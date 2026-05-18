@@ -106,7 +106,7 @@ void SettingsScreen::on_start() {
 #else
   namespace fs = std::filesystem;
   try {
-    for (const auto& entry : fs::directory_iterator("resources/fonts")) {
+    for (const auto& entry : fs::directory_iterator("sd/fonts")) {
       std::string ext = entry.path().extension().string();
       if (ext == ".mfb") {
         sd_fonts_.push_back(entry.path().string());

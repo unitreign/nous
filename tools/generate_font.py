@@ -43,7 +43,27 @@ RANGE_PRESETS = {
     "latin-ext-a": [(0x0100, 0x017F)],  # Latin Extended-A
     "latin-ext-b": [(0x0180, 0x024F)],  # Latin Extended-B
     "cyrillic": [(0x0400, 0x04FF)],  # Cyrillic
-    "cjk": [(0x4E00, 0x9FFF)],  # CJK Unified Ideographs
+    "hiragana": [(0x3040, 0x309F)],  # Hiragana
+    "katakana": [(0x30A0, 0x30FF)],  # Katakana
+    "cjk-punct": [(0x3000, 0x303F)],  # CJK Symbols and Punctuation (。「」、・ etc.)
+    "halfwidth-katakana": [(0xFF65, 0xFF9F)],  # Halfwidth Katakana
+    "cjk": [(0x4E00, 0x9FFF)],  # CJK Unified Ideographs (main block)
+    "cjk-ext-a": [(0x3400, 0x4DBF)],  # CJK Extension A (rare/archaic kanji)
+    "cjk-compat": [(0xF900, 0xFAFF)],  # CJK Compatibility Ideographs
+    "cjk-enclosed": [(0x3200, 0x33FF)],  # Enclosed CJK Letters + CJK Compatibility (㋿ ㎞ etc.)
+    "fullwidth": [(0xFF01, 0xFF5E), (0xFFE0, 0xFFE6)],  # Fullwidth Latin/digits + currency signs
+    # Convenience bundle: everything needed for Japanese text
+    "japanese": [
+        (0x3000, 0x303F),  # CJK Symbols and Punctuation
+        (0x3040, 0x30FF),  # Hiragana + Katakana
+        (0x3200, 0x33FF),  # Enclosed CJK + CJK Compatibility
+        (0x4E00, 0x9FFF),  # CJK Unified Ideographs
+        (0xF900, 0xFAFF),  # CJK Compatibility Ideographs
+        (0xFF01, 0xFF5E),  # Fullwidth Latin/digits
+        (0xFF61, 0xFF9F),  # Halfwidth Katakana
+        (0xFFE0, 0xFFE6),  # Fullwidth currency signs
+        (0xFFFD, 0xFFFD),  # Replacement character (□ fallback for missing glyphs)
+    ],
     "greek": [(0x0370, 0x03FF)],  # Greek and Coptic
     "general-punct": [(0x2000, 0x206F)],  # General Punctuation (curly quotes, em-dash, ellipsis)
     "currency": [(0x20A0, 0x20CF)],  # Currency Symbols (€ etc.)
@@ -274,17 +294,10 @@ def extract_kerning_fonttools(ttfont, scale):
                         c1_glyphs = {}
                         for glyph, c in classDef1.items():
                             c1_glyphs.setdefault(c, []).append(glyph)
-                        for glyph in getattr(sub, "Coverage").glyphs if hasattr(sub, "Coverage") else []:
-                            if glyph not in classDef1:
-                                c1_glyphs.setdefault(0, []).append(glyph)
                         
                         c2_glyphs = {}
                         for glyph, c in classDef2.items():
                             c2_glyphs.setdefault(c, []).append(glyph)
-                        # Fallback for class 0 in ClassDef2
-                        for glyph in all_glyphs:
-                            if glyph not in classDef2:
-                                c2_glyphs.setdefault(0, []).append(glyph)
                                 
                         for class1, rec1 in enumerate(sub.Class1Record):
                             if class1 not in c1_glyphs: continue
@@ -327,12 +340,17 @@ def render_style_glyphs(face_info, size, codepoint_ranges, use_hinted_advance=Fa
     if fallback_face:
         fallback_face.set_pixel_sizes(0, size)
 
+    total_codepoints = sum(e - s + 1 for s, e in codepoint_ranges)
+    print(f"  Rasterizing {total_codepoints} codepoints at {size}px...")
+
     ranges = []
     all_glyphs = []
     bw_bitmaps = bytearray()
     lsb_bitmaps = bytearray()
     msb_bitmaps = bytearray()
     max_glyph_height = 0
+    rendered_count = 0
+    last_progress = -1
 
     for range_start, range_end in codepoint_ranges:
         count = range_end - range_start + 1
@@ -340,6 +358,11 @@ def render_style_glyphs(face_info, size, codepoint_ranges, use_hinted_advance=Fa
         has_any = False
 
         for cp in range(range_start, range_end + 1):
+            rendered_count += 1
+            pct = rendered_count * 100 // total_codepoints
+            if pct != last_progress and pct % 5 == 0:
+                print(f"  Rendering glyphs... {pct}% ({rendered_count}/{total_codepoints})", end="\r", flush=True)
+                last_progress = pct
             g = render_glyph(face, cp, size, use_hinted_advance, fallback_face)
             if g is None:
                 all_glyphs.append(
@@ -369,26 +392,32 @@ def render_style_glyphs(face_info, size, codepoint_ranges, use_hinted_advance=Fa
         if has_any:
             ranges.append((range_start, count, glyph_table_start))
 
+    if total_codepoints > 100:
+        print(f"  Rendering glyphs... done ({rendered_count} codepoints)        ")
+
     kerning_mbf_bytes = bytearray()
 
     upem = ttfont["head"].unitsPerEm
     scale = size / upem
+    print(f"  Extracting kerning...", end="\r", flush=True)
     fonttools_kern = extract_kerning_fonttools(ttfont, scale)
 
     if fonttools_kern:
-        flat_pairs = {}
-        for l_idx, l_glyph in enumerate(all_glyphs):
-            if l_glyph["bitmap_width"] == 0 and l_glyph["x_advance"] == 0:
+        # Build reverse map: FreeType glyph index -> glyph table index
+        ft_idx_to_glyph_idx = {}
+        for g_idx, g in enumerate(all_glyphs):
+            if g["bitmap_width"] == 0 and g["x_advance"] == 0:
                 continue
-            l_ft_idx = face.get_char_index(l_glyph["codepoint"])
-            for r_idx, r_glyph in enumerate(all_glyphs):
-                if r_glyph["bitmap_width"] == 0 and r_glyph["x_advance"] == 0:
-                    continue
-                r_ft_idx = face.get_char_index(r_glyph["codepoint"])
-                
-                px_kern = fonttools_kern.get((l_ft_idx, r_ft_idx), 0)
-                if px_kern != 0:
-                    flat_pairs[(l_idx, r_idx)] = px_kern
+            ft_idx = face.get_char_index(g["codepoint"])
+            if ft_idx != 0:
+                ft_idx_to_glyph_idx[ft_idx] = g_idx
+
+        flat_pairs = {}
+        for (l_ft_idx, r_ft_idx), px_kern in fonttools_kern.items():
+            l_idx = ft_idx_to_glyph_idx.get(l_ft_idx, -1)
+            r_idx = ft_idx_to_glyph_idx.get(r_ft_idx, -1)
+            if l_idx >= 0 and r_idx >= 0:
+                flat_pairs[(l_idx, r_idx)] = px_kern
 
         if flat_pairs:
             # Step 1: Compress Left Classes based on right kerning signatures

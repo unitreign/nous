@@ -77,6 +77,36 @@ static bool is_ws(char c) {
   return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
 
+// Returns the byte length of the UTF-8 sequence starting at text[i].
+static size_t utf8_char_len(const char* text, size_t len, size_t i) {
+  uint8_t b = static_cast<uint8_t>(text[i]);
+  if (b < 0x80)
+    return 1;
+  if (b < 0xC0)
+    return 1;  // stray continuation byte
+  if (b < 0xE0)
+    return (i + 1 < len) ? 2 : 1;
+  if (b < 0xF0)
+    return (i + 2 < len) ? 3 : 1;
+  return (i + 3 < len) ? 4 : 1;
+}
+
+// Returns true if the UTF-8 character at text[i] is a CJK character that can
+// break freely at every character boundary (hiragana, katakana, CJK ideographs,
+// CJK symbols/punctuation, fullwidth forms).
+static bool is_cjk_break_char(const char* text, size_t len, size_t i) {
+  uint8_t b0 = static_cast<uint8_t>(text[i]);
+  if (b0 < 0xE0 || i + 2 >= len)
+    return false;
+  uint8_t b1 = static_cast<uint8_t>(text[i + 1]);
+  uint8_t b2 = static_cast<uint8_t>(text[i + 2]);
+  uint32_t cp = ((b0 & 0x0F) << 12) | ((b1 & 0x3F) << 6) | (b2 & 0x3F);
+  // U+3000–U+9FFF: CJK symbols/punct, kana, CJK unified ideographs
+  // U+F900–U+FAFF: CJK compatibility ideographs
+  // U+FF00–U+FFEF: Halfwidth/fullwidth forms
+  return (cp >= 0x3000 && cp <= 0x9FFF) || (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0xFF00 && cp <= 0xFFEF);
+}
+
 static size_t ws_len(const char* text, size_t len, size_t i) {
   uint8_t b = static_cast<uint8_t>(text[i]);
   if (b <= 0x7F)
@@ -98,21 +128,39 @@ static size_t ws_len(const char* text, size_t len, size_t i) {
 
 struct WordSpan {
   size_t start, len;
+  bool no_space_before;  // true when this span is adjacent (no whitespace) to the previous span
 };
 
 static std::vector<WordSpan> split_words(const char* text, size_t text_len) {
   std::vector<WordSpan> spans;
   size_t i = 0;
   while (i < text_len) {
+    // Skip whitespace.
     size_t wl;
-    while (i < text_len && (wl = ws_len(text, text_len, i)) > 0)
+    bool had_space = false;
+    while (i < text_len && (wl = ws_len(text, text_len, i)) > 0) {
       i += wl;
+      had_space = true;
+    }
     if (i >= text_len)
       break;
+    // CJK character: each character is its own break opportunity with no
+    // inter-character space inserted.
+    if (is_cjk_break_char(text, text_len, i)) {
+      size_t clen = utf8_char_len(text, text_len, i);
+      bool no_spc = !had_space && !spans.empty();
+      spans.push_back({i, clen, no_spc});
+      i += clen;
+      continue;
+    }
+    // Latin/other word: consume until whitespace or a CJK break char.
     size_t start = i;
-    while (i < text_len && ws_len(text, text_len, i) == 0)
+    while (i < text_len && ws_len(text, text_len, i) == 0 && !is_cjk_break_char(text, text_len, i))
       ++i;
-    spans.push_back({start, i - start});
+    // Suppress space if this non-CJK word immediately followed a CJK char
+    // (e.g. "東京Tokyo" — no gap between CJK and Latin).
+    bool no_spc = !had_space && !spans.empty();
+    spans.push_back({start, i - start, no_spc});
   }
   return spans;
 }
@@ -259,6 +307,8 @@ static std::vector<LayoutLine> layout_para_lines(const IFont& font, const Layout
       uint16_t word_len = span.len;
       bool needs_space = !current.words.empty();
       if (first_word_of_run && !prev_run_ended_space && text_len > 0 && ws_len(text, text_len, 0) == 0)
+        needs_space = false;
+      if (span.no_space_before)
         needs_space = false;
       first_word_of_run = false;
 
