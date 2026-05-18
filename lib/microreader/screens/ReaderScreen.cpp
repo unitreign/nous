@@ -302,6 +302,8 @@ void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
             (unsigned)saved_page_pos_.paragraph, (unsigned)nav_history_.size());
     app_->links_screen()->clear_pending();
   } else {
+    saved_chapter_idx_ = 0;
+    saved_page_pos_ = PagePosition{0, 0};
     load_position_();
   }
   load_chapter_(saved_chapter_idx_);

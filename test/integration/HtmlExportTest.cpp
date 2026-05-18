@@ -295,6 +295,25 @@ TEST(HtmlExportTest, ExportAliceIllustrated) {
   std::cout << "\nOutput: " << (output_root / "alice-illustrated" / "index.html") << std::endl;
 }
 
+TEST(HtmlExportTest, ExportPiranesi) {
+  BitmapFontSet font_set;
+  std::vector<BitmapFont> prop_fonts(kMaxFontSizes);
+  std::vector<std::vector<uint8_t>> font_data(kMaxFontSizes);
+  ASSERT_TRUE(load_desktop_fonts(font_set, prop_fonts, font_data));
+
+  fs::path epub_path = fs::path(repo_root()) / "sd" / "books" / "Piranesi.epub";
+  ASSERT_TRUE(fs::exists(epub_path)) << "Piranesi.epub not found in sd/books/";
+
+  fs::path output_root = fs::path(repo_root()) / "test" / "output" / "piranesi";
+  std::error_code ec;
+  fs::create_directories(output_root, ec);
+
+  BookStats s = export_book_to_html(epub_path, output_root, font_set);
+  ASSERT_TRUE(s.ok);
+  print_stats(s);
+  std::cout << "\nOutput: " << (output_root / "Piranesi" / "index.html") << std::endl;
+}
+
 TEST(HtmlExportTest, ExportRegressionTest) {
   BitmapFontSet font_set;
   std::vector<BitmapFont> prop_fonts(kMaxFontSizes);
