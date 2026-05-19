@@ -30,14 +30,15 @@ set(SDL_STATIC ON  CACHE BOOL "" FORCE)
 set(SDL_TEST   OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SDL2)
 
-# miniz (for DEFLATE decompression — required by content library)
-FetchContent_Declare(
-    miniz
-    GIT_REPOSITORY https://github.com/richgel999/miniz.git
-    GIT_TAG        3.0.2
-    GIT_SHALLOW    TRUE
+# miniz (vendored in third_party/miniz/ — all .c files compiled as separate TUs)
+set(MINIZ_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/miniz)
+add_library(miniz STATIC
+    ${MINIZ_DIR}/miniz.c
+    ${MINIZ_DIR}/miniz_tdef.c
+    ${MINIZ_DIR}/miniz_tinfl.c
+    ${MINIZ_DIR}/miniz_zip.c
 )
-FetchContent_MakeAvailable(miniz)
+target_include_directories(miniz PUBLIC ${MINIZ_DIR})
 
 # ---------------------------------------------------------------------------
 # Content library (EPUB, ZIP, XML, layout)
