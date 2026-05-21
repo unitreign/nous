@@ -50,6 +50,10 @@ static std::string get_rotate_display_label(bool rotated) {
   return std::string("Display: ") + (rotated ? "Landscape" : "Portrait");
 }
 
+static std::string get_menu_font_label(int size) {
+  return std::string("Menu Font: ") + (size == 1 ? "Medium" : "Small");
+}
+
 static std::string get_font_label(const std::string& font_path) {
   std::string label = "Font: ";
   if (font_path == "Bookerly" || font_path == "Alegreya") {
@@ -172,6 +176,9 @@ void SettingsScreen::on_start() {
   // --- Appearance / General ---
   idx_rotate_display_ = count();
   add_item(get_rotate_display_label(app_ && app_->rotate_display()));
+
+  idx_menu_font_ = count();
+  add_item(get_menu_font_label(app_ ? app_->menu_font_size() : 0));
 
   idx_list_format_ = count();
   if (app_) {
@@ -320,6 +327,14 @@ void SettingsScreen::on_select(int index) {
       app_->set_rotate_display(v);
       set_item_label(idx_rotate_display_, get_rotate_display_label(v));
       buf_->set_rotation(v ? Rotation::Deg0 : Rotation::Deg90);
+    }
+    return;
+  }
+  if (index == idx_menu_font_) {
+    if (app_) {
+      int v = (app_->menu_font_size() + 1) % 2;
+      app_->set_menu_font_size(v);
+      restart();  // rebuilds items with the new font size immediately
     }
     return;
   }

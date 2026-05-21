@@ -49,6 +49,9 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   // before the menu's on_start() (directory scan + selection restore) runs.
   load_settings_();
 
+  // Apply persisted menu font size to all list screens.
+  ListMenuScreen::set_font_size(menu_font_size_);
+
   // Apply persisted display rotation.
   buf.set_rotation(rotate_display_ ? Rotation::Deg0 : Rotation::Deg90);
 
@@ -241,6 +244,7 @@ void microreader::Application::save_settings_() {
   std::fprintf(f, "inv_bpage=%u\n", invert_bottom_paging_ ? 1u : 0u);
   std::fprintf(f, "inv_side=%u\n", invert_side_buttons_ ? 1u : 0u);
   std::fprintf(f, "rotate_display=%u\n", rotate_display_ ? 1u : 0u);
+  std::fprintf(f, "menu_font_size=%d\n", menu_font_size_);
 
   if (!custom_font_path_.empty())
     std::fprintf(f, "custom_font=%s\n", custom_font_path_.c_str());
@@ -312,6 +316,8 @@ void microreader::Application::load_settings_() {
       invert_side_buttons_ = (uval != 0);
     else if (std::sscanf(line, "rotate_display=%u", &uval) == 1)
       rotate_display_ = (uval != 0);
+    else if (std::sscanf(line, "menu_font_size=%u", &uval) == 1)
+      menu_font_size_ = static_cast<int>(uval > 2 ? 2 : uval);
     else if (std::sscanf(line, "custom_font=%511[^\n]", sval) == 1)
       custom_font_path_ = sval;
     else if (std::sscanf(line, "inst_font=%511[^\n]", sval) == 1)

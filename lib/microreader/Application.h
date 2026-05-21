@@ -132,6 +132,14 @@ class Application {
     rotate_display_ = v;
   }
 
+  int menu_font_size() const {
+    return menu_font_size_;
+  }
+  void set_menu_font_size(int v) {
+    menu_font_size_ = v;
+    ListMenuScreen::set_font_size(v);
+  }
+
   const std::string& custom_font_path() const {
     return custom_font_path_;
   }
@@ -201,6 +209,7 @@ class Application {
   bool invert_bottom_paging_ = false;
   bool invert_side_buttons_ = false;
   bool rotate_display_ = false;
+  int menu_font_size_ = 0;
 
   std::string custom_font_path_;
   std::string installed_font_path_;

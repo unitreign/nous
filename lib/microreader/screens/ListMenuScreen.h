@@ -31,6 +31,15 @@ class ListMenuScreen : public IScreen {
     initial_selection_ = index;
   }
 
+  // Global font size — affects all ListMenuScreen instances (static).
+  // 0 = Normal (14px), 1 = Large (18px), 2 = XLarge (22px)
+  static void set_font_size(int size) {
+    font_size_idx_ = size;
+  }
+  static int font_size() {
+    return font_size_idx_;
+  }
+
  protected:
   const char* title_ = nullptr;
   std::string subtitle_;
@@ -98,10 +107,18 @@ class ListMenuScreen : public IScreen {
   int hold_frames_down_ = 0;
 
   BitmapFont ui_font_;
+  static int font_size_idx_;  // 0=Normal, 1=Large, 2=XLarge
   BitmapFont header_font_;
   DrawBuffer* buf_ = nullptr;
+  IRuntime* runtime_ = nullptr;
 
  protected:
+  // Re-run start() to rebuild items with updated settings (e.g. after font change).
+  void restart() {
+    if (buf_ && runtime_)
+      start(*buf_, *runtime_);
+  }
+
   void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const;
   void ensure_visible_();
   void center_on_selected_();

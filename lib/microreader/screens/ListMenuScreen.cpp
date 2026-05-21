@@ -4,9 +4,12 @@
 
 #include "../Application.h"
 #include "../display/ui_font_header.h"
+#include "../display/ui_font_medium.h"
 #include "../display/ui_font_small.h"
 
 namespace microreader {
+
+int ListMenuScreen::font_size_idx_ = 0;
 
 static constexpr int kHeaderY = 15;        // top padding before the title text
 static constexpr int kBottomPadding = 16;  // list padding from bottom
@@ -14,7 +17,12 @@ static constexpr int kButtonHintsH = 26;   // height of the button hint area
 
 void ListMenuScreen::start(DrawBuffer& buf, IRuntime& runtime) {
   buf_ = &buf;
-  if (!ui_font_.valid())
+  runtime_ = &runtime;
+  // Re-init ui_font_ whenever the font_size_idx_ setting may have changed.
+  ui_font_ = BitmapFont{};
+  if (font_size_idx_ == 1)
+    ui_font_.init(kFontData_ui_medium_mbf, kFontData_ui_medium_mbf_size);
+  else
     ui_font_.init(kFontData_ui_small_mbf, kFontData_ui_small_mbf_size);
   if (!header_font_.valid())
     header_font_.init(kFontData_ui_header_mbf, kFontData_ui_header_mbf_size);
@@ -224,20 +232,21 @@ void ListMenuScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_p
     const int iy = y;
     if (i == selected_) {
       const int bar_w = 3;  // horizontal padding on each side (rounded cap adds 1 more)
-      const int bar_h = ui_font_.y_advance() + 1;
+      const int sel_top = (font_size_idx_ == 1) ? iy : iy - 1;
+      const int bar_h = ui_font_.y_advance() + (font_size_idx_ == 1 ? 1 : 2) - 1;
 
       if (align_left_) {
         // Full width bar for left-aligned
         const int bar_x = 16;
         const int bar_width = W - 32 - landscape_pad;
-        buf.fill_rect(bar_x + 1, iy - 1, bar_width - 2, bar_h, false);  // Body
-        buf.fill_rect(bar_x, iy, 1, bar_h - 2, false);                  // Left cap
-        buf.fill_rect(bar_x + bar_width - 1, iy, 1, bar_h - 2, false);  // Right cap
+        buf.fill_rect(bar_x + 1, sel_top, bar_width - 2, bar_h, false);          // Body
+        buf.fill_rect(bar_x, sel_top + 1, 1, bar_h - 2, false);                  // Left cap
+        buf.fill_rect(bar_x + bar_width - 1, sel_top + 1, 1, bar_h - 2, false);  // Right cap
         buf.draw_text_proportional(ix, iy + baseline, label, len, ui_font_, true);
       } else {
-        buf.fill_rect(ix - bar_w, iy - 1, iw + bar_w * 2, bar_h, false);
-        buf.fill_rect(ix - bar_w - 1, iy, 1, bar_h - 2, false);
-        buf.fill_rect(ix + iw + bar_w, iy, 1, bar_h - 2, false);
+        buf.fill_rect(ix - bar_w, sel_top, iw + bar_w * 2, bar_h, false);
+        buf.fill_rect(ix - bar_w - 1, sel_top + 1, 1, bar_h - 2, false);
+        buf.fill_rect(ix + iw + bar_w, sel_top + 1, 1, bar_h - 2, false);
         buf.draw_text_proportional(ix, iy + baseline, label, len, ui_font_, true);
       }
     } else {
@@ -250,10 +259,11 @@ void ListMenuScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_p
   if (n > visible) {
     const int sb_w = 4;
     const int sb_x = (buf.rotation() == Rotation::Deg0) ? 8 : W - 12;
-    const int sb_top = items_y - 1;
+    const int sb_top = items_y - (font_size_idx_ == 1 ? 0 : 1);
     const int sb_bottom = items_y + total_h - line_h + ui_font_.y_advance();
     const int sb_total_h = sb_bottom - sb_top;
-    const int thumb_h = sb_total_h * visible / n < 6 ? 6 : sb_total_h * visible / n;
+    const int thumb_min = 20;
+    const int thumb_h = std::max(sb_total_h * visible / n, thumb_min);
     const int track = sb_total_h - thumb_h;
     const int max_scroll = n - visible;
     const int thumb_y = sb_top + (max_scroll > 0 ? track * scroll_offset_ / max_scroll : 0);
