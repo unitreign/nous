@@ -148,6 +148,7 @@ class Application {
     save_settings_();
   }
 
+  // Empty string = auto-cycle through all images on each sleep.
   const std::string& sleep_image_path() const {
     return sleep_image_path_;
   }
@@ -213,7 +214,8 @@ class Application {
 
   std::string custom_font_path_;
   std::string installed_font_path_;
-  std::string sleep_image_path_;
+  std::string sleep_image_path_;  // empty = auto-cycle
+  int sleep_image_idx_ = 0;
 
   ScreenManager screen_mgr_;
   MainMenu menu_;

@@ -1416,9 +1416,12 @@ TEST(XhtmlHref, ExternalLinkCaptured) {
 
 // A fragment-only href "#section2" should be stored (possibly resolved relative to base).
 TEST(XhtmlHref, FragmentOnlyHref) {
+  // Fragment-only hrefs (e.g. <a href="#footnote1">1</a>) are same-page anchors
+  // that cannot navigate to another chapter. They must NOT be treated as links
+  // (no underline, no href stored on the run).
   const char* xhtml =
       "<html><body>"
-      "<p><a href=\"#section2\">Go to section 2</a></p>"
+      "<p><a href=\"#1\">1</a> <a href=\"#2\">2</a> <a href=\"#section2\">Go to section 2</a></p>"
       "</body></html>";
 
   ZipReader dummy_zip;
@@ -1429,12 +1432,10 @@ TEST(XhtmlHref, FragmentOnlyHref) {
   auto runs = collect_runs(paragraphs);
   ASSERT_GE(runs.size(), 1u);
 
-  for (size_t i = 0; i < runs.size(); ++i) {
-    const std::string& text = runs[i].text;
-    const std::string& href = runs[i].href;
-    if ((text.find("section 2") != std::string::npos || text.find("section") != std::string::npos) && !href.empty()) {
-      EXPECT_NE(href.find("section2"), std::string::npos) << "Fragment-only href should contain anchor name";
-    }
+  // None of the runs should have an href set — fragment-only links are suppressed.
+  for (const auto& r : runs) {
+    EXPECT_TRUE(r.href.empty()) << "Fragment-only href should not be stored (got: " << r.href << " for text: " << r.text
+                                << ")";
   }
 }
 

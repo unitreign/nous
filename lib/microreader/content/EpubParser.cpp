@@ -1453,7 +1453,7 @@ static EpubError parse_xhtml_events(XmlReader& reader, const CssStylesheet* inli
       // Only track the outermost <a> (nested <a> is invalid HTML, ignore inner ones).
       if (sv_eq(ev.name, "a") && parser.current_href_.empty()) {
         auto href_sv = ev.attrs.get("href");
-        if (!href_sv.empty()) {
+        if (!href_sv.empty() && !(href_sv.length > 0 && href_sv.data[0] == '#')) {
           // Flush any text accumulated before this <a> so it gets no href.
           parser.flush_text(false);
           std::string resolved = Epub::resolve_path(base_dir, sv_to_string(href_sv));

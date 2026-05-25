@@ -7,7 +7,15 @@
 #include "HeapLog.h"
 
 #ifdef ESP_PLATFORM
+#include <dirent.h>
+
 #include "esp_random.h"
+#else
+#include <filesystem>
+#endif
+
+#ifndef ESP_PLATFORM
+namespace fs = std::filesystem;
 #endif
 
 namespace microreader {
@@ -92,26 +100,79 @@ void Application::do_sleep_(DrawBuffer& buf) {
   if (IScreen* top = screen_mgr_.top())
     top->stop();
 
-  // Save all persistent settings
+  // If a specific image is pinned, always show it. Otherwise auto-cycle.
+  MR_LOGI("sleep", "do_sleep_: pinned='%s' idx=%d", sleep_image_path_.c_str(), sleep_image_idx_);
+  if (!sleep_image_path_.empty()) {
+    save_settings_();
+    buf.set_rotation(Rotation::Deg90);
+    bool shown = false;
+    if (sleep_image_path_.rfind("embedded:", 0) == 0) {
+      int eidx = std::atoi(sleep_image_path_.c_str() + 9);
+      MR_LOGI("sleep", "showing pinned embedded:%d", eidx);
+      shown = buf.show_sleep_image_embedded(eidx);
+    } else {
+      MR_LOGI("sleep", "showing pinned file: %s", sleep_image_path_.c_str());
+      shown = buf.show_sleep_image(sleep_image_path_.c_str());
+    }
+    MR_LOGI("sleep", "show result: %d", (int)shown);
+    if (!shown)
+      buf.show_sleep_image_embedded(0);
+    running_ = false;
+    return;
+  }
+
+  // Auto-cycle: build list. Custom SD images take priority over embedded ones.
+  std::vector<std::string> images;
+#ifdef ESP_PLATFORM
+  DIR* d = opendir("/sdcard/sleep");
+  if (d) {
+    struct dirent* ent;
+    while ((ent = readdir(d)) != nullptr) {
+      if (ent->d_name[0] == '.')
+        continue;
+      const char* ext = std::strrchr(ent->d_name, '.');
+      if (ext && std::strcmp(ext, ".mgr") == 0)
+        images.push_back(std::string("/sdcard/sleep/") + ent->d_name);
+    }
+    closedir(d);
+  }
+#else
+  try {
+    for (const auto& entry : fs::directory_iterator("sd/sleep")) {
+      if (entry.path().extension() == ".mgr")
+        images.push_back(entry.path().string());
+    }
+  } catch (...) {}
+#endif
+  if (images.empty()) {
+    images.push_back("embedded:0");
+    images.push_back("embedded:1");
+    images.push_back("embedded:2");
+  }
+
+  // Pick current image, then advance index for next sleep.
+  int idx = sleep_image_idx_ % static_cast<int>(images.size());
+  sleep_image_idx_ = (idx + 1) % static_cast<int>(images.size());
+
+  MR_LOGI("sleep", "auto-cycle: %d images, showing idx=%d path='%s'", (int)images.size(), idx, images[idx].c_str());
+
+  // Save state (includes updated sleep_image_idx_).
   save_settings_();
 
-  // Reset rotation before drawing the sleeping screen
+  // Reset rotation before drawing the sleeping screen.
   buf.set_rotation(Rotation::Deg90);
 
-  // Attempt to load and show the sleep image (settings > SD card default > embedded fallback)
+  const std::string& path = images[idx];
   bool sleep_shown = false;
-  if (!sleep_image_path_.empty()) {
-    if (sleep_image_path_.rfind("embedded:", 0) == 0) {
-      int idx = std::atoi(sleep_image_path_.c_str() + 9);
-      sleep_shown = buf.show_sleep_image_embedded(idx);
-    } else {
-      sleep_shown = buf.show_sleep_image(sleep_image_path_.c_str());
-    }
+  if (path.rfind("embedded:", 0) == 0) {
+    sleep_shown = buf.show_sleep_image_embedded(std::atoi(path.c_str() + 9));
+  } else {
+    sleep_shown = buf.show_sleep_image(path.c_str());
   }
 
-  if (!sleep_shown) {
+  MR_LOGI("sleep", "show result: %d", (int)sleep_shown);
+  if (!sleep_shown)
     buf.show_sleep_image_embedded(0);
-  }
 
   running_ = false;
 }
@@ -252,6 +313,7 @@ void microreader::Application::save_settings_() {
     std::fprintf(f, "inst_font=%s\n", installed_font_path_.c_str());
   if (!sleep_image_path_.empty())
     std::fprintf(f, "sleep_image=%s\n", sleep_image_path_.c_str());
+  std::fprintf(f, "sleep_image_idx=%d\n", sleep_image_idx_);
 
   std::fclose(f);
 }
@@ -324,6 +386,8 @@ void microreader::Application::load_settings_() {
       installed_font_path_ = sval;
     else if (std::sscanf(line, "sleep_image=%511[^\n]", sval) == 1)
       sleep_image_path_ = sval;
+    else if (std::sscanf(line, "sleep_image_idx=%u", &uval) == 1)
+      sleep_image_idx_ = static_cast<int>(uval);
   }
   std::fclose(f);
   MR_LOGI("app", "Loaded settings: align=%u ph=%u pv=%u ls=%u prog=%u sel=%s", static_cast<unsigned>(rs.align_override),

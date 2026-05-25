@@ -54,33 +54,35 @@ static std::string get_menu_font_label(int size) {
   return std::string("Menu Font: ") + (size == 1 ? "Medium" : "Small");
 }
 
-static std::string get_font_label(const std::string& font_path) {
-  std::string label = "Font: ";
-  if (font_path == "Bookerly" || font_path == "Alegreya") {
-    label += font_path;
-  } else {
-    const char* slash = strrchr(font_path.c_str(), '/');
-#ifndef ESP_PLATFORM
-    if (!slash)
-      slash = strrchr(font_path.c_str(), '\\');
-#endif
-    label += std::string(slash ? slash + 1 : font_path.c_str());
-  }
-  return label;
-}
-
 static std::string get_sleep_image_label(const std::string& path) {
+  if (path.empty())
+    return "Sleep Image: Auto";
   std::string label = "Sleep Image: ";
   if (path.rfind("embedded:", 0) == 0) {
     int idx = std::atoi(path.c_str() + 9);
     label += (idx == 0 ? "bird" : (idx == 1 ? "stone" : "bebop"));
   } else {
-    const char* slash = strrchr(path.c_str(), '/');
-#ifndef ESP_PLATFORM
-    if (!slash)
-      slash = strrchr(path.c_str(), '\\');
-#endif
-    label += (slash ? slash + 1 : path.c_str());
+    const char* p = path.c_str();
+    const char* slash = nullptr;
+    for (const char* c = p; *c; ++c)
+      if (*c == '/' || *c == '\\')
+        slash = c;
+    label += (slash ? slash + 1 : p);
+  }
+  return label;
+}
+
+static std::string get_font_label(const std::string& font_path) {
+  std::string label = "Font: ";
+  if (font_path == "Bookerly" || font_path == "Alegreya") {
+    label += font_path;
+  } else {
+    const char* p = font_path.c_str();
+    const char* slash = nullptr;
+    for (const char* c = p; *c; ++c)
+      if (*c == '/' || *c == '\\')
+        slash = c;
+    label += std::string(slash ? slash + 1 : p);
   }
   return label;
 }
@@ -129,46 +131,50 @@ void SettingsScreen::on_start() {
     }
   }
 
+  // Sleep image list: first entry is empty string = Auto-cycle.
+  // Custom SD images take priority — embedded ones are only shown when no
+  // custom images are present.
   sleep_images_.clear();
-  sleep_images_.push_back("embedded:0");
-  sleep_images_.push_back("embedded:1");
-  sleep_images_.push_back("embedded:2");
+  sleep_images_.push_back("");  // Auto
   sleep_image_sel_idx_ = 0;
+  std::vector<std::string> sd_sleep;
 #ifdef ESP_PLATFORM
-  d = opendir("/sdcard/sleep");
-  if (d) {
-    struct dirent* ent;
-    while ((ent = readdir(d)) != nullptr) {
-      if (ent->d_name[0] == '.')
-        continue;
-      const char* ext = std::strrchr(ent->d_name, '.');
-      if (ext && strcmp(ext, ".mgr") == 0) {
-        sleep_images_.push_back(std::string("/sdcard/sleep/") + ent->d_name);
+  {
+    DIR* sd = opendir("/sdcard/sleep");
+    if (sd) {
+      struct dirent* ent;
+      while ((ent = readdir(sd)) != nullptr) {
+        if (ent->d_name[0] == '.')
+          continue;
+        const char* ext = std::strrchr(ent->d_name, '.');
+        if (ext && strcmp(ext, ".mgr") == 0)
+          sd_sleep.push_back(std::string("/sdcard/sleep/") + ent->d_name);
       }
+      closedir(sd);
     }
-    closedir(d);
   }
 #else
   try {
     for (const auto& entry : fs::directory_iterator("sd/sleep")) {
-      std::string ext = entry.path().extension().string();
-      if (ext == ".mgr") {
-        sleep_images_.push_back(std::string("/sdcard/sleep/") + entry.path().filename().string());
-      }
+      if (entry.path().extension() == ".mgr")
+        sd_sleep.push_back(entry.path().string());
     }
   } catch (...) {}
 #endif
-
+  if (sd_sleep.empty()) {
+    sleep_images_.push_back("embedded:0");
+    sleep_images_.push_back("embedded:1");
+    sleep_images_.push_back("embedded:2");
+  } else {
+    for (auto& p : sd_sleep)
+      sleep_images_.push_back(std::move(p));
+  }
   if (app_) {
     const std::string& current = app_->sleep_image_path();
-    if (current.empty()) {
-      sleep_image_sel_idx_ = 0;  // Default to embedded:0
-    } else {
-      for (size_t i = 0; i < sleep_images_.size(); ++i) {
-        if (sleep_images_[i] == current) {
-          sleep_image_sel_idx_ = static_cast<int>(i);
-          break;
-        }
+    for (size_t i = 0; i < sleep_images_.size(); ++i) {
+      if (sleep_images_[i] == current) {
+        sleep_image_sel_idx_ = static_cast<int>(i);
+        break;
       }
     }
   }
@@ -348,7 +354,7 @@ void SettingsScreen::on_select(int index) {
   }
   if (index == idx_sleep_image_) {
     if (app_ && !sleep_images_.empty()) {
-      sleep_image_sel_idx_ = (sleep_image_sel_idx_ + 1) % sleep_images_.size();
+      sleep_image_sel_idx_ = (sleep_image_sel_idx_ + 1) % static_cast<int>(sleep_images_.size());
       app_->set_sleep_image_path(sleep_images_[sleep_image_sel_idx_]);
       set_item_label(idx_sleep_image_, get_sleep_image_label(sleep_images_[sleep_image_sel_idx_]));
     }

@@ -1,8 +1,10 @@
-﻿#include "TextLayout.h"
+#include "TextLayout.h"
 
 #include <algorithm>
 #include <cstdio>
 #include <optional>
+
+// Set to 1 to print per-paragraph budget trace for layout_backward().
 
 #include "hyphenation/Hyphenation.h"
 
@@ -1169,16 +1171,21 @@ std::optional<Collected> TextLayout::LaidOutParagraph::collect_backward(size_t e
 // Returns break_idx: the idx at which collection stopped.
 // ---------------------------------------------------------------------------
 
+// pending_desc is the uncharged descender of the last placed TextLine (0 otherwise).
+// It is paid when placing the next item so that 'used' always represents:
+//   sum of y_advance for all but the last item + baseline of the last item.
+// This makes the budget identical in the forward and backward passes.
 static size_t collect_para_items(const LaidOut& lp, size_t start_idx, uint16_t spc, uint16_t ph, uint16_t& used,
-                                 bool& has_content, bool& page_full, bool& pending_page_break, PagePosition& boundary,
-                                 std::vector<PageItem>& items) {
-  MR_TRACE("  fwd para %u: start_idx=%zu spc=%u used=%u ph=%u", (unsigned)lp.para_idx, start_idx, (unsigned)spc,
-           (unsigned)used, (unsigned)ph);
+                                 uint16_t& pending_desc, bool& has_content, bool& page_full, bool& pending_page_break,
+                                 PagePosition& boundary, std::vector<PageItem>& items) {
+  MR_TRACE("  fwd para %u: start_idx=%zu spc=%u used=%u ph=%u pd=%u", (unsigned)lp.para_idx, start_idx, (unsigned)spc,
+           (unsigned)used, (unsigned)ph, (unsigned)pending_desc);
   size_t break_idx = start_idx;
   for (size_t idx = start_idx; !page_full; ++idx) {
     break_idx = idx;
     uint16_t gap = (idx == start_idx && !items.empty()) ? spc : 0;
-    uint16_t avail = items.empty() ? ph : (used + gap < ph ? ph - used - gap : 0);
+    // avail = space left for the new item's leading dimension (baseline or height)
+    uint16_t avail = (used + pending_desc + gap < ph) ? static_cast<uint16_t>(ph - used - pending_desc - gap) : 0;
 
     if (avail == 0) {
       auto probe = lp.collect(idx, ph);
@@ -1209,11 +1216,17 @@ static size_t collect_para_items(const LaidOut& lp, size_t start_idx, uint16_t s
       break;
     }
 
-    MR_TRACE("    fwd idx=%zu kind=%s h=%u bl=%u avail=%u gap=%u -> used %u->%u", idx, trace_kind(r->item.kind),
-             (unsigned)r->item.height, (unsigned)r->item.baseline, (unsigned)avail, (unsigned)gap, (unsigned)used,
-             (unsigned)(used + gap + r->item.height));
+    uint16_t item_cost = (r->item.kind == PageItem::TextLine) ? r->item.baseline : r->item.height;
+    uint16_t new_pd =
+        (r->item.kind == PageItem::TextLine) ? static_cast<uint16_t>(r->item.height - r->item.baseline) : 0;
 
-    used += gap + r->item.height;
+    MR_TRACE("    fwd idx=%zu kind=%s h=%u bl=%u avail=%u gap=%u pd=%u->%u -> used %u->%u", idx,
+             trace_kind(r->item.kind), (unsigned)r->item.height, (unsigned)r->item.baseline, (unsigned)avail,
+             (unsigned)gap, (unsigned)pending_desc, (unsigned)new_pd, (unsigned)used,
+             (unsigned)(used + pending_desc + gap + item_cost));
+
+    used += pending_desc + gap + item_cost;
+    pending_desc = new_pd;
     has_content |= (r->item.kind != PageItem::Empty);
     size_t next_idx = r->next_idx;
     items.push_back(std::move(r->item));
@@ -1231,7 +1244,7 @@ TextLayout::CollectResult TextLayout::collect_page_items(PagePosition pos) const
   const size_t pcnt = source_->paragraph_count();
 
   std::vector<PageItem> items;
-  uint16_t used = 0;
+  uint16_t used = 0, pending_desc = 0;
   bool has_content = false, page_full = false, pending_page_break = false;
   PagePosition boundary = pos;
 
@@ -1249,8 +1262,8 @@ TextLayout::CollectResult TextLayout::collect_page_items(PagePosition pos) const
     uint16_t spc = static_cast<uint16_t>(spc_i < 0 ? 0 : spc_i);
     size_t start_idx = (pi == (size_t)pos.paragraph) ? (size_t)pos.offset : 0;
 
-    size_t break_idx =
-        collect_para_items(lp, start_idx, spc, ph, used, has_content, page_full, pending_page_break, boundary, items);
+    size_t break_idx = collect_para_items(lp, start_idx, spc, ph, used, pending_desc, has_content, page_full,
+                                          pending_page_break, boundary, items);
 
     if (!page_full && !items.empty()) {
       auto probe = lp.collect(break_idx, ph);
@@ -1323,29 +1336,20 @@ static size_t paragraph_end_idx(const LaidOut& lp) {
 }
 
 // Mirror of collect_para_items, going backward.
-// Collects from end_idx down to 0 (or until the page is full).
-// desc is the font's descender height (y_advance - baseline).  When a leading
-// spacer at index 0 doesn't quite fit (overflow ≤ desc), it is accepted anyway
-// because the overflow was caused by a baseline-fit text line earlier on the
-// page.  This is safe: mathematical analysis shows the spacer only fails to fit
-// in backward when used_fwd > ph (baseline-fit overflow), never for normal pages.
+// Uses the same pending_desc model: cost = pending_desc + gap + baseline (TextLine) or height (others).
+// pending_desc carries across paragraph boundaries, exactly mirroring the forward pass.
 // Returns the remaining start offset within the paragraph (0 = fully consumed).
-static size_t collect_para_items_bwd(const LaidOut& lp, size_t end_idx, uint16_t spc, uint16_t ph, uint16_t desc,
-                                     uint16_t& used, bool& page_full, std::vector<PageItem>& rev_items) {
-  MR_TRACE("  bwd para %u: end_idx=%zu spc=%u used=%u ph=%u desc=%u", (unsigned)lp.para_idx, end_idx, (unsigned)spc,
-           (unsigned)used, (unsigned)ph, (unsigned)desc);
+static size_t collect_para_items_bwd(const LaidOut& lp, size_t end_idx, uint16_t spc, uint16_t ph, uint16_t& used,
+                                     uint16_t& pending_desc, bool& page_full, std::vector<PageItem>& rev_items) {
+  MR_TRACE("  bwd para %u: end_idx=%zu spc=%u used=%u ph=%u pd=%u", (unsigned)lp.para_idx, end_idx, (unsigned)spc,
+           (unsigned)used, (unsigned)ph, (unsigned)pending_desc);
   size_t idx = end_idx;
   bool first_item = true;
   while (idx > 0 && !page_full) {
     uint16_t gap = (first_item && !rev_items.empty()) ? spc : 0;
-    uint16_t avail = (used + gap < ph) ? static_cast<uint16_t>(ph - used - gap) : 0;
+    uint16_t avail = (used + pending_desc + gap < ph) ? static_cast<uint16_t>(ph - used - pending_desc - gap) : 0;
 
-    // Leading spacer at index 0 of a paragraph: extend available by the font's
-    // descender height to absorb baseline-fit overflow from the last text line.
-    bool is_spacer = (idx == 1 && lp.leading_spacer > 0 && end_idx > 1);
-    uint16_t effective_avail = is_spacer ? static_cast<uint16_t>(avail + desc) : avail;
-
-    if (effective_avail == 0) {
+    if (avail == 0) {
       auto probe = lp.collect_backward(idx, ph);
       if (probe) {
         page_full = true;
@@ -1354,48 +1358,30 @@ static size_t collect_para_items_bwd(const LaidOut& lp, size_t end_idx, uint16_t
       break;
     }
 
-    auto r = lp.collect_backward(idx, effective_avail);
+    auto r = lp.collect_backward(idx, avail);
     if (!r) {
       // Distinguish exhausted vs. item too tall for remaining space.
       auto probe = lp.collect_backward(idx, ph);
       if (probe) {
         page_full = true;
-        MR_TRACE("    bwd idx=%zu avail=%u -> item too tall, page_full", idx, (unsigned)effective_avail);
+        MR_TRACE("    bwd idx=%zu avail=%u -> item too tall, page_full", idx, (unsigned)avail);
       } else {
         MR_TRACE("    bwd idx=%zu -> exhausted", idx);
       }
       break;
     }
 
-    // Symmetric baseline-fit rule:
-    //   * The FIRST backward-collected item is the LAST item in forward order.
-    //     If it's a text line, forward layout allows its descender to extend
-    //     past the page bottom, so backward must count only its baseline toward
-    //     `used` — otherwise the budget for items above it is too tight and a
-    //     line that forward would have placed at the top would be rejected
-    //     here (e.g. BaselineFit_ForwardBackwardRoundTrip).
-    //   * EVERY OTHER backward-collected text item must fit by its FULL line
-    //     height. Forward only tolerates descender overflow on its last item;
-    //     allowing it mid-page in backward would yield a page whose start, when
-    //     re-rendered forward, drops the bottom-most item (e.g. an HR sitting
-    //     after a tall paragraph at chapter end — see HrBackwardTest).
-    const bool is_first_on_page = rev_items.empty();
-    if (!is_first_on_page && r->item.kind == PageItem::TextLine && r->item.height > effective_avail) {
-      page_full = true;
-      MR_TRACE("    bwd idx=%zu kind=Text h=%u > avail=%u (non-first) -> REJECT, page_full", idx,
-               (unsigned)r->item.height, (unsigned)effective_avail);
-      break;
-    }
-    uint16_t consumed = r->item.height;
-    if (is_first_on_page && r->item.kind == PageItem::TextLine)
-      consumed = r->item.baseline;
+    uint16_t item_cost = (r->item.kind == PageItem::TextLine) ? r->item.baseline : r->item.height;
+    uint16_t new_pd =
+        (r->item.kind == PageItem::TextLine) ? static_cast<uint16_t>(r->item.height - r->item.baseline) : 0;
 
-    MR_TRACE("    bwd idx=%zu kind=%s h=%u bl=%u avail=%u gap=%u first=%d consumed=%u -> used %u->%u next_idx=%zu", idx,
-             trace_kind(r->item.kind), (unsigned)r->item.height, (unsigned)r->item.baseline, (unsigned)effective_avail,
-             (unsigned)gap, (int)is_first_on_page, (unsigned)consumed, (unsigned)used,
-             (unsigned)(used + gap + consumed), r->next_idx);
+    MR_TRACE("    bwd idx=%zu kind=%s h=%u bl=%u avail=%u gap=%u pd=%u->%u -> used %u->%u next_idx=%zu", idx,
+             trace_kind(r->item.kind), (unsigned)r->item.height, (unsigned)r->item.baseline, (unsigned)avail,
+             (unsigned)gap, (unsigned)pending_desc, (unsigned)new_pd, (unsigned)used,
+             (unsigned)(used + pending_desc + gap + item_cost), r->next_idx);
 
-    used += gap + consumed;
+    used += pending_desc + gap + item_cost;
+    pending_desc = new_pd;
     first_item = false;
     idx = r->next_idx;
     rev_items.push_back(std::move(r->item));
@@ -1409,10 +1395,6 @@ static size_t collect_para_items_bwd(const LaidOut& lp, size_t end_idx, uint16_t
 
 TextLayout::CollectResult TextLayout::collect_page_items_backward(PagePosition end_pos) const {
   const uint16_t ph = opts_.height - opts_.padding_top - opts_.padding_bottom;
-  // Extend backward budget by the normal-font descender height so that a
-  // leading spacer at para 0 is accepted even when a baseline-fit text line
-  // caused a tiny overflow (≤ desc pixels) in the forward pass.
-  const uint16_t desc = static_cast<uint16_t>(font_->y_advance() - font_->baseline());
   const size_t pcnt = source_->paragraph_count();
 
   if (pcnt == 0 || (end_pos.paragraph == 0 && end_pos.offset == 0))
@@ -1423,7 +1405,7 @@ TextLayout::CollectResult TextLayout::collect_page_items_backward(PagePosition e
     };
 
   std::vector<PageItem> rev_items;
-  uint16_t used = 0;
+  uint16_t used = 0, pending_desc = 0;
   bool page_full = false;
   bool stopped_at_page_break = false;
   PagePosition start = {0, 0, 0};
@@ -1475,12 +1457,12 @@ TextLayout::CollectResult TextLayout::collect_page_items_backward(PagePosition e
     // Inter-paragraph spacing: gap between pi and the next paragraph (pi+1).
     // spacing_before[pi+1] is applied by assemble_page when pi+1's first item follows pi's.
     // Only budget it once items from later paragraphs are already collected.
-    int spc_i = (!rev_items.empty())
+    int spc_i = (!rev_items.empty() && pi > 0)
                     ? static_cast<int>(source_->paragraph(pi + 1).spacing_before.value_or(opts_.para_spacing))
                     : 0;
     uint16_t spc = static_cast<uint16_t>(spc_i < 0 ? 0 : spc_i);
 
-    size_t remaining = collect_para_items_bwd(lp, para_end_idx, spc, ph, desc, used, page_full, rev_items);
+    size_t remaining = collect_para_items_bwd(lp, para_end_idx, spc, ph, used, pending_desc, page_full, rev_items);
 
     // Update start only when at least one item was collected from this paragraph.
     if (!rev_items.empty() && remaining < para_end_idx) {
