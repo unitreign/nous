@@ -207,7 +207,7 @@ class Application {
   uint32_t inactivity_ms_ = 0;
 
   bool invert_menu_buttons_ = false;
-  bool invert_bottom_paging_ = false;
+  bool invert_bottom_paging_ = true;
   bool invert_side_buttons_ = false;
   bool rotate_display_ = false;
   int menu_font_size_ = 0;
