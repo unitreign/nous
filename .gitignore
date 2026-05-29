@@ -45,3 +45,5 @@ test/bench_results.json
 /resources/fonts/bookerly
 /resources/images
 /resources/sd fonts/ttf
+/version.txt
+/firmware.bin
