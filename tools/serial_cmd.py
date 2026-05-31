@@ -541,6 +541,12 @@ def main():
         help="Non-interactive: upload an EPUB file then exit",
     )
     parser.add_argument(
+        "--upload-dir",
+        metavar="DIR",
+        default=None,
+        help="Non-interactive: upload all .epub files in DIR then exit",
+    )
+    parser.add_argument(
         "--upload-sleep",
         metavar="FILE",
         default=None,
@@ -633,6 +639,40 @@ def main():
         ok = upload_epub(ser, fp)
         ser.close()
         sys.exit(0 if ok else 1)
+
+    if args.upload_dir:
+        dir_path = Path(args.upload_dir)
+        if not dir_path.is_dir():
+            print(f"Not a directory: {dir_path}", file=sys.stderr)
+            ser.close()
+            sys.exit(1)
+        epubs = sorted(dir_path.glob("*.epub"))
+        if not epubs:
+            print(f"No .epub files found in {dir_path}", file=sys.stderr)
+            ser.close()
+            sys.exit(1)
+        existing = set(send_list_books_raw(ser))
+        to_upload = [fp for fp in epubs if fp.name not in existing]
+        skipped = len(epubs) - len(to_upload)
+        if skipped:
+            print(f"Skipping {skipped} file(s) already on device")
+        if not to_upload:
+            print("Nothing to upload")
+            ser.close()
+            sys.exit(0)
+        print(f"Found {len(to_upload)} .epub file(s) to upload")
+        ok = 0
+        for i, fp in enumerate(to_upload, 1):
+            print(f"\n[{i}/{len(to_upload)}] ", end="", flush=True)
+            drain(ser)
+            try:
+                if upload_epub(ser, fp):
+                    ok += 1
+            except OSError as e:
+                print(f"ERROR: {e}")
+        print(f"\nDone: {ok}/{len(to_upload)} uploaded successfully")
+        ser.close()
+        sys.exit(0 if ok == len(to_upload) else 1)
 
     if args.upload_sleep:
         fp = Path(args.upload_sleep)

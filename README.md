@@ -68,6 +68,9 @@ Books (`.epub`) can go anywhere on the SD card — the device scans recursively 
 # Upload an EPUB book
 python tools/serial_cmd.py --port COM4 --upload path/to/book.epub
 
+# Upload all EPUB books in a directory
+python tools/serial_cmd.py --port COM4 --upload-dir path/to/books/
+
 # Upload an SD card font (no firmware rebuild needed)
 python tools/serial_cmd.py --port COM4 --upload-sd-font "resources/sd fonts/Cartisse.mfb"
 
