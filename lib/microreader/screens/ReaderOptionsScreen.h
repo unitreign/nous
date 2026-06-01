@@ -169,6 +169,9 @@ class ReaderOptionsScreen final : public ListMenuScreen {
   int prev_selected_ = 0;
   int prev_idx_links_ = -1;
 
+  std::string book_title_;
+  std::string book_title1_buf_;
+  std::string book_title2_buf_;
   std::string chapter_title_;
   int book_progress_pct_ = 0;
   int chapter_progress_pct_ = 0;

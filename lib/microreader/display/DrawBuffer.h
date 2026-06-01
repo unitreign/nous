@@ -590,26 +590,26 @@ class DrawBuffer {
   // scratch.  The region is byte-aligned in physical space so the extraction
   // can be done with plain memcpy (no bit-shifting).
   //
-  // Logical box: 256 x 40 px, centred horizontally, 4 px from the bottom.
-  //   lx = (480 - 256) / 2 = 112,  ly = 788 - 40 - 4 = 744
+  // Logical box: 256 x 32 px, centred horizontally, flush to the bottom.
+  //   lx = (480 - 256) / 2 = 112,  ly = 788 - 32 = 756
   // Physical (Deg90 rotation):
-  //   px = ly = 744  (byte-aligned: 744 / 8 = 93)
+  //   px = ly = 756  (byte-aligned with panel offset: 756 + 12 = 768)
   //   py = PhysH - lx - lw = 480 - 112 - 256 = 112
-  //   pw = lh = 40   ->  stride = 5 bytes
+  //   pw = lh = 32   ->  stride = 4 bytes
   //   ph = lw = 256
-  // Mini-buffer size: 5 x 256 = 1280 bytes each (stack-allocated).
+  // Mini-buffer size: 4 x 256 = 1024 bytes each (stack-allocated).
 
   static constexpr int kLoadLogW = 256;
   static constexpr int kLoadLogH = 32;
   static constexpr int kLoadLogX = (kWidth - kLoadLogW) / 2;  // 112
   static constexpr int kLoadLogY = kHeight - kLoadLogH;       // - 4;   // 744
 
-  static constexpr int kLoadPhysX = kLoadLogY;                                              // 744
+  static constexpr int kLoadPhysX = kLoadLogY;                                              // 756
   static constexpr int kLoadPhysY = DisplayFrame::kPhysicalHeight - kLoadLogX - kLoadLogW;  // 112
-  static constexpr int kLoadPhysW = kLoadLogH;                                              // 40
+  static constexpr int kLoadPhysW = kLoadLogH;                                              // 32
   static constexpr int kLoadPhysH = kLoadLogW;                                              // 256
-  static constexpr int kLoadStride = (kLoadPhysW + 7) / 8;                                  // 5
-  static constexpr int kLoadBufBytes = kLoadStride * kLoadPhysH;                            // 1280
+  static constexpr int kLoadStride = (kLoadPhysW + 7) / 8;                                  // 4
+  static constexpr int kLoadBufBytes = kLoadStride * kLoadPhysH;                            // 1024
 
   // Bar geometry.
   static constexpr int kBarW = 160;
@@ -888,7 +888,7 @@ class DrawBuffer {
       const int tw = static_cast<int>(font.word_width(text, strlen(text), FontStyle::Regular));
       const int text_lx = kWidth / 2 - tw / 2;
       const int baseline_ly = kLoadLogY + 3 + static_cast<int>(font.baseline());
-      draw_text_impl_(t, text_lx, baseline_ly, text, strlen(text), font, GrayPlane::BW, /*white=*/false,
+      draw_text_impl_(t, text_lx, baseline_ly, text, strlen(text), font, GrayPlane::BW, false,
                       FontStyle::Regular);
     }
 

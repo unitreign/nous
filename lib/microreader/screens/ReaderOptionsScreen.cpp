@@ -1,5 +1,6 @@
 #include "ReaderOptionsScreen.h"
 
+#include <climits>
 #include <cstring>
 
 #include "../Application.h"
@@ -21,6 +22,7 @@ constexpr const char* ReaderSettings::kFontSizeNames[];
 
 void ReaderOptionsScreen::populate(const TableOfContents& toc, uint16_t current_chapter, uint16_t current_para,
                                    const std::string& fallback_title, int book_progress_pct, int chapter_progress_pct) {
+  book_title_ = fallback_title;
   chapter_title_ = fallback_title;
   int best_match = -1;
   for (size_t i = 0; i < toc.entries.size(); ++i) {
@@ -48,6 +50,7 @@ static const char* fmt_setting(char* buf, size_t bufsz, const char* label, const
 }
 
 void ReaderOptionsScreen::start(DrawBuffer& buf, IRuntime& runtime) {
+  buf_ = &buf;
   // Capture current selection and Links position before the base class
   // calls on_start(), which rebuilds the list.
   prev_selected_ = selected_index();
@@ -65,7 +68,108 @@ void ReaderOptionsScreen::set_page_links(const std::vector<PageLink>& links,
 }
 
 void ReaderOptionsScreen::on_start() {
-  title_ = "Options";
+  title2_ = nullptr;
+  book_title1_buf_.clear();
+
+  if (header_font_.valid()) {
+    const int max_line_w = buf_->width() - 24;
+    const int total_w = header_font_.word_width(book_title_.c_str(), book_title_.length(), FontStyle::Regular);
+    if (total_w <= max_line_w) {
+      title_ = book_title_.c_str();
+    } else {
+      std::vector<std::string> words;
+      std::string w;
+      for (size_t i = 0; i <= book_title_.length(); ++i) {
+        if (i == book_title_.length() || book_title_[i] == ' ') {
+          if (!w.empty()) words.push_back(w);
+          w.clear();
+        } else {
+          w += book_title_[i];
+        }
+      }
+
+      std::vector<int> word_w;
+      word_w.reserve(words.size());
+      int all_w = 0;
+      for (const auto& word : words) {
+        int ww = static_cast<int>(header_font_.word_width(word.c_str(), word.length(), FontStyle::Regular));
+        word_w.push_back(ww);
+        all_w += ww;
+      }
+      int spaces = static_cast<int>(words.size()) - 1;
+      if (spaces > 0) all_w += spaces * static_cast<int>(header_font_.word_width(" ", 1, FontStyle::Regular));
+
+      if (all_w <= max_line_w) {
+        title_ = book_title_.c_str();
+      } else {
+        int space_w = static_cast<int>(header_font_.word_width(" ", 1, FontStyle::Regular));
+        int ellipsis_w = static_cast<int>(header_font_.word_width("...", 3, FontStyle::Regular));
+
+        int best_split = 1;
+        int best_diff = INT_MAX;
+        int l1_w = 0;
+        for (size_t i = 0; i < words.size(); ++i) {
+          if (i > 0) l1_w += space_w;
+          l1_w += word_w[i];
+          if (l1_w > max_line_w) break;
+          if (i + 1 < words.size()) {
+            int l2_w = 0;
+            for (size_t j = i + 1; j < words.size(); ++j) {
+              if (j > i + 1) l2_w += space_w;
+              l2_w += word_w[j];
+            }
+            int diff = std::abs(l1_w - l2_w);
+            if (diff < best_diff) {
+              best_diff = diff;
+              best_split = static_cast<int>(i) + 1;
+            }
+          }
+        }
+
+        std::string line1, line2;
+        for (int i = 0; i < best_split; ++i) {
+          if (i > 0) line1 += ' ';
+          line1 += words[i];
+        }
+        for (int i = best_split; i < static_cast<int>(words.size()); ++i) {
+          if (i > best_split) line2 += ' ';
+          line2 += words[i];
+        }
+
+        if (header_font_.word_width(line2.c_str(), line2.length(), FontStyle::Regular) <= max_line_w) {
+          book_title2_buf_ = line2;
+          title2_ = book_title2_buf_.c_str();
+        } else {
+          int l2_w = 0;
+          int trunc_at = 0;
+          for (int i = best_split; i < static_cast<int>(words.size()); ++i) {
+            int word_with_space = word_w[i] + ((i > best_split) ? space_w : 0);
+            if (l2_w + word_with_space + ellipsis_w > max_line_w) break;
+            l2_w += word_with_space;
+            trunc_at = i + 1;
+          }
+          line2.clear();
+          for (int i = best_split; i < trunc_at; ++i) {
+            if (i > best_split) line2 += ' ';
+            line2 += words[i];
+          }
+          line2 += "...";
+          book_title2_buf_ = line2;
+          title2_ = book_title2_buf_.c_str();
+        }
+
+        book_title1_buf_ = line1;
+        title_ = book_title1_buf_.c_str();
+      }
+    }
+  } else {
+    if (book_title_.length() > 30) {
+      book_title1_buf_ = book_title_.substr(0, 27) + "...";
+      title_ = book_title1_buf_.c_str();
+    } else {
+      title_ = book_title_.c_str();
+    }
+  }
 
   subtitle_ = chapter_title_;
   if (subtitle_.length() > 42) {

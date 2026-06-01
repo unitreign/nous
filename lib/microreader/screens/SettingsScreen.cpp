@@ -26,6 +26,18 @@
 
 namespace microreader {
 
+static const char* const kControlModeLabels[] = {
+  "Default", "Side Inverted", "Front Inverted", "Inverted"
+};
+
+static std::string get_reader_controls_label(ControlMode mode) {
+  return std::string("Reader Controls: ") + kControlModeLabels[static_cast<int>(mode)];
+}
+
+static std::string get_menu_controls_label(ControlMode mode) {
+  return std::string("Menu Controls: ") + kControlModeLabels[static_cast<int>(mode)];
+}
+
 static std::string get_list_format_label(BookListFormat fmt) {
   if (fmt == BookListFormat::TitleOnly)
     return "Book List: Title";
@@ -34,24 +46,12 @@ static std::string get_list_format_label(BookListFormat fmt) {
   return "Book List: Title & Author";
 }
 
-static std::string get_menu_nav_label(bool inverted) {
-  return std::string("Menu Nav: ") + (inverted ? "Left=Up" : "Left=Down");
-}
-
-static std::string get_bottom_paging_label(bool inverted) {
-  return std::string("Bottom Paging: ") + (inverted ? "Left=Prev" : "Left=Next");
-}
-
-static std::string get_side_paging_label(bool inverted) {
-  return std::string("Side Paging: ") + (inverted ? "Top=Prev" : "Top=Next");
-}
-
 static std::string get_rotate_display_label(bool rotated) {
   return std::string("Display: ") + (rotated ? "Landscape" : "Portrait");
 }
 
 static std::string get_menu_font_label(int size) {
-  return std::string("Menu Font: ") + (size == 1 ? "Medium" : "Small");
+  return std::string("Menu Size: ") + (size == 1 ? "Medium" : "Small");
 }
 
 static std::string get_sleep_image_label(const std::string& path) {
@@ -179,7 +179,7 @@ void SettingsScreen::on_start() {
     }
   }
 
-  // --- Appearance / General ---
+  // --- Appearance ---
   idx_rotate_display_ = count();
   add_item(get_rotate_display_label(app_ && app_->rotate_display()));
 
@@ -202,18 +202,14 @@ void SettingsScreen::on_start() {
   add_separator();
 
   // --- Controls ---
-  idx_invert_side_ = count();
-  add_item(get_side_paging_label(app_->invert_side_buttons()));
+  idx_reader_controls_ = count();
+  add_item(get_reader_controls_label(app_->reader_controls()));
 
-  idx_invert_bottom_paging_ = count();
-  add_item(get_bottom_paging_label(app_->invert_bottom_paging()));
-
-  idx_invert_menu_ = count();
-  add_item(get_menu_nav_label(app_->invert_menu_buttons()));
+  idx_menu_controls_ = count();
+  add_item(get_menu_controls_label(app_->menu_controls()));
 
   add_separator();
 
-  // --- System / Maintenance ---
   if (data_dir_) {
     idx_clear_cache_ = count();
     add_item("Clear Cache");
@@ -273,7 +269,11 @@ void SettingsScreen::on_select(int index) {
 #endif
   if (index == idx_clear_cache_) {
     clear_cache_();
-    return;  // stay on screen
+    toast_original_label_ = get_item_label(idx_clear_cache_);
+    toast_idx_ = idx_clear_cache_;
+    toast_frames_ = 15;
+    set_item_label(idx_clear_cache_, "Cache cleared!");
+    return;
   }
   if (index == idx_rebuild_index_) {
     if (app_->main_menu() && app_->main_menu()->has_books_dir() && app_->data_dir_) {
@@ -301,29 +301,22 @@ void SettingsScreen::on_select(int index) {
       app_->main_menu()->set_list_format(fmt);
       set_item_label(idx_list_format_, get_list_format_label(fmt));
     }
+    app_->save_settings_();
     return;
   }
-  if (index == idx_invert_menu_) {
+  if (index == idx_reader_controls_) {
     if (app_) {
-      bool v = !app_->invert_menu_buttons();
-      app_->set_invert_menu_buttons(v);
-      set_item_label(idx_invert_menu_, get_menu_nav_label(v));
+      ControlMode v = static_cast<ControlMode>((static_cast<int>(app_->reader_controls()) + 1) % 4);
+      app_->set_reader_controls(v);
+      set_item_label(idx_reader_controls_, get_reader_controls_label(v));
     }
     return;
   }
-  if (index == idx_invert_bottom_paging_) {
+  if (index == idx_menu_controls_) {
     if (app_) {
-      bool v = !app_->invert_bottom_paging();
-      app_->set_invert_bottom_paging(v);
-      set_item_label(idx_invert_bottom_paging_, get_bottom_paging_label(v));
-    }
-    return;
-  }
-  if (index == idx_invert_side_) {
-    if (app_) {
-      bool v = !app_->invert_side_buttons();
-      app_->set_invert_side_buttons(v);
-      set_item_label(idx_invert_side_, get_side_paging_label(v));
+      ControlMode v = static_cast<ControlMode>((static_cast<int>(app_->menu_controls()) + 1) % 4);
+      app_->set_menu_controls(v);
+      set_item_label(idx_menu_controls_, get_menu_controls_label(v));
     }
     return;
   }
@@ -369,8 +362,12 @@ void SettingsScreen::on_select(int index) {
     if (app_) {
       app_->set_installed_font_path("");
       app_->invalidate_font();
+      toast_original_label_ = get_item_label(idx_invalidate_font_);
+      toast_idx_ = idx_invalidate_font_;
+      toast_frames_ = 15;
+      set_item_label(idx_invalidate_font_, "Font invalidated!");
     }
-    return;  // stay on settings screen
+    return;
   }
   if (index == idx_spiffs_) {
     const esp_partition_t* part =

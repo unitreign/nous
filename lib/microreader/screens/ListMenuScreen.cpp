@@ -42,6 +42,8 @@ void ListMenuScreen::start(DrawBuffer& buf, IRuntime& runtime) {
     center_on_selected_();
   else
     ensure_visible_();
+  while (selected_ < count() && selected_ < (int)separators_.size() && separators_[selected_])
+    ++selected_;
   draw_all_(buf, runtime.battery_percentage());
 }
 
@@ -54,7 +56,9 @@ void ListMenuScreen::ensure_visible_() {
     subtitle_h += ui_font_.y_advance() + 8;
   if (!subtitle3_.empty() && ui_font_.valid())
     subtitle_h += ui_font_.y_advance() + 8;
-  const int header_h = kHeaderY + (header_font_.valid() ? header_font_.y_advance() : 0) + subtitle_h + 8;
+  const int hfh = header_font_.valid() ? header_font_.y_advance() : 0;
+  const int t2h = (title2_ && header_font_.valid()) ? header_font_.y_advance() : 0;
+  const int header_h = kHeaderY + hfh + t2h + subtitle_h + 8;
   const int visible = (buf_->height() - header_h - kBottomPadding) / line_h;
   if (visible <= 0)
     return;
@@ -82,7 +86,9 @@ void ListMenuScreen::center_on_selected_() {
     subtitle_h += ui_font_.y_advance() + 8;
   if (!subtitle3_.empty() && ui_font_.valid())
     subtitle_h += ui_font_.y_advance() + 8;
-  const int header_h = kHeaderY + (header_font_.valid() ? header_font_.y_advance() : 0) + subtitle_h + 8;
+  const int hfh = header_font_.valid() ? header_font_.y_advance() : 0;
+  const int t2h = (title2_ && header_font_.valid()) ? header_font_.y_advance() : 0;
+  const int header_h = kHeaderY + hfh + t2h + subtitle_h + 8;
   const int visible = (buf_->height() - header_h - kBottomPadding) / line_h;
   if (visible <= 0)
     return;
@@ -108,30 +114,36 @@ void ListMenuScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_p
     const size_t title_len = std::strlen(title_);
     const int tw = header_font_.word_width(title_, title_len, FontStyle::Regular);
     buf.draw_text_proportional((W - tw) / 2, kHeaderY + header_font_.baseline(), title_, header_font_, false);
+  }
+  if (title2_ && header_font_.valid()) {
+    const size_t title2_len = std::strlen(title2_);
+    const int tw2 = header_font_.word_width(title2_, title2_len, FontStyle::Regular);
+    const int title2_y = kHeaderY + header_font_.y_advance();
+    buf.draw_text_proportional((W - tw2) / 2, title2_y + header_font_.baseline(), title2_, header_font_, false);
+  }
 
-    // Battery bar at the bottom center (horizontal)
-    if (battery_pct.has_value()) {
-      const int bat_pct = battery_pct.value();
-      const int kBarW = 26;
-      const int kBarH = 8;
-      const int kBarX = (W - kBarW) / 2;  // Center horizontally
-      const int kBarY = H - kBarH - 4;    // Position at the bottom
+  // Battery bar at the bottom center (horizontal)
+  if (battery_pct.has_value()) {
+    const int bat_pct = battery_pct.value();
+    const int kBarW = 26;
+    const int kBarH = 8;
+    const int kBarX = (W - kBarW) / 2;
+    const int kBarY = H - kBarH - 4;
 
-      // Outline: rounded corners
-      buf.fill_rect(kBarX + 1, kBarY, kBarW - 2, 1, false);              // top edge
-      buf.fill_rect(kBarX + 1, kBarY + kBarH - 1, kBarW - 2, 1, false);  // bottom edge
-      buf.fill_rect(kBarX, kBarY + 1, 1, kBarH - 2, false);              // left edge
-      buf.fill_rect(kBarX + kBarW - 1, kBarY + 1, 1, kBarH - 2, false);  // right edge
+    // Outline: rounded corners
+    buf.fill_rect(kBarX + 1, kBarY, kBarW - 2, 1, false);
+    buf.fill_rect(kBarX + 1, kBarY + kBarH - 1, kBarW - 2, 1, false);
+    buf.fill_rect(kBarX, kBarY + 1, 1, kBarH - 2, false);
+    buf.fill_rect(kBarX + kBarW - 1, kBarY + 1, 1, kBarH - 2, false);
 
-      // Inner bar: sloped right side (left to right)
-      const int max_fill = kBarW - 4;
-      const int filled = (bat_pct * max_fill) / 100;
-      if (filled > 0) {
-        buf.fill_row(kBarY + 5, kBarX + 2, kBarX + 2 + std::min(filled + 3, max_fill), false);
-        buf.fill_row(kBarY + 4, kBarX + 2, kBarX + 2 + std::min(filled + 2, max_fill), false);
-        buf.fill_row(kBarY + 3, kBarX + 2, kBarX + 2 + std::min(filled + 1, max_fill), false);
-        buf.fill_row(kBarY + 2, kBarX + 2, kBarX + 2 + std::min(filled, max_fill), false);
-      }
+    // Inner bar: sloped right side (left to right)
+    const int max_fill = kBarW - 4;
+    const int filled = (bat_pct * max_fill) / 100;
+    if (filled > 0) {
+      buf.fill_row(kBarY + 5, kBarX + 2, kBarX + 2 + std::min(filled + 3, max_fill), false);
+      buf.fill_row(kBarY + 4, kBarX + 2, kBarX + 2 + std::min(filled + 2, max_fill), false);
+      buf.fill_row(kBarY + 3, kBarX + 2, kBarX + 2 + std::min(filled + 1, max_fill), false);
+      buf.fill_row(kBarY + 2, kBarX + 2, kBarX + 2 + std::min(filled, max_fill), false);
     }
   }
 
@@ -139,24 +151,24 @@ void ListMenuScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_p
   if (!subtitle_.empty() && ui_font_.valid()) {
     const size_t sub_len = subtitle_.size();
     const int sw = ui_font_.word_width(subtitle_.c_str(), sub_len, FontStyle::Regular);
-    const int title_bottom = kHeaderY + (header_font_.valid() ? header_font_.y_advance() : 0);
-    buf.draw_text_proportional((W - sw) / 2, title_bottom + ui_font_.baseline(), subtitle_.c_str(), sub_len, ui_font_,
+    const int title_bottom = kHeaderY + (header_font_.valid() ? header_font_.y_advance() : 0) + ((title2_ && header_font_.valid()) ? header_font_.y_advance() : 0) + ((title2_ && header_font_.valid()) ? 4 : 0);
+    buf.draw_text_proportional((W - sw) / 2, title_bottom + ui_font_.baseline() + 2, subtitle_.c_str(), sub_len, ui_font_,
                                false);
     subtitle_h += ui_font_.y_advance() + 8;
   }
   if (!subtitle2_.empty() && ui_font_.valid()) {
     const size_t sub2_len = subtitle2_.size();
     const int sw2 = ui_font_.word_width(subtitle2_.c_str(), sub2_len, FontStyle::Regular);
-    const int title_bottom = kHeaderY + (header_font_.valid() ? header_font_.y_advance() : 0);
-    buf.draw_text_proportional((W - sw2) / 2, title_bottom + subtitle_h + ui_font_.baseline() - 4, subtitle2_.c_str(),
+    const int title_bottom = kHeaderY + (header_font_.valid() ? header_font_.y_advance() : 0) + ((title2_ && header_font_.valid()) ? header_font_.y_advance() : 0) + ((title2_ && header_font_.valid()) ? 4 : 0);
+    buf.draw_text_proportional((W - sw2) / 2, title_bottom + subtitle_h + ui_font_.baseline() + 2, subtitle2_.c_str(),
                                sub2_len, ui_font_, false);
     subtitle_h += ui_font_.y_advance() + 8;
   }
   if (!subtitle3_.empty() && ui_font_.valid()) {
     const size_t sub3_len = subtitle3_.size();
     const int sw3 = ui_font_.word_width(subtitle3_.c_str(), sub3_len, FontStyle::Regular);
-    const int title_bottom = kHeaderY + (header_font_.valid() ? header_font_.y_advance() : 0);
-    buf.draw_text_proportional((W - sw3) / 2, title_bottom + subtitle_h + ui_font_.baseline() - 4, subtitle3_.c_str(),
+    const int title_bottom = kHeaderY + (header_font_.valid() ? header_font_.y_advance() : 0) + ((title2_ && header_font_.valid()) ? header_font_.y_advance() : 0) + ((title2_ && header_font_.valid()) ? 4 : 0);
+    buf.draw_text_proportional((W - sw3) / 2, title_bottom + subtitle_h + ui_font_.baseline() + 2, subtitle3_.c_str(),
                                sub3_len, ui_font_, false);
     subtitle_h += ui_font_.y_advance() + 8;
   }
@@ -173,7 +185,9 @@ void ListMenuScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_p
   const int line_h = ui_font_.y_advance() + 8;
   const int baseline = ui_font_.baseline();
   // Provide padding below the header
-  const int header_h = kHeaderY + (header_font_.valid() ? header_font_.y_advance() : 0) + subtitle_h + 8;
+  const int hfh = header_font_.valid() ? header_font_.y_advance() : 0;
+  const int t2h = (title2_ && header_font_.valid()) ? header_font_.y_advance() : 0;
+  const int header_h = kHeaderY + hfh + t2h + subtitle_h + 8;
   const int visible = (H - header_h - kBottomPadding) / line_h;
 
   const int end = scroll_offset_ + visible < n ? scroll_offset_ + visible : n;
@@ -181,10 +195,15 @@ void ListMenuScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_p
   // Compute total height for centring when all items fit on screen.
   // Separators are drawn as a thin line taking half a line slot.
   int total_h = 0;
-  for (int i = scroll_offset_; i < end; ++i)
-    total_h += (i < (int)separators_.size() && separators_[i]) ? line_h / 2 : line_h;
+  for (int i = scroll_offset_; i < end; ++i) {
+    if (i < (int)separators_.size() && separators_[i]) {
+      total_h += (i < (int)labels_.size() && !labels_[i].empty()) ? line_h : line_h / 2;
+    } else {
+      total_h += line_h;
+    }
+  }
 
-  const int items_y = n <= visible ? header_h + (H - kBottomPadding - header_h - total_h) / 2 : header_h;
+  const int items_y = (H - total_h) / 2 + 20;
 
   static const char kEllipsis[] = "...";
   const int ellipsis_w = ui_font_.word_width(kEllipsis, 3, FontStyle::Regular);
@@ -194,7 +213,15 @@ void ListMenuScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_p
   for (int i = scroll_offset_; i < end; ++i) {
     const bool is_sep = (i < (int)separators_.size() && separators_[i]);
     if (is_sep) {
-      y += line_h / 2;
+      const std::string& hdr = labels_[i];
+      if (!hdr.empty()) {
+        const size_t hlen = hdr.size();
+        const int hw = ui_font_.word_width(hdr.c_str(), hlen, FontStyle::Regular);
+        buf.draw_text_proportional((W - hw) / 2, y + baseline, hdr.c_str(), hlen, ui_font_, false);
+        y += line_h;
+      } else {
+        y += line_h / 2;
+      }
       continue;
     }
     const std::string& label_str = labels_[i];
@@ -204,7 +231,7 @@ void ListMenuScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_p
 
     const int landscape_pad = (buf.rotation() == Rotation::Deg0) ? 10 : 0;
     const int indent_px = align_left_ ? (32 + ((i < (int)indents_.size() ? indents_[i] : 0) * 20)) : 0;
-    const int max_item_w = align_left_ ? (W - 32 - landscape_pad - indent_px) : (W - 120);
+    const int max_item_w = align_left_ ? (W - 32 - landscape_pad - indent_px) : (W - 100);
 
     // Truncate with "..." if the label is too wide to fit.
     if (iw > max_item_w) {
@@ -285,10 +312,10 @@ void ListMenuScreen::draw_button_hints_(DrawBuffer& buf) const {
   const int baseline = ui_font_.baseline();
 
   // Four labels: back=◀, select=▶, down=▼, up=▲
-  bool inv_menu = app_ && app_->invert_menu_buttons();
+  bool front_inv = app_ && app_->menu_front_inverted();
   const char* lbl_down = "\xe2\x96\xbc";
   const char* lbl_up = "\xe2\x96\xb2";
-  const char* kLabels[4] = {"\xe2\x97\x80", "\xe2\x96\xb6", inv_menu ? lbl_up : lbl_down, inv_menu ? lbl_down : lbl_up};
+  const char* kLabels[4] = {"\xe2\x97\x80", "\xe2\x96\xb6", front_inv ? lbl_down : lbl_up, front_inv ? lbl_up : lbl_down};
   static const size_t kLens[4] = {3, 3, 3, 3};
 
   const bool sideways = buf.rotation() == Rotation::Deg90;
@@ -343,19 +370,22 @@ void ListMenuScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntim
   bool had_up_press = false;
   bool had_down_press = false;
 
-  bool inv_menu = app_ && app_->invert_menu_buttons();
-  Button logical_up = inv_menu ? Button::Button2 : Button::Button3;
-  Button logical_down = inv_menu ? Button::Button3 : Button::Button2;
+  bool side_inv = app_ && app_->menu_side_inverted();
+  bool front_inv = app_ && app_->menu_front_inverted();
+  Button logical_up_front = front_inv ? Button::Button3 : Button::Button2;
+  Button logical_down_front = front_inv ? Button::Button2 : Button::Button3;
+  Button logical_up_side = side_inv ? Button::Down : Button::Up;
+  Button logical_down_side = side_inv ? Button::Up : Button::Down;
 
   Button btn;
   while (buttons.next_press(btn)) {
-    if (btn == logical_up) {
+    if (btn == logical_up_front || btn == logical_up_side) {
       if (n > 0) {
         move_up();
         moved = true;
         had_up_press = true;
       }
-    } else if (btn == logical_down) {
+    } else if (btn == logical_down_front || btn == logical_down_side) {
       if (n > 0) {
         move_down();
         moved = true;
@@ -387,22 +417,6 @@ void ListMenuScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntim
           }
           break;
 
-        case Button::Up:  // physical up
-          if (n > 0) {
-            move_up();
-            moved = true;
-            had_up_press = true;
-          }
-          break;
-
-        case Button::Down:  // physical down
-          if (n > 0) {
-            move_down();
-            moved = true;
-            had_down_press = true;
-          }
-          break;
-
         default:
           break;
       }
@@ -413,8 +427,8 @@ void ListMenuScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntim
   // step size grows by 1 each frame: frame 0 = 1, frame 1 = 2, frame 2 = 3, …
   auto hold_step = [](int frames) -> int { return frames + 1; };
 
-  const bool up_held = !had_up_press && (buttons.is_down(logical_up) || buttons.is_down(Button::Up));
-  const bool down_held = !had_down_press && (buttons.is_down(logical_down) || buttons.is_down(Button::Down));
+  const bool up_held = !had_up_press && (buttons.is_down(logical_up_front) || buttons.is_down(logical_up_side));
+  const bool down_held = !had_down_press && (buttons.is_down(logical_down_front) || buttons.is_down(logical_down_side));
 
   if (up_held && n > 0) {
     const int step = hold_step(hold_frames_up_);
@@ -436,9 +450,10 @@ void ListMenuScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntim
     hold_frames_down_ = 0;
   }
 
-  if (moved || needs_draw) {
+  if (moved || needs_draw || force_redraw_) {
     draw_all_(buf, runtime.battery_percentage());
     buf.refresh();
+    force_redraw_ = false;
   }
 }
 

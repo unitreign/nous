@@ -402,20 +402,20 @@ void ReaderScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime&
   bool had_next_press = false;
   bool had_prev_press = false;
 
-  bool inv_side = app_ && app_->invert_side_buttons();
-  bool inv_bottom = app_ && app_->invert_bottom_paging();
+  bool side_inv = app_ && app_->reader_side_inverted();
+  bool front_inv = app_ && app_->reader_front_inverted();
 
-  Button logical_next_bottom = inv_bottom ? Button::Button3 : Button::Button2;
-  Button logical_prev_bottom = inv_bottom ? Button::Button2 : Button::Button3;
-  Button logical_next_side = inv_side ? Button::Down : Button::Up;
-  Button logical_prev_side = inv_side ? Button::Up : Button::Down;
+  Button logical_next_front = front_inv ? Button::Button2 : Button::Button3;
+  Button logical_prev_front = front_inv ? Button::Button3 : Button::Button2;
+  Button logical_next_side = side_inv ? Button::Up : Button::Down;
+  Button logical_prev_side = side_inv ? Button::Down : Button::Up;
 
   Button btn;
   while (buttons.next_press(btn)) {
-    if (btn == logical_next_bottom || btn == logical_next_side) {
+    if (btn == logical_next_front || btn == logical_next_side) {
       ++page_delta;
       had_next_press = true;
-    } else if (btn == logical_prev_bottom || btn == logical_prev_side) {
+    } else if (btn == logical_prev_front || btn == logical_prev_side) {
       --page_delta;
       had_prev_press = true;
     } else {
@@ -464,9 +464,9 @@ void ReaderScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime&
   // Hold-down: advance one page per frame while a nav button is held,
   // but only if no fresh press event arrived this frame (avoids double-counting
   // the initial press).
-  if (!had_next_press && (buttons.is_down(logical_next_bottom) || buttons.is_down(logical_next_side)))
+  if (!had_next_press && (buttons.is_down(logical_next_front) || buttons.is_down(logical_next_side)))
     ++page_delta;
-  if (!had_prev_press && (buttons.is_down(logical_prev_bottom) || buttons.is_down(logical_prev_side)))
+  if (!had_prev_press && (buttons.is_down(logical_prev_front) || buttons.is_down(logical_prev_side)))
     --page_delta;
 
   bool changed = false;

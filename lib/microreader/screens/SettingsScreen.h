@@ -20,6 +20,15 @@ class SettingsScreen final : public ListMenuScreen {
 
   void update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& runtime) override {
     buf_ = &buf;
+    if (toast_frames_ > 0) {
+      --toast_frames_;
+      if (toast_frames_ == 0 && toast_idx_ >= 0) {
+        set_item_label(toast_idx_, toast_original_label_);
+        toast_idx_ = -1;
+        toast_original_label_.clear();
+        request_redraw();
+      }
+    }
     ListMenuScreen::update(buttons, buf, runtime);
   }
 
@@ -39,9 +48,8 @@ class SettingsScreen final : public ListMenuScreen {
   int idx_switch_ota_ = -1;
   int idx_invalidate_font_ = -1;
   int idx_spiffs_ = -1;
-  int idx_invert_menu_ = -1;
-  int idx_invert_bottom_paging_ = -1;
-  int idx_invert_side_ = -1;
+  int idx_reader_controls_ = -1;
+  int idx_menu_controls_ = -1;
   int idx_rotate_display_ = -1;
   int idx_menu_font_ = -1;
   int idx_font_ = -1;
@@ -51,6 +59,9 @@ class SettingsScreen final : public ListMenuScreen {
   int font_sel_idx_ = 0;
   std::vector<std::string> sleep_images_;
   int sleep_image_sel_idx_ = 0;
+  int toast_idx_ = -1;
+  std::string toast_original_label_;
+  int toast_frames_ = 0;
 
   void clear_cache_();
 #ifdef ESP_PLATFORM

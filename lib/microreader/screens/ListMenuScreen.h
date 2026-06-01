@@ -40,8 +40,9 @@ class ListMenuScreen : public IScreen {
     return font_size_idx_;
   }
 
- protected:
+  protected:
   const char* title_ = nullptr;
+  const char* title2_ = nullptr;
   std::string subtitle_;
   std::string subtitle2_;
   std::string subtitle3_;
@@ -56,8 +57,8 @@ class ListMenuScreen : public IScreen {
     indents_.push_back(indent);
   }
   // Insert a visual separator (thin horizontal line, non-selectable).
-  void add_separator() {
-    labels_.push_back("");
+  void add_separator(const std::string& header = "") {
+    labels_.push_back(header);
     separators_.push_back(true);
     indents_.push_back(0);
   }
@@ -65,6 +66,11 @@ class ListMenuScreen : public IScreen {
     if (index >= 0 && index < static_cast<int>(labels_.size())) {
       labels_[index] = label;
     }
+  }
+  std::string get_item_label(int index) const {
+    if (index >= 0 && index < static_cast<int>(labels_.size()))
+      return labels_[index];
+    return {};
   }
   void clear_items() {
     labels_.clear();
@@ -93,26 +99,12 @@ class ListMenuScreen : public IScreen {
   // Called when user presses back.
   virtual void on_back();
 
- private:
-  std::vector<std::string> labels_;
-  std::vector<bool> separators_;
-  std::vector<int> indents_;
-  bool align_left_ = false;
-  int selected_ = 0;
-  int scroll_offset_ = 0;
-  bool on_start_set_selection_ = false;
-  int initial_selection_ = -1;
-  // Hold-down acceleration counters (frames button has been held without a fresh press).
-  int hold_frames_up_ = 0;
-  int hold_frames_down_ = 0;
-
+  protected:
   BitmapFont ui_font_;
-  static int font_size_idx_;  // 0=Normal, 1=Large, 2=XLarge
   BitmapFont header_font_;
-  DrawBuffer* buf_ = nullptr;
-  IRuntime* runtime_ = nullptr;
+  static int font_size_idx_;  // 0=Normal, 1=Large, 2=XLarge
+  void request_redraw() { force_redraw_ = true; }
 
- protected:
   // Re-run start() to rebuild items with updated settings (e.g. after font change).
   void restart() {
     if (buf_ && runtime_)
@@ -124,6 +116,19 @@ class ListMenuScreen : public IScreen {
   void center_on_selected_();
 
  private:
+  std::vector<std::string> labels_;
+  std::vector<bool> separators_;
+  std::vector<int> indents_;
+  bool align_left_ = false;
+  int selected_ = 0;
+  int scroll_offset_ = 0;
+  bool on_start_set_selection_ = false;
+  int initial_selection_ = -1;
+  int hold_frames_up_ = 0;
+  int hold_frames_down_ = 0;
+  bool force_redraw_ = false;
+  DrawBuffer* buf_ = nullptr;
+  IRuntime* runtime_ = nullptr;
   void draw_button_hints_(DrawBuffer& buf) const;
 };
 

@@ -33,6 +33,13 @@ enum class ScreenId : uint8_t {
   Links,
 };
 
+enum class ControlMode : uint8_t {
+  Default = 0,
+  SideInverted = 1,
+  FrontInverted = 2,
+  Inverted = 3
+};
+
 class Application {
  public:
   Application() = default;
@@ -104,25 +111,33 @@ class Application {
     return &menu_;
   }
 
-  bool invert_menu_buttons() const {
-    return invert_menu_buttons_;
+  ControlMode reader_controls() const {
+    return reader_controls_;
   }
-  void set_invert_menu_buttons(bool v) {
-    invert_menu_buttons_ = v;
-  }
-
-  bool invert_bottom_paging() const {
-    return invert_bottom_paging_;
-  }
-  void set_invert_bottom_paging(bool v) {
-    invert_bottom_paging_ = v;
+  void set_reader_controls(ControlMode v) {
+    reader_controls_ = v;
+    save_settings_();
   }
 
-  bool invert_side_buttons() const {
-    return invert_side_buttons_;
+  ControlMode menu_controls() const {
+    return menu_controls_;
   }
-  void set_invert_side_buttons(bool v) {
-    invert_side_buttons_ = v;
+  void set_menu_controls(ControlMode v) {
+    menu_controls_ = v;
+    save_settings_();
+  }
+
+  bool reader_side_inverted() const {
+    return reader_controls_ == ControlMode::SideInverted || reader_controls_ == ControlMode::Inverted;
+  }
+  bool reader_front_inverted() const {
+    return reader_controls_ == ControlMode::FrontInverted || reader_controls_ == ControlMode::Inverted;
+  }
+  bool menu_side_inverted() const {
+    return menu_controls_ == ControlMode::SideInverted || menu_controls_ == ControlMode::Inverted;
+  }
+  bool menu_front_inverted() const {
+    return menu_controls_ == ControlMode::FrontInverted || menu_controls_ == ControlMode::Inverted;
   }
 
   bool rotate_display() const {
@@ -130,6 +145,7 @@ class Application {
   }
   void set_rotate_display(bool v) {
     rotate_display_ = v;
+    save_settings_();
   }
 
   int menu_font_size() const {
@@ -138,6 +154,7 @@ class Application {
   void set_menu_font_size(int v) {
     menu_font_size_ = v;
     ListMenuScreen::set_font_size(v);
+    save_settings_();
   }
 
   const std::string& custom_font_path() const {
@@ -206,9 +223,8 @@ class Application {
   static constexpr uint32_t kSleepTimeoutMs = 10u * 60u * 1000u;  // 10 minutes
   uint32_t inactivity_ms_ = 0;
 
-  bool invert_menu_buttons_ = false;
-  bool invert_bottom_paging_ = true;
-  bool invert_side_buttons_ = false;
+  ControlMode reader_controls_ = ControlMode::Default;
+  ControlMode menu_controls_ = ControlMode::Default;
   bool rotate_display_ = false;
   int menu_font_size_ = 0;
 
