@@ -28,6 +28,7 @@ Interactive commands:
                       --clean deletes .mrb files first (tests full conversion).
                       filter narrows to books whose filename contains the string.
     clear             Delete all .mrb files on the device
+    rm <path>         Delete a file by full path (e.g. rm /sdcard/books/book.epub)
     upload <file>     Upload an EPUB file to the device
     bench <book>      Run full EPUB conversion benchmark for a book
     imgsize <book>    Run image format+size benchmark for a book

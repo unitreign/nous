@@ -122,6 +122,7 @@ class ReaderScreen final : public IScreen {
   PagePosition page_pos_;
   PageContent page_;
   bool open_ok_ = false;
+  bool buf_was_touched_ = false;
 
   // Navigation history: stack of positions pushed before following a hyperlink.
   struct NavHistoryEntry {

@@ -580,6 +580,19 @@ static void handle_serial_cmd() {
       ESP_LOGI(kCmdTag, "cleared %d SD fonts", count);
       break;
     }
+    case 'R': {
+      if (!read_cmd_path("rm"))
+        return;
+      if (remove(g_cmd_path) == 0) {
+        ESP_LOGI(kCmdTag, "removed: %s", g_cmd_path);
+        serial_write("OK\n");
+      } else {
+        char buf[300];
+        snprintf(buf, sizeof(buf), "ERR:remove_failed:%s\n", g_cmd_path);
+        serial_write(buf);
+      }
+      break;
+    }
     case 'X': {
       if (!read_cmd_path("bench"))
         return;

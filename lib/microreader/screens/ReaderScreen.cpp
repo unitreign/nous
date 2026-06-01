@@ -196,9 +196,11 @@ void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
   buf_ = &buf;
   book_key_.clear();
   pos_path_.clear();
+  MR_LOGI("reader", "start: path='%s'", path_.c_str());
 
   if (app_ && app_->font_manager())
     app_->font_manager()->ensure_ready(buf);
+  MR_LOGI("reader", "font ready");
 
   // Build cache path: <data_dir>/cache/<basename>/book.mrb
   {
@@ -222,11 +224,25 @@ void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
     mrb_path_ = book_cache_dir_ + "/book.mrb";
   }
 
+  MR_LOGI("reader", "mrb_path='%s'", mrb_path_.c_str());
   bool mrb_ok = mrb_.open(mrb_path_.c_str());
+  MR_LOGI("reader", "mrb_ok=%d", (int)mrb_ok);
+  buf_was_touched_ = false;
 
   if (!mrb_ok) {
     // Upload the current frame before scratch buffer use so the display
     // controller has a valid reference frame for partial refreshes.
+    MR_LOGI("reader", "mrb miss — opening epub: '%s'", path_.c_str());
+    {
+      FILE* check = std::fopen(path_.c_str(), "r");
+      if (!check) {
+        MR_LOGI("reader", "epub not found: '%s'", path_.c_str());
+        open_ok_ = false;
+        goto show_error;
+      }
+      std::fclose(check);
+    }
+    buf_was_touched_ = true;
     buf.sync_bw_ram();
     buf.show_loading("Converting...", 0);
 
@@ -332,8 +348,10 @@ show_error:
 #ifdef ESP_PLATFORM
   ESP_LOGE("reader", "BOOK_FAIL: %s", path_);
 #endif
-  buf.fill(true);
-  buf.draw_text(kPaddingLeft, kPaddingTop, "Failed to open book", true, kScale);
+  if (buf_was_touched_) {
+    buf.fill(true);
+    buf.draw_text(kPaddingLeft, kPaddingTop, "Failed to open book", true, kScale);
+  }
 }
 
 void ReaderScreen::stop() {
@@ -362,6 +380,12 @@ void ReaderScreen::stop() {
 
 void ReaderScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& /*runtime*/) {
   if (!open_ok_) {
+    // Auto-pop if the book was never found (no display was touched).
+    // Otherwise wait for back button so user can see the error message.
+    if (!buf_was_touched_) {
+      app_->pop_screen();
+      return;
+    }
     // Still drain the history so stale events don't bleed into the next frame.
     Button btn;
     while (buttons.next_press(btn)) {

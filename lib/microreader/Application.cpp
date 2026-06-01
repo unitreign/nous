@@ -70,6 +70,7 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   // fall back to the main menu and let the normal pre-book-open hook install
   // the font on the first book open.
   if (!pending_book_path_.empty()) {
+    MR_LOGI("app", "auto-open: '%s'", pending_book_path_.c_str());
     if (reader_font_ && reader_font_->valid()) {
       auto_open_book(pending_book_path_.c_str(), buf, runtime);
     } else {

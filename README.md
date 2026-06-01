@@ -79,8 +79,11 @@ foreach ($f in (Get-ChildItem "resources/sd fonts/*.mfb")) {
     python tools/serial_cmd.py --port COM4 --upload-sd-font $f.FullName
 }
 
-# Interactive console (status, button injection, benchmarks)
+# Interactive console (status, button injection, file management, benchmarks)
 python tools/serial_cmd.py --port COM4
+
+# Delete a specific file from the device
+# (interactive: rm /sdcard/books/book.epub)
 ```
 
 ## Font Generation
