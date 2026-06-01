@@ -649,7 +649,24 @@ TEST_F(RealBookTest, BulkImageSizeResolution) {
 }
 
 // ===========================================================================
-// MRB image decode via read_local_entry + sink � mirrors ReaderScreen pipeline
+// Tress of the Emerald Sea — diagnostic TOC check
+// ===========================================================================
+
+TEST_F(RealBookTest, Tress1_TOC) {
+  OPEN_BOOK_OR_SKIP("microreader/sd/books/Tress of the Emerald Sea 1.epub");
+
+  auto& toc = book_.toc();
+  printf("  Title: %s\n", book_.metadata().title.c_str());
+  printf("  Chapters (spine): %zu\n", book_.chapter_count());
+  printf("  TOC entries: %zu\n", toc.entries.size());
+  for (size_t i = 0; i < toc.entries.size(); ++i) {
+    const auto& e = toc.entries[i];
+    printf("    [%zu] depth=%u file_idx=%u label='%s'\n", i, (unsigned)e.depth, (unsigned)e.file_idx, e.label.c_str());
+  }
+}
+
+// ===========================================================================
+// MRB image decode via read_local_entry + sink — mirrors ReaderScreen pipeline
 // ===========================================================================
 
 #include "microreader/content/mrb/MrbConverter.h"

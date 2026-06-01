@@ -155,6 +155,33 @@ static uint32_t fnv1a(const char* data, size_t len) {
 // functions break on large OPFs (e.g. 77K+ bytes with 500+ manifest items).
 
 // Decode basic HTML entities (used by NCX and OPF parsers)
+
+// Normalize a path by resolving ".." segments (e.g. "OEBPS/ncx/../Text/ch01.xhtml" → "OEBPS/Text/ch01.xhtml").
+static std::string normalize_path(const std::string& path) {
+  std::vector<std::string_view> parts;
+  std::string_view sv(path);
+  size_t start = 0;
+  for (size_t i = 0; i <= sv.size(); ++i) {
+    if (i == sv.size() || sv[i] == '/') {
+      auto seg = sv.substr(start, i - start);
+      if (seg == "..") {
+        if (!parts.empty())
+          parts.pop_back();
+      } else if (!seg.empty() && seg != ".") {
+        parts.push_back(seg);
+      }
+      start = i + 1;
+    }
+  }
+  std::string result;
+  for (size_t i = 0; i < parts.size(); ++i) {
+    if (i)
+      result += '/';
+    result.append(parts[i].data(), parts[i].size());
+  }
+  return result;
+}
+
 static std::string decode_entities(const std::string& text) {
   std::string result;
   result.reserve(text.size());
@@ -265,7 +292,7 @@ static EpubError parse_ncx(IZipFile& file, const ZipReader& zip, const ZipEntry&
             src = src.substr(0, hash);
           }
 
-          std::string full_path = root_dir + src;
+          std::string full_path = normalize_path(root_dir + src);
           int idx = -1;
           for (size_t i = 0; i < zip.entry_count(); ++i) {
             if (zip.entry(i).name == full_path) {
@@ -468,7 +495,13 @@ EpubError Epub::parse_opf(IZipFile& file, const std::string& opf_path, uint8_t* 
   if (ncx_file_idx >= 0) {
     HEAP_LOG("parse_opf: before NCX");
     auto& ncx_entry = zip_.entry(ncx_file_idx);
-    parse_ncx(file, zip_, ncx_entry, root_dir_, toc_, work_buf, kWorkBufSize, xml_buf, kXmlBufSize);
+    // NCX src paths are relative to the NCX file's directory, not the OPF root.
+    // Compute the NCX's own base dir (e.g. "OEBPS/ncx/" for "OEBPS/ncx/toc.ncx").
+    std::string ncx_dir = root_dir_;
+    auto slash = std::string_view(ncx_entry.name).rfind('/');
+    if (slash != std::string_view::npos)
+      ncx_dir = std::string(ncx_entry.name.data(), slash + 1);
+    parse_ncx(file, zip_, ncx_entry, ncx_dir, toc_, work_buf, kWorkBufSize, xml_buf, kXmlBufSize);
     HEAP_LOG("parse_opf: after NCX parse");
   }
 
