@@ -50,8 +50,13 @@ RANGE_PRESETS = {
     "cjk": [(0x4E00, 0x9FFF)],  # CJK Unified Ideographs (main block)
     "cjk-ext-a": [(0x3400, 0x4DBF)],  # CJK Extension A (rare/archaic kanji)
     "cjk-compat": [(0xF900, 0xFAFF)],  # CJK Compatibility Ideographs
-    "cjk-enclosed": [(0x3200, 0x33FF)],  # Enclosed CJK Letters + CJK Compatibility (㋿ ㎞ etc.)
-    "fullwidth": [(0xFF01, 0xFF5E), (0xFFE0, 0xFFE6)],  # Fullwidth Latin/digits + currency signs
+    "cjk-enclosed": [
+        (0x3200, 0x33FF)
+    ],  # Enclosed CJK Letters + CJK Compatibility (㋿ ㎞ etc.)
+    "fullwidth": [
+        (0xFF01, 0xFF5E),
+        (0xFFE0, 0xFFE6),
+    ],  # Fullwidth Latin/digits + currency signs
     # Convenience bundle: everything needed for Japanese text
     "japanese": [
         (0x3000, 0x303F),  # CJK Symbols and Punctuation
@@ -65,14 +70,21 @@ RANGE_PRESETS = {
         (0xFFFD, 0xFFFD),  # Replacement character (□ fallback for missing glyphs)
     ],
     "greek": [(0x0370, 0x03FF)],  # Greek and Coptic
-    "general-punct": [(0x2000, 0x206F)],  # General Punctuation (curly quotes, em-dash, ellipsis)
+    "general-punct": [
+        (0x2000, 0x206F)
+    ],  # General Punctuation (curly quotes, em-dash, ellipsis)
     "currency": [(0x20A0, 0x20CF)],  # Currency Symbols (€ etc.)
     "letterlike": [(0x2100, 0x214F)],  # Letterlike Symbols (™ ℃ etc.)
     "number-forms": [(0x2150, 0x218F)],  # Number Forms (fractions)
     "arrows": [(0x2190, 0x21FF)],  # Arrows
     "math-ops": [(0x2200, 0x22FF)],  # Mathematical Operators
     "geometric": [(0x25A0, 0x25FF)],  # Geometric Shapes
-    "ui-shapes": [(0x25B2, 0x25B2), (0x25BC, 0x25BC), (0x25C0, 0x25C0), (0x25B6, 0x25B6)], # UI Button hints: ◀ ▶ ▼ ▲
+    "ui-shapes": [
+        (0x25B2, 0x25B2),
+        (0x25BC, 0x25BC),
+        (0x25C0, 0x25C0),
+        (0x25B6, 0x25B6),
+    ],  # UI Button hints: ◀ ▶ ▼ ▲
     "misc-symbols": [(0x2600, 0x26FF)],  # Miscellaneous Symbols
     "combining": [(0x0300, 0x036F)],  # Combining Diacritical Marks
     "spacing-mod": [(0x02B0, 0x02FF)],  # Spacing Modifier Letters
@@ -80,7 +92,31 @@ RANGE_PRESETS = {
     "super-sub": [(0x2070, 0x209F)],  # Superscripts and Subscripts
     "specials": [
         (0xFFF0, 0xFFFF)
-    ],  # Specials (includes U+FFFD replacement character �)
+    ],  # Specials (includes U+FFFD replacement character &#xFFFD;)
+    # Convenience bundle: all scripts sensible for a multilingual UI font
+    # (excludes large CJK blocks — those add tens of thousands of glyphs)
+    "ui": [
+        (0x0020, 0x007E),  # Basic ASCII
+        (0x00A0, 0x00FF),  # Latin-1 Supplement (Western European + common symbols)
+        (0x0100, 0x017F),  # Latin Extended-A (Central/Eastern European)
+        (0x0180, 0x024F),  # Latin Extended-B (extra Latin letters)
+        (0x02B0, 0x02FF),  # Spacing Modifier Letters
+        (0x0300, 0x036F),  # Combining Diacritical Marks
+        (0x0370, 0x03FF),  # Greek and Coptic
+        (0x0400, 0x04FF),  # Cyrillic (Russian, Ukrainian, Bulgarian, Serbian, etc.)
+        (0x0500, 0x052F),  # Cyrillic Supplement
+        (0x1E00, 0x1EFF),  # Latin Extended Additional (Vietnamese, Welsh, etc.)
+        (0x2000, 0x206F),  # General Punctuation (curly quotes, em-dash, ellipsis, etc.)
+        (0x2070, 0x209F),  # Superscripts and Subscripts
+        (0x20A0, 0x20CF),  # Currency Symbols (€, £, ¥, ₽, etc.)
+        (0x2100, 0x214F),  # Letterlike Symbols (™, ©, ℃, etc.)
+        (0x2150, 0x218F),  # Number Forms (fractions)
+        (0x25B2, 0x25B2),  # UI shapes: ▲
+        (0x25B6, 0x25B6),  # UI shapes: ▶
+        (0x25BC, 0x25BC),  # UI shapes: ▼
+        (0x25C0, 0x25C0),  # UI shapes: ◀
+        (0xFFF0, 0xFFFF),  # Specials (U+FFFD replacement character)
+    ],
 }
 
 DEFAULT_RANGES = [
@@ -125,7 +161,9 @@ def render_glyph(face, codepoint, size, use_hinted_advance=False, fallback_face=
         adv = active_face.glyph.advance.x
     else:
         # First, get the unhinted advance so we base our layout on true proportions
-        active_face.load_glyph(glyph_index, freetype.FT_LOAD_NO_HINTING | freetype.FT_LOAD_NO_BITMAP)
+        active_face.load_glyph(
+            glyph_index, freetype.FT_LOAD_NO_HINTING | freetype.FT_LOAD_NO_BITMAP
+        )
         adv = active_face.glyph.advance.x
 
     x_advance = int(round(adv * 4.0 / 64.0))  # Scale by 4 for quarter-pixel precision
@@ -252,13 +290,14 @@ def render_glyph(face, codepoint, size, use_hinted_advance=False, fallback_face=
 # MBF writer
 # ---------------------------------------------------------------------------
 
+
 def extract_kerning_fonttools(ttfont, scale):
     """
     Extracts kerning pairs from 'kern' and 'GPOS' tables using fonttools.
     Returns: dict mapping (left_ft_idx, right_ft_idx) -> px_kern
     """
     pairs = {}
-    
+
     if "kern" in ttfont:
         for table in ttfont["kern"].kernTables:
             if hasattr(table, "kernTable"):
@@ -278,32 +317,38 @@ def extract_kerning_fonttools(ttfont, scale):
                         if getattr(ext, "ExtensionLookupType", 0) == 2:
                             if hasattr(ext, "ExtSubTable"):
                                 subtables.append(ext.ExtSubTable)
-                                
+
                 for sub in subtables:
                     if sub.Format == 1:
                         for p, pairSet in zip(sub.Coverage.glyphs, sub.PairSet):
                             for pairValue in pairSet.PairValueRecord:
                                 r = pairValue.SecondGlyph
-                                val = getattr(getattr(pairValue, "Value1", None), "XAdvance", 0)
+                                val = getattr(
+                                    getattr(pairValue, "Value1", None), "XAdvance", 0
+                                )
                                 if val != 0:
                                     pairs[(p, r)] = val
                     elif sub.Format == 2:
                         classDef1 = sub.ClassDef1.classDefs if sub.ClassDef1 else {}
                         classDef2 = sub.ClassDef2.classDefs if sub.ClassDef2 else {}
-                        
+
                         c1_glyphs = {}
                         for glyph, c in classDef1.items():
                             c1_glyphs.setdefault(c, []).append(glyph)
-                        
+
                         c2_glyphs = {}
                         for glyph, c in classDef2.items():
                             c2_glyphs.setdefault(c, []).append(glyph)
-                                
+
                         for class1, rec1 in enumerate(sub.Class1Record):
-                            if class1 not in c1_glyphs: continue
+                            if class1 not in c1_glyphs:
+                                continue
                             for class2, rec2 in enumerate(rec1.Class2Record):
-                                if class2 not in c2_glyphs: continue
-                                val = getattr(getattr(rec2, "Value1", None), "XAdvance", 0)
+                                if class2 not in c2_glyphs:
+                                    continue
+                                val = getattr(
+                                    getattr(rec2, "Value1", None), "XAdvance", 0
+                                )
                                 if val != 0:
                                     for l in c1_glyphs[class1]:
                                         for right in c2_glyphs[class2]:
@@ -314,16 +359,20 @@ def extract_kerning_fonttools(ttfont, scale):
         try:
             l_id = ttfont.getGlyphID(l_name)
             r_id = ttfont.getGlyphID(r_name)
-            px_kern = int(round(val * scale * 4.0))  # Scale by 4 for quarter-pixel precision
+            px_kern = int(
+                round(val * scale * 4.0)
+            )  # Scale by 4 for quarter-pixel precision
             if px_kern != 0:
                 result[(l_id, r_id)] = px_kern
         except KeyError:
             continue
-            
+
     return result
 
 
-def render_style_glyphs(face_info, size, codepoint_ranges, use_hinted_advance=False, fallback_face=None):
+def render_style_glyphs(
+    face_info, size, codepoint_ranges, use_hinted_advance=False, fallback_face=None
+):
     """Render glyphs for one style. Returns (ranges, all_glyphs, bw_bitmaps, lsb_bitmaps, msb_bitmaps, max_glyph_height, kerning_pairs).
 
     ranges: list of (first_cp, count, glyph_table_start)
@@ -335,7 +384,7 @@ def render_style_glyphs(face_info, size, codepoint_ranges, use_hinted_advance=Fa
     """
     face = face_info["face"]
     ttfont = face_info["ttfont"]
-    
+
     face.set_pixel_sizes(0, size)
     if fallback_face:
         fallback_face.set_pixel_sizes(0, size)
@@ -361,7 +410,11 @@ def render_style_glyphs(face_info, size, codepoint_ranges, use_hinted_advance=Fa
             rendered_count += 1
             pct = rendered_count * 100 // total_codepoints
             if pct != last_progress and pct % 5 == 0:
-                print(f"  Rendering glyphs... {pct}% ({rendered_count}/{total_codepoints})", end="\r", flush=True)
+                print(
+                    f"  Rendering glyphs... {pct}% ({rendered_count}/{total_codepoints})",
+                    end="\r",
+                    flush=True,
+                )
                 last_progress = pct
             g = render_glyph(face, cp, size, use_hinted_advance, fallback_face)
             if g is None:
@@ -424,11 +477,11 @@ def render_style_glyphs(face_info, size, codepoint_ranges, use_hinted_advance=Fa
             l_profiles = {}
             for (l_idx, r_idx), val in flat_pairs.items():
                 l_profiles.setdefault(l_idx, {})[r_idx] = val
-                
+
             l_class_map = [0] * len(all_glyphs)
             l_class_list = [{}]
             l_profile_to_class = {frozenset(): 0}
-            
+
             for l_idx, profile in l_profiles.items():
                 fs = frozenset(profile.items())
                 if fs not in l_profile_to_class:
@@ -444,13 +497,14 @@ def render_style_glyphs(face_info, size, codepoint_ranges, use_hinted_advance=Fa
             r_profiles = {}
             for (l_idx, r_idx), val in flat_pairs.items():
                 lc = l_class_map[l_idx]
-                if lc == 255: continue
+                if lc == 255:
+                    continue
                 r_profiles.setdefault(r_idx, {})[lc] = val
-                
+
             r_class_map = [0] * len(all_glyphs)
             r_class_list = [{}]
             r_profile_to_class = {frozenset(): 0}
-            
+
             for r_idx, profile in r_profiles.items():
                 fs = frozenset(profile.items())
                 if fs not in r_profile_to_class:
@@ -483,13 +537,23 @@ def render_style_glyphs(face_info, size, codepoint_ranges, use_hinted_advance=Fa
             for val in matrix:
                 kerning_mbf_bytes.append(max(-128, min(127, val)) & 0xFF)
 
-            print(f"    Style kerning: {len(flat_pairs)} basic pairs -> {num_l_classes}x{num_r_classes} classes ({len(kerning_mbf_bytes)} bytes)")
+            print(
+                f"    Style kerning: {len(flat_pairs)} basic pairs -> {num_l_classes}x{num_r_classes} classes ({len(kerning_mbf_bytes)} bytes)"
+            )
         else:
             print(f"    Style kerning pairs: 0")
     else:
         print(f"    Style kerning pairs: 0")
 
-    return ranges, all_glyphs, bw_bitmaps, lsb_bitmaps, msb_bitmaps, max_glyph_height, kerning_mbf_bytes
+    return (
+        ranges,
+        all_glyphs,
+        bw_bitmaps,
+        lsb_bitmaps,
+        msb_bitmaps,
+        max_glyph_height,
+        kerning_mbf_bytes,
+    )
 
 
 def _encode_ranges_and_glyphs(ranges, all_glyphs, bitmap_base_offset):
@@ -518,8 +582,20 @@ def _encode_ranges_and_glyphs(ranges, all_glyphs, bitmap_base_offset):
 
 def build_mbf(face_info, size, codepoint_ranges, bw_only=False, fallback_face=None):
     """Build single-style MBF binary. Returns (bytes, stats_dict)."""
-    ranges, all_glyphs, bw_bitmaps, lsb_bitmaps, msb_bitmaps, max_glyph_height, kerning_bytes = (
-        render_style_glyphs(face_info, size, codepoint_ranges, use_hinted_advance=bw_only, fallback_face=fallback_face)
+    (
+        ranges,
+        all_glyphs,
+        bw_bitmaps,
+        lsb_bitmaps,
+        msb_bitmaps,
+        max_glyph_height,
+        kerning_bytes,
+    ) = render_style_glyphs(
+        face_info,
+        size,
+        codepoint_ranges,
+        use_hinted_advance=bw_only,
+        fallback_face=fallback_face,
     )
 
     if bw_only:
@@ -536,9 +612,9 @@ def build_mbf(face_info, size, codepoint_ranges, bw_only=False, fallback_face=No
 
     # Underline metrics from the font's post table (in font design units).
     em = face.units_per_EM or 1000
-    ul_pos_raw = getattr(face, 'underline_position', -100)
-    ul_thick_raw = getattr(face, 'underline_thickness', 50)
-    underline_pos = max(1, round(-ul_pos_raw * size / em))   # positive = below baseline
+    ul_pos_raw = getattr(face, "underline_position", -100)
+    ul_thick_raw = getattr(face, "underline_thickness", 50)
+    underline_pos = max(1, round(-ul_pos_raw * size / em))  # positive = below baseline
     underline_thickness = max(1, round(ul_thick_raw * size / em))
 
     num_ranges = len(ranges)
@@ -546,7 +622,7 @@ def build_mbf(face_info, size, codepoint_ranges, bw_only=False, fallback_face=No
     header_size = 50
     ranges_size = num_ranges * 8
     glyphs_size = num_glyphs * 10
-    
+
     kerning_length = len(kerning_bytes)
     kerning_offset = header_size + ranges_size + glyphs_size
     bitmap_data_offset = kerning_offset + kerning_length
@@ -602,7 +678,9 @@ def build_mbf(face_info, size, codepoint_ranges, bw_only=False, fallback_face=No
     return bytes(buf), stats
 
 
-def build_multi_style_mbf(faces, size, codepoint_ranges, bw_only=False, fallback_face=None):
+def build_multi_style_mbf(
+    faces, size, codepoint_ranges, bw_only=False, fallback_face=None
+):
     """Build multi-style MBF from dict of {FontStyle: face_info}.
 
     faces keys: 'regular' (required), 'bold', 'italic', 'bold_italic' (optional).
@@ -611,7 +689,13 @@ def build_multi_style_mbf(faces, size, codepoint_ranges, bw_only=False, fallback
     # Render all styles — now returns 6-tuples with 3 bitmap sections
     style_data = {}
     for style_name, face_info in faces.items():
-        style_data[style_name] = render_style_glyphs(face_info, size, codepoint_ranges, use_hinted_advance=bw_only, fallback_face=fallback_face)
+        style_data[style_name] = render_style_glyphs(
+            face_info,
+            size,
+            codepoint_ranges,
+            use_hinted_advance=bw_only,
+            fallback_face=fallback_face,
+        )
 
     if bw_only:
         # Strip grayscale planes from all styles
@@ -630,9 +714,9 @@ def build_multi_style_mbf(faces, size, codepoint_ranges, bw_only=False, fallback
 
     # Underline metrics from the font's post table (in font design units).
     em = reg_face.units_per_EM or 1000
-    ul_pos_raw = getattr(reg_face, 'underline_position', -100)
-    ul_thick_raw = getattr(reg_face, 'underline_thickness', 50)
-    underline_pos = max(1, round(-ul_pos_raw * size / em))   # positive = below baseline
+    ul_pos_raw = getattr(reg_face, "underline_position", -100)
+    ul_thick_raw = getattr(reg_face, "underline_thickness", 50)
+    underline_pos = max(1, round(-ul_pos_raw * size / em))  # positive = below baseline
     underline_thickness = max(1, round(ul_thick_raw * size / em))
 
     max_glyph_height = max(d[5] for d in style_data.values())
@@ -644,7 +728,7 @@ def build_multi_style_mbf(faces, size, codepoint_ranges, bw_only=False, fallback
     header_size = 50
     reg_ranges_size = len(reg_ranges) * 8
     reg_glyphs_size = len(reg_glyphs) * 10
-    
+
     # After regular ranges+glyphs, append regular kerning, then extra styles
     cursor = header_size + reg_ranges_size + reg_glyphs_size + len(reg_kerning)
 
@@ -660,10 +744,10 @@ def build_multi_style_mbf(faces, size, codepoint_ranges, bw_only=False, fallback
             continue
         ranges, glyphs, bw, lsb, msb, _, kerning = style_data[sname]
         style_offsets[sname] = cursor
-        
+
         kerning_length = len(kerning)
         kerning_offset = cursor + 8 + len(ranges) * 8 + len(glyphs) * 10
-        
+
         # MbfStyleSection: uint16 num_ranges, uint16 num_glyphs, uint32 kerning_length
         sec = struct.pack("<HHI", len(ranges), len(glyphs), kerning_length)
         # Ranges + glyphs (bitmap offsets will be fixed up later)
@@ -775,6 +859,7 @@ def build_multi_style_mbf(faces, size, codepoint_ranges, bw_only=False, fallback
         "y_advance": y_advance,
     }
     return bytes(buf), stats
+
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -899,39 +984,74 @@ def main():
     has_extra_styles = bold_path or italic_path or bold_italic_path
 
     if has_extra_styles:
-        faces = {"regular": {"face": freetype.Face(font_path), "ttfont": fontTools.ttLib.TTFont(font_path)}}
+        faces = {
+            "regular": {
+                "face": freetype.Face(font_path),
+                "ttfont": fontTools.ttLib.TTFont(font_path),
+            }
+        }
         if bold_path and os.path.isfile(bold_path):
-            faces["bold"] = {"face": freetype.Face(bold_path), "ttfont": fontTools.ttLib.TTFont(bold_path)}
+            faces["bold"] = {
+                "face": freetype.Face(bold_path),
+                "ttfont": fontTools.ttLib.TTFont(bold_path),
+            }
             print(f"Bold: {os.path.basename(bold_path)}")
         if italic_path and os.path.isfile(italic_path):
-            faces["italic"] = {"face": freetype.Face(italic_path), "ttfont": fontTools.ttLib.TTFont(italic_path)}
+            faces["italic"] = {
+                "face": freetype.Face(italic_path),
+                "ttfont": fontTools.ttLib.TTFont(italic_path),
+            }
             print(f"Italic: {os.path.basename(italic_path)}")
         if bold_italic_path and os.path.isfile(bold_italic_path):
-            faces["bold_italic"] = {"face": freetype.Face(bold_italic_path), "ttfont": fontTools.ttLib.TTFont(bold_italic_path)}
+            faces["bold_italic"] = {
+                "face": freetype.Face(bold_italic_path),
+                "ttfont": fontTools.ttLib.TTFont(bold_italic_path),
+            }
             print(f"BoldItalic: {os.path.basename(bold_italic_path)}")
 
         fallback_face = freetype.Face(args.fallback) if args.fallback else None
 
         if args.bundle:
-            _generate_bundle(faces, args, codepoint_ranges, multi_style=True, fallback_face=fallback_face)
+            _generate_bundle(
+                faces,
+                args,
+                codepoint_ranges,
+                multi_style=True,
+                fallback_face=fallback_face,
+            )
             return
 
         mbf_data, stats = build_multi_style_mbf(
-            faces, args.size, codepoint_ranges, bw_only=args.bw_only, fallback_face=fallback_face
+            faces,
+            args.size,
+            codepoint_ranges,
+            bw_only=args.bw_only,
+            fallback_face=fallback_face,
         )
     else:
-        face_info = {"face": freetype.Face(font_path), "ttfont": fontTools.ttLib.TTFont(font_path)}
+        face_info = {
+            "face": freetype.Face(font_path),
+            "ttfont": fontTools.ttLib.TTFont(font_path),
+        }
 
         fallback_face = freetype.Face(args.fallback) if args.fallback else None
 
         if args.bundle:
             _generate_bundle(
-                {"regular": face_info}, args, codepoint_ranges, multi_style=False, fallback_face=fallback_face
+                {"regular": face_info},
+                args,
+                codepoint_ranges,
+                multi_style=False,
+                fallback_face=fallback_face,
             )
             return
 
         mbf_data, stats = build_mbf(
-            face_info, args.size, codepoint_ranges, bw_only=args.bw_only, fallback_face=fallback_face
+            face_info,
+            args.size,
+            codepoint_ranges,
+            bw_only=args.bw_only,
+            fallback_face=fallback_face,
         )
 
     # Write output
@@ -1023,14 +1143,22 @@ def _generate_bundle(faces, args, codepoint_ranges, multi_style, fallback_face=N
         print(f"{'='*40}")
         if multi_style:
             data, stats = build_multi_style_mbf(
-                faces, px_size, codepoint_ranges, bw_only=args.bw_only, fallback_face=fallback_face
+                faces,
+                px_size,
+                codepoint_ranges,
+                bw_only=args.bw_only,
+                fallback_face=fallback_face,
             )
             face = faces["regular"]["face"]
         else:
             face_info = faces["regular"]
             face = face_info["face"]
             data, stats = build_mbf(
-                face_info, px_size, codepoint_ranges, bw_only=args.bw_only, fallback_face=fallback_face
+                face_info,
+                px_size,
+                codepoint_ranges,
+                bw_only=args.bw_only,
+                fallback_face=fallback_face,
             )
 
         out_path = os.path.join(out_dir, f"font-{idx}.mbf")
@@ -1191,6 +1319,7 @@ def _generate_bundle(faces, args, codepoint_ranges, multi_style, fallback_face=N
     # The leading uint32 lets provision_embedded() erase exactly the right
     # number of flash blocks without over-estimating.
     import zlib as _zlib
+
     compressed = _zlib.compress(bytes(bundle), level=9)
     bin_path = os.path.splitext(bundle_path)[0] + ".bin"
     with open(bin_path, "wb") as f:

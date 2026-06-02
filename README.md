@@ -116,8 +116,8 @@ foreach ($f in @("Bitter","Cartisse","NV_Bitter","NV_Charis","NV_Cooper","NV_Gar
 python tools/font_overview.py
 
 # UI fonts (bitmap, bw-only)
-python tools/generate_font.py resources/fonts/terminus/Terminus-Bold.ttf 14 -o resources/fonts/ui-small.mbf --header lib/microreader/display/ui_font_small.h --bw-only
-python tools/generate_font.py resources/fonts/terminus/Terminus-Bold.ttf 32 -o resources/fonts/ui-header.mbf --header lib/microreader/display/ui_font_header.h --bw-only
+python tools/generate_font.py resources/fonts/terminus/Terminus-Bold.ttf 14 -o resources/fonts/ui-small.mbf --header lib/microreader/display/ui_font_small.h --bw-only --ranges ui
+python tools/generate_font.py resources/fonts/terminus/Terminus-Bold.ttf 32 -o resources/fonts/ui-header.mbf --header lib/microreader/display/ui_font_header.h --bw-only --ranges ui
 ```
 
 > **Font partition limit**: SD card fonts must fit within 3.375 MB. The font data + 4 KB header must not exceed `0x360000` bytes.
