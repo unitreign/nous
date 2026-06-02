@@ -135,47 +135,79 @@ bool ReaderScreen::decode_image_to_buffer_(uint16_t img_key, uint32_t offset, Dr
 // Bookmark / key-file helpers (must precede start())
 // ---------------------------------------------------------------------------
 
-// Sanitize an arbitrary string into a safe filename component (lowercase alnum + hyphens).
-static void sanitize_append(std::string& out, const std::string& s) {
-  bool last_dash = !out.empty() && out.back() == '-';
-  for (unsigned char c : s) {
-    if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
-      out += static_cast<char>(c);
-      last_dash = false;
-    } else if (c >= 'A' && c <= 'Z') {
-      out += static_cast<char>(c + 32);
-      last_dash = false;
-    } else if (!last_dash) {
-      out += '-';
-      last_dash = true;
-    }
-  }
+// FNV-1a 32-bit hash of an arbitrary byte string.
+static uint32_t fnv1a_32(const std::string& s) {
+  uint32_t h = 2166136261u;
+  for (unsigned char c : s)
+    h = (h ^ c) * 16777619u;
+  return h;
 }
 
-// Build a stable book key from all available metadata fields.
-// title + author + language together uniquely identify most books (including
-// the same book in different languages or by different authors).
-// Falls back to the epub basename if title is absent.
-static std::string make_book_key(const EpubMetadata& meta, const char* epub_path) {
+// Build a stable, filesystem-safe book key from raw metadata.
+// Always produces an 8-char lowercase hex string derived from a hash of
+// title + author + language — works for any language/script.
+static std::string make_book_key(const EpubMetadata& meta) {
+  std::string raw = meta.title;
+  if (meta.author && !meta.author->empty()) {
+    raw += '|';
+    raw += *meta.author;
+  }
+  if (meta.language && !meta.language->empty()) {
+    raw += '|';
+    raw += *meta.language;
+  }
+  char hex[9];
+  snprintf(hex, sizeof(hex), "%08lx", static_cast<unsigned long>(fnv1a_32(raw)));
+  return std::string(hex);
+}
+
+// Build the legacy slug key used by older versions (ASCII-only sanitization).
+// Used only when loading, to migrate existing .pos files to the new key.
+static std::string make_book_key_legacy(const EpubMetadata& meta, const char* epub_path) {
+  auto sanitize = [](const std::string& s) {
+    std::string out;
+    bool last_dash = false;
+    for (unsigned char c : s) {
+      if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+        out += static_cast<char>(c);
+        last_dash = false;
+      } else if (c >= 'A' && c <= 'Z') {
+        out += static_cast<char>(c + 32);
+        last_dash = false;
+      } else if (!last_dash) {
+        out += '-';
+        last_dash = true;
+      }
+    }
+    while (!out.empty() && out.back() == '-')
+      out.pop_back();
+    while (!out.empty() && out.front() == '-')
+      out.erase(out.begin());
+    return out;
+  };
+
   if (!meta.title.empty()) {
-    std::string key;
-    key.reserve(80);
-    sanitize_append(key, meta.title);
-    if (meta.author && !meta.author->empty()) {
-      key += '-';
-      sanitize_append(key, *meta.author);
-    }
-    if (meta.language && !meta.language->empty()) {
-      key += '-';
-      sanitize_append(key, *meta.language);
-    }
-    // Trim trailing dash.
-    while (!key.empty() && key.back() == '-')
-      key.pop_back();
-    if (key.size() > 80)
-      key.resize(80);
-    if (!key.empty())
+    std::string title_part = sanitize(meta.title);
+    if (!title_part.empty()) {
+      std::string key = title_part;
+      if (meta.author && !meta.author->empty()) {
+        std::string a = sanitize(*meta.author);
+        if (!a.empty()) {
+          key += '-';
+          key += a;
+        }
+      }
+      if (meta.language && !meta.language->empty()) {
+        std::string l = sanitize(*meta.language);
+        if (!l.empty()) {
+          key += '-';
+          key += l;
+        }
+      }
+      if (key.size() > 80)
+        key.resize(80);
       return key;
+    }
   }
   // Fallback: epub basename.
   const char* name = epub_path;
@@ -290,7 +322,7 @@ void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
 
   // Derive a stable book key from MRB metadata (title + author).
   // This survives epub file renames while staying unique across different books.
-  book_key_ = make_book_key(mrb_.metadata(), path_.c_str());
+  book_key_ = make_book_key(mrb_.metadata());
   pos_path_ = std::string(data_dir_) + "/data/" + book_key_ + ".pos";
 
   open_ok_ = true;
@@ -1008,18 +1040,39 @@ void ReaderScreen::save_position_() {
 void ReaderScreen::load_position_() {
   if (pos_path_.empty())
     return;
-  const std::string& path = pos_path_;
-  FILE* f = std::fopen(path.c_str(), "r");
+
+  // Try the current (hash-based) key first.
+  FILE* f = std::fopen(pos_path_.c_str(), "r");
+
+  // If not found, try the legacy slug key so existing .pos files still load.
+  if (!f) {
+    std::string legacy_key = make_book_key_legacy(mrb_.metadata(), path_.c_str());
+    std::string legacy_path = std::string(data_dir_) + "/data/" + legacy_key + ".pos";
+    if (legacy_path != pos_path_) {
+      f = std::fopen(legacy_path.c_str(), "r");
+      if (f) {
+        MR_LOGI("reader", "Migrating legacy pos file: '%s' -> '%s'", legacy_path.c_str(), pos_path_.c_str());
+#ifdef ESP_PLATFORM
+        unlink(legacy_path.c_str());
+#else
+        std::remove(legacy_path.c_str());
+#endif
+      }
+    }
+  }
+
   if (!f)
     return;
   unsigned ch = 0, para = 0, line = 0, to = 0;
   int scanned = std::fscanf(f, "%u %u %u %u", &ch, &para, &line, &to);
+  std::fclose(f);
   if (scanned >= 3) {
     saved_chapter_idx_ = ch;
     saved_page_pos_ = PagePosition{static_cast<uint16_t>(para), static_cast<uint16_t>(line), static_cast<uint32_t>(to)};
     MR_LOGI("reader", "Loaded pos ch=%u para=%u line=%u to=%u (scanned=%d)", ch, para, line, to, scanned);
+    // Immediately write to the new path so future opens find it directly.
+    save_position_();
   }
-  std::fclose(f);
 }
 
 }  // namespace microreader
