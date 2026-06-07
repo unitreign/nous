@@ -944,7 +944,8 @@ using PageItem = TextLayout::PageItem;
 // For the promoted-image pixel region the index space is pixel offsets [0..promoted_h).
 // Backward automatically clamps `available` to produce the exact slice that ends at idx,
 // so that round-tripping forward→backward and backward→forward is always consistent.
-static std::optional<Collected> collect_text(const LaidOut& lp, size_t idx, uint16_t available, bool forward) {
+static std::optional<Collected> collect_text(const LaidOut& lp, size_t idx, uint16_t available, bool forward,
+                                             bool require_full_height = false) {
   // --- Step 1: translate idx to start_idx, clamping available if needed ---
 
   size_t start_idx;
@@ -1026,9 +1027,9 @@ static std::optional<Collected> collect_text(const LaidOut& lp, size_t idx, uint
     lh += lp.inline_extra;
     bl += lp.inline_extra;
   }
-  // Accept a line if its baseline fits — spread_text_items aligns by baseline so
-  // a line whose descenders extend slightly past the slot boundary is OK.
-  if (bl > available)
+  // Forward / bottommost-backward: accept if baseline fits (descender may slightly exceed).
+  // Non-bottommost backward: must charge full height, so require height fits.
+  if (require_full_height ? lh > available : bl > available)
     return std::nullopt;
 
   PageItem item{PageItem::TextLine, lp.para_idx, static_cast<uint16_t>(line_idx), nullptr, lh, bl};
@@ -1138,7 +1139,8 @@ std::optional<Collected> TextLayout::LaidOutParagraph::collect(size_t idx, uint1
   return r;
 }
 
-std::optional<Collected> TextLayout::LaidOutParagraph::collect_backward(size_t end_idx, uint16_t available) const {
+std::optional<Collected> TextLayout::LaidOutParagraph::collect_backward(size_t end_idx, uint16_t available,
+                                                                        bool require_full_height /*= false*/) const {
   if (end_idx == 0 || available == 0)
     return std::nullopt;
   // end_idx==1 means "item ending at index 1, starting at 0" which is the Spacer.
@@ -1154,7 +1156,7 @@ std::optional<Collected> TextLayout::LaidOutParagraph::collect_backward(size_t e
   std::optional<Collected> r;
   switch (type) {
     case ParagraphType::Text:
-      r = collect_text(*this, inner_end, available, false);
+      r = collect_text(*this, inner_end, available, false, require_full_height);
       break;
     case ParagraphType::Image:
       r = collect_image(*this, inner_end, available, false);
@@ -1364,10 +1366,11 @@ static size_t collect_para_items_bwd(const LaidOut& lp, size_t end_idx, uint16_t
       break;
     }
 
-    auto r = lp.collect_backward(idx, avail);
+    bool is_bottommost = rev_items.empty();
+    auto r = lp.collect_backward(idx, avail, !is_bottommost);
     if (!r) {
       // Distinguish exhausted vs. item too tall for remaining space.
-      auto probe = lp.collect_backward(idx, ph);
+      auto probe = lp.collect_backward(idx, ph, !is_bottommost);
       if (probe) {
         page_full = true;
         MR_TRACE("    bwd idx=%zu avail=%u -> item too tall, page_full", idx, (unsigned)avail);
@@ -1377,9 +1380,10 @@ static size_t collect_para_items_bwd(const LaidOut& lp, size_t end_idx, uint16_t
       break;
     }
 
-    uint16_t item_cost = (r->item.kind == PageItem::TextLine) ? r->item.baseline : r->item.height;
-    uint16_t new_pd =
-        (r->item.kind == PageItem::TextLine) ? static_cast<uint16_t>(r->item.height - r->item.baseline) : 0;
+    // Bottommost item: charge only baseline (descender hangs free, mirroring forward pass).
+    // All other items: charge full height — collect_text already enforced height <= avail.
+    uint16_t item_cost = (is_bottommost && r->item.kind == PageItem::TextLine) ? r->item.baseline : r->item.height;
+    uint16_t new_pd = 0;
 
     MR_TRACE("    bwd idx=%zu kind=%s h=%u bl=%u avail=%u gap=%u pd=%u->%u -> used %u->%u next_idx=%zu", idx,
              trace_kind(r->item.kind), (unsigned)r->item.height, (unsigned)r->item.baseline, (unsigned)avail,
@@ -1524,6 +1528,24 @@ uint16_t TextLayout::promoted_image_end_offset(uint16_t para) const {
   if (!lp.inline_img.promoted || lp.promoted_h == 0)
     return 0;
   return lp.promoted_h;
+}
+
+PagePosition TextLayout::snap_to_image_end(PagePosition pos) const {
+  if (pos.offset == 0 || !source_)
+    return pos;
+  if (pos.paragraph >= source_->paragraph_count())
+    return pos;
+  const auto& sp = source_->paragraph(pos.paragraph);
+  if (sp.type == ParagraphType::Image) {
+    const LaidOutParagraph& lp = get_laid_out_(pos.paragraph);
+    if (lp.block_height > 0)
+      return PagePosition{pos.paragraph, lp.block_height, 0};
+  } else if (is_mid_promoted_image(pos)) {
+    uint16_t img_end = promoted_image_end_offset(pos.paragraph);
+    if (img_end > 0)
+      return PagePosition{pos.paragraph, img_end, 0};
+  }
+  return pos;
 }
 
 PagePosition TextLayout::resolve_stable_position(PagePosition pos) const {

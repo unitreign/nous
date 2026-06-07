@@ -279,6 +279,12 @@ class TextLayout {
   // FULL image rather than a slice.
   uint16_t promoted_image_end_offset(uint16_t para) const;
 
+  // If `pos` is mid-image (standalone Image paragraph or promoted inline image),
+  // returns a position snapped to the bottom of that image so that
+  // layout_backward() will produce a page containing the full image.
+  // Returns `pos` unchanged if it is not mid-image.
+  PagePosition snap_to_image_end(PagePosition pos) const;
+
   // Uses the layout cache (with the currently configured font/options)
   // to sync `offset` (line index) based on the absolute `text_offset` of the page position.
   PagePosition resolve_stable_position(PagePosition pos) const;
@@ -347,7 +353,7 @@ class TextLayout {
 
     // Symmetric backward operation: given end_idx (exclusive upper bound, i.e. the next_idx
     // of the item we want) and available pixels, return the item that ends there.
-    std::optional<Collected> collect_backward(size_t end_idx, uint16_t available) const;
+    std::optional<Collected> collect_backward(size_t end_idx, uint16_t available, bool require_full_height = false) const;
   };
 
  private:
