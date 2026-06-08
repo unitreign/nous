@@ -59,9 +59,12 @@ struct Run {
   Run() = default;
   Run(const std::string& t, FontStyle s = FontStyle::Regular, bool br = false)
       : text(t), style(s), size_pct(100), breaking(br) {}
+  Run(std::string&& t, FontStyle s = FontStyle::Regular, bool br = false)
+      : text(std::move(t)), style(s), size_pct(100), breaking(br) {}
   Run(const char* t, FontStyle s = FontStyle::Regular, bool br = false)
       : text(t), style(s), size_pct(100), breaking(br) {}
   Run(const std::string& t, FontStyle s, int sz, bool br = false) : text(t), style(s), size_pct(sz), breaking(br) {}
+  Run(std::string&& t, FontStyle s, int sz, bool br = false) : text(std::move(t)), style(s), size_pct(sz), breaking(br) {}
   Run(const char* t, FontStyle s, int sz, bool br = false) : text(t), style(s), size_pct(sz), breaking(br) {}
 
   bool operator==(const Run& o) const {

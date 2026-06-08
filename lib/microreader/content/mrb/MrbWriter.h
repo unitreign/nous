@@ -121,12 +121,6 @@ class MrbWriter {
   char anchor_tmp_path_[260] = {};
   uint32_t anchor_count_ = 0;
 
-  // Reusable serialization buffer (avoids per-paragraph heap allocation).
-  std::vector<uint8_t> serialize_buf_;
-
-  // Serialize a text paragraph's body into serialize_buf_.
-  void serialize_text(const TextParagraph& text, uint16_t spacing_before, const Run* runs, size_t run_count);
-
   // Write raw bytes.
   bool write_bytes(const void* data, size_t size);
 

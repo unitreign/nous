@@ -140,8 +140,12 @@ bool write_split_paragraph(MrbWriter& writer, Paragraph& para) {
 bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t* work_buf, uint8_t* xml_buf,
                                    std::function<void(int, int)> progress_cb) {
   MrbWriter writer;
-  if (!writer.open(output_path))
+  if (!writer.open(output_path)) {
+#ifdef ESP_PLATFORM
+    ESP_LOGE("mrb", "writer.open failed: %s", output_path);
+#endif
     return false;
+  }
 
   // On ESP32, caller always passes pre-allocated buffers. On desktop (tests etc.)
   // allocate here so the leaf parse_chapter_streaming never has to.
@@ -159,6 +163,7 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
   }
 
   std::vector<ImageMapping> image_map;
+  image_map.reserve(16);  // typical epub image count; avoids realloc on fragmented heap
   const auto& zip = book.epub().zip();
 
 #ifdef ESP_PLATFORM
@@ -172,13 +177,22 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
     std::string fragment;   // the id value to locate
     size_t toc_entry_idx;   // index into toc_work.entries to fill in
   };
-  TableOfContents toc_work = book.toc();
+  TableOfContents toc_work = book.take_toc();
+  // toc_work.entries may have a large capacity from the NCX parse. Shrink it
+  // to release any excess memory before further allocations on the fragmented heap.
+  toc_work.entries.shrink_to_fit();
+
   std::vector<FragmentNeed> fragment_needs;
+  fragment_needs.reserve(toc_work.entries.size());  // worst case: all entries have fragments
   for (size_t i = 0; i < toc_work.entries.size(); ++i) {
     if (!toc_work.entries[i].fragment.empty()) {
-      fragment_needs.push_back({toc_work.entries[i].file_idx, toc_work.entries[i].fragment, i});
+      fragment_needs.push_back({toc_work.entries[i].file_idx, std::move(toc_work.entries[i].fragment), i});
     }
   }
+  // Fragment strings have been moved into fragment_needs; release the now-empty
+  // strings in toc_work so their small-string buffers are freed.
+  for (auto& e : toc_work.entries)
+    e.fragment.shrink_to_fit();
 
   // Context for the streaming paragraph + ID sinks.
   struct SinkCtx {
@@ -249,8 +263,12 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
     c.write_us += esp_timer_get_time() - t0;
     c.para_count++;
 #endif
-    if (!write_ok)
+    if (!write_ok) {
+#ifdef ESP_PLATFORM
+      ESP_LOGE("mrb", "write_split_paragraph failed at ch %u", (unsigned)c.current_chapter_idx);
+#endif
       c.error = true;
+    }
   };
 
   for (size_t ci = 0; ci < book.chapter_count(); ++ci) {
@@ -263,8 +281,12 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
     ctx.current_zip_file_idx = static_cast<uint16_t>(book.epub().spine()[ci].file_idx);
     ctx.current_chapter_idx = static_cast<uint16_t>(ci);
     book.load_chapter_streaming(ci, sink, &ctx, work_buf, xml_buf, id_sink, &ctx);
-    if (ctx.error)
+    if (ctx.error) {
+#ifdef ESP_PLATFORM
+      ESP_LOGE("mrb", "ctx.error after ch %u", (unsigned)ci);
+#endif
       return false;
+    }
 
     writer.end_chapter();
 

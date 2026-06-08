@@ -660,6 +660,24 @@ class BodyParser {
     sink_ctx_ = ctx;
   }
 
+  // Pre-allocate run vector capacity to avoid mid-parse reallocation on
+  // fragmented ESP32 heap. Call before parse_xhtml_events.
+  void reserve_runs(size_t n) {
+#ifdef ESP_PLATFORM
+    // Cap to what the heap can actually provide to avoid bad_alloc on
+    // fragmented ESP32 heap (largest block may be much smaller than free).
+    {
+      size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+      constexpr size_t kReserveHeadroom = 6144;
+      size_t affordable = (largest > kReserveHeadroom) ? (largest - kReserveHeadroom) / sizeof(Run) : 0;
+      if (affordable < n)
+        n = affordable;
+    }
+#endif
+    if (n > 0)
+      runs_.reserve(n);
+  }
+
   void push_text(const char* text, size_t len) {
     if (pre_depth_.has_value()) {
       push_preformatted_text(text, len);
@@ -1019,6 +1037,10 @@ class BodyParser {
       }
       TextParagraph tp;
       tp.runs = std::move(runs_);
+      // NOTE: do NOT reserve runs_ here — tp.runs still holds the buffer,
+      // so a reserve now would require two simultaneous 512-run allocations.
+      // Reserve AFTER emit() when the old buffer has been freed.
+      size_t prev_cap = tp.runs.capacity();
       tp.alignment = alignment_;
       tp.indent = indent_;
       tp.inline_image = pending_inline_image_;  // attach float image if pending
@@ -1039,6 +1061,19 @@ class BodyParser {
       }
 
       emit(std::move(para));
+      // Re-reserve runs_ after emit() so the just-freed buffer block is available.
+      // Cap to what the heap can actually provide (largest block may be fragmented).
+      if (prev_cap > 0) {
+#ifdef ESP_PLATFORM
+        size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+        constexpr size_t kReserveHeadroom = 6144;
+        size_t affordable = (largest > kReserveHeadroom) ? (largest - kReserveHeadroom) / sizeof(Run) : 0;
+        if (affordable < prev_cap)
+          prev_cap = affordable;
+#endif
+        if (prev_cap > 0)
+          runs_.reserve(prev_cap);
+      }
       runs_.clear();
       indent_.reset();
     } else if (pending_inline_image_.has_value()) {
@@ -1210,6 +1245,12 @@ class BodyParser {
       r.margin_right = margin_right_;
       if (!current_href_.empty())
         r.href = current_href_;
+      // If runs_ is full, emit the accumulated runs as a partial paragraph now
+      // rather than letting the vector realloc (which may fail on a fragmented
+      // ESP32 heap). flush_run() calls flush_text() first, but current_run_ is
+      // already cleared (moved into r above), so there is no recursion.
+      if (!runs_.empty() && runs_.size() == runs_.capacity())
+        flush_run();
       runs_.push_back(std::move(r));
       current_run_.clear();
     }
@@ -2080,6 +2121,9 @@ EpubError Epub::parse_chapter_streaming(IZipFile& file, size_t index, ParagraphS
   parser.set_sink(sink, sink_ctx);
   if (id_sink)
     parser.set_id_callback(id_sink, id_sink_ctx);
+  // Pre-reserve run capacity before parsing so heap fragmentation from
+  // decompression+XML doesn't cause realloc failure mid-paragraph.
+  parser.reserve_runs(512);
 
   EpubError err = parse_xhtml_events(reader, nullptr, &stylesheet_, base_dir, zip_, parser);
   if (err != EpubError::Ok)

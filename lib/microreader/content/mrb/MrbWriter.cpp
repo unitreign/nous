@@ -1,6 +1,12 @@
 #include "MrbWriter.h"
 
+#include <cerrno>
 #include <cstring>
+
+#ifdef ESP_PLATFORM
+#include "esp_log.h"
+static constexpr char kMrbTag[] = "mrb_w";
+#endif
 
 namespace microreader {
 
@@ -11,11 +17,16 @@ namespace microreader {
 bool BufferedFileWriter::open(const char* path) {
   close();
   f_ = fopen(path, "wb");
-  if (!f_)
+  if (!f_) {
+#ifdef ESP_PLATFORM
+    ESP_LOGE(kMrbTag, "bw fopen failed: %s", path);
+#endif
     return false;
-  // Larger stdio buffer coalesces fwrite→SD card writes, reducing SPI transactions.
-  // 16KB aligns with FAT allocation unit for optimal SD write granularity.
-  setvbuf(f_, nullptr, _IOFBF, 16384);
+  }
+  // Use unbuffered I/O: our BufferedFileWriter already batches writes into
+  // a 4KB buffer, so a second stdio layer just wastes heap and can fail to
+  // allocate its buffer on a fragmented ESP32 heap.
+  setvbuf(f_, nullptr, _IONBF, 0);
   pos_ = 0;
   used_ = 0;
   return true;
@@ -33,8 +44,12 @@ void BufferedFileWriter::close() {
 
 bool BufferedFileWriter::flush() {
   if (used_ > 0) {
-    if (fwrite(buf_, 1, used_, f_) != used_)
+    if (fwrite(buf_, 1, used_, f_) != used_) {
+#ifdef ESP_PLATFORM
+      ESP_LOGE(kMrbTag, "flush fwrite failed: used=%u errno=%d (%s)", (unsigned)used_, errno, strerror(errno));
+#endif
       return false;
+    }
     used_ = 0;
   }
   return true;
@@ -82,7 +97,10 @@ bool MrbWriter::open(const char* path) {
   // Open a temp file to stream anchor entries during conversion (zero RAM usage).
   std::snprintf(anchor_tmp_path_, sizeof(anchor_tmp_path_), "%s.tmp", path);
   anchor_tmp_ = std::fopen(anchor_tmp_path_, "w+b");
-  // anchor_tmp_ failure is non-fatal: add_anchor() will silently skip.
+#ifdef ESP_PLATFORM
+  if (!anchor_tmp_)
+    ESP_LOGW(kMrbTag, "anchor_tmp fopen failed: %s", anchor_tmp_path_);
+#endif
   anchor_count_ = 0;
 
   // Open a single temp file for all paragraph descriptors across the whole book.
@@ -90,7 +108,13 @@ bool MrbWriter::open(const char* path) {
   std::snprintf(desc_tmp_path_, sizeof(desc_tmp_path_), "%s.desc", path);
   desc_tmp_ = std::fopen(desc_tmp_path_, "w+b");
   chapter_desc_start_ = 0;
-  // desc_tmp_ failure is non-fatal: end_chapter() will write an empty table.
+  if (!desc_tmp_) {
+#ifdef ESP_PLATFORM
+    ESP_LOGE(kMrbTag, "desc_tmp fopen failed: %s", desc_tmp_path_);
+#endif
+    close();
+    return false;
+  }
 
   // Write placeholder header (will be fixed up in finish()).
   MrbHeader hdr{};
@@ -124,7 +148,6 @@ void MrbWriter::close() {
   paragraph_count_ = 0;
   chapters_.clear();
   images_.clear();
-  serialize_buf_.clear();
   in_chapter_ = false;
   chapter_para_count_ = 0;
   chapter_char_count_ = 0;
@@ -359,100 +382,10 @@ bool MrbWriter::finish(const EpubMetadata& meta, const TableOfContents& toc,
 }
 
 // ---------------------------------------------------------------------------
-// Paragraph serialization
+// write_text_paragraph  (streams directly to bw_ — no intermediate buffer)
 // ---------------------------------------------------------------------------
 
-void MrbWriter::serialize_text(const TextParagraph& text, uint16_t spacing, const Run* runs, size_t run_count) {
-  // Layout:
-  //   alignment(1) + indent(2) + margin_left(2) + margin_right(2) +
-  //   spacing_before(2) + line_height_pct(1) + inline_image_idx(2) +
-  //   inline_image_w(2) + inline_image_h(2) +
-  //   run_count(2) +
-  //   per run: style(1) + size_pct(1) + vertical_align(1) + flags(1) +
-  //            margin_left(2) + margin_right(2) + text_len(4) + text[text_len]
-  //            [if flags & 0x02: href_len(2) + href[href_len]]
-
-  // Pre-compute total size to avoid repeated resizes.
-  static constexpr size_t kHeaderSize = 1 + 2 + 2 + 2 + 2 + 1 + 2 + 2 + 2 + 2;  // 18 bytes
-  static constexpr size_t kRunHeaderSize = 1 + 1 + 1 + 1 + 2 + 2 + 4;           // 12 bytes per run
-  size_t total = kHeaderSize;
-  for (size_t i = 0; i < run_count; ++i) {
-    total += kRunHeaderSize + runs[i].text.size();
-    if (!runs[i].href.empty())
-      total += 2 + runs[i].href.size();  // href_len(2) + href bytes
-  }
-
-  serialize_buf_.resize(total);
-  uint8_t* p = serialize_buf_.data();
-
-  // Header
-  *p++ = text.alignment.has_value() ? static_cast<uint8_t>(*text.alignment) : kMrbAlignDefault;
-  mrb_write_i16(p, text.indent.value_or(kMrbIndentNone));
-  p += 2;
-  mrb_write_u16(p, 0);
-  p += 2;  // margin_left placeholder
-  mrb_write_u16(p, 0);
-  p += 2;  // margin_right placeholder
-  mrb_write_u16(p, spacing);
-  p += 2;
-  *p++ = text.line_height_pct;
-
-  // Inline image
-  if (text.inline_image.has_value()) {
-    mrb_write_u16(p, text.inline_image->key);
-    p += 2;
-    mrb_write_u16(p, text.inline_image->attr_width);
-    p += 2;
-    mrb_write_u16(p, text.inline_image->attr_height);
-    p += 2;
-  } else {
-    mrb_write_u16(p, kMrbNoImage);
-    p += 2;
-    mrb_write_u16(p, 0);
-    p += 2;
-    mrb_write_u16(p, 0);
-    p += 2;
-  }
-
-  // Run count
-  mrb_write_u16(p, static_cast<uint16_t>(run_count));
-  p += 2;
-
-  // Runs
-  for (size_t i = 0; i < run_count; ++i) {
-    const Run& run = runs[i];
-    *p++ = static_cast<uint8_t>(run.style);
-    *p++ = run.size_pct;
-    *p++ = static_cast<uint8_t>(run.vertical_align);
-    uint8_t flags = run.breaking ? 0x01 : 0x00;
-    if (!run.href.empty())
-      flags |= 0x02;
-    *p++ = flags;
-    mrb_write_u16(p, run.margin_left);
-    p += 2;
-    mrb_write_u16(p, run.margin_right);
-    p += 2;
-    uint32_t text_len = static_cast<uint32_t>(run.text.size());
-    mrb_write_u32(p, text_len);
-    p += 4;
-    std::memcpy(p, run.text.data(), text_len);
-    p += text_len;
-    if (!run.href.empty()) {
-      uint16_t href_len = static_cast<uint16_t>(run.href.size());
-      mrb_write_u16(p, href_len);
-      p += 2;
-      std::memcpy(p, run.href.data(), href_len);
-      p += href_len;
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// write_text_paragraph
-// ---------------------------------------------------------------------------
-
-bool MrbWriter::write_text_paragraph(const TextParagraph& meta, uint16_t spacing, const Run* runs,
-                                     size_t run_count) {
+bool MrbWriter::write_text_paragraph(const TextParagraph& meta, uint16_t spacing, const Run* runs, size_t run_count) {
   if (!bw_.is_open())
     return false;
 
@@ -468,15 +401,83 @@ bool MrbWriter::write_text_paragraph(const TextParagraph& meta, uint16_t spacing
   for (size_t i = 0; i < run_count; ++i)
     chapter_char_count_ += static_cast<uint32_t>(runs[i].text.size());
 
-  // Serialize and write: [type(1)][data_size(4)][data...].
-  serialize_text(meta, spacing, runs, run_count);
-  uint8_t hdr[5];
-  hdr[0] = kMrbParaText;
-  mrb_write_u32(hdr + 1, static_cast<uint32_t>(serialize_buf_.size()));
-  if (!write_bytes(hdr, 5))
+  // Compute body size (pure arithmetic, no allocation).
+  static constexpr size_t kBodyHdrSize = 18;  // alignment(1)+indent(2)+ml(2)+mr(2)+spacing(2)+lh(1)+img(6)+runcount(2)
+  static constexpr size_t kRunHdrSize = 12;   // style(1)+size(1)+valign(1)+flags(1)+ml(2)+mr(2)+textlen(4)
+  size_t body_size = kBodyHdrSize;
+  for (size_t i = 0; i < run_count; ++i) {
+    body_size += kRunHdrSize + runs[i].text.size();
+    if (!runs[i].href.empty())
+      body_size += 2 + runs[i].href.size();
+  }
+
+  // Write outer header: [type(1)][body_size(4)]
+  uint8_t outer[5];
+  outer[0] = kMrbParaText;
+  mrb_write_u32(outer + 1, static_cast<uint32_t>(body_size));
+  if (!write_bytes(outer, 5))
     return false;
-  if (!serialize_buf_.empty() && !write_bytes(serialize_buf_.data(), serialize_buf_.size()))
+
+  // Write paragraph body header (18 bytes) from stack.
+  uint8_t hdr[18];
+  uint8_t* p = hdr;
+  *p++ = meta.alignment.has_value() ? static_cast<uint8_t>(*meta.alignment) : kMrbAlignDefault;
+  mrb_write_i16(p, meta.indent.value_or(kMrbIndentNone));
+  p += 2;
+  mrb_write_u16(p, 0);
+  p += 2;  // margin_left placeholder
+  mrb_write_u16(p, 0);
+  p += 2;  // margin_right placeholder
+  mrb_write_u16(p, spacing);
+  p += 2;
+  *p++ = meta.line_height_pct;
+  if (meta.inline_image.has_value()) {
+    mrb_write_u16(p, meta.inline_image->key);
+    p += 2;
+    mrb_write_u16(p, meta.inline_image->attr_width);
+    p += 2;
+    mrb_write_u16(p, meta.inline_image->attr_height);
+    p += 2;
+  } else {
+    mrb_write_u16(p, kMrbNoImage);
+    p += 2;
+    mrb_write_u16(p, 0);
+    p += 2;
+    mrb_write_u16(p, 0);
+    p += 2;
+  }
+  mrb_write_u16(p, static_cast<uint16_t>(run_count));
+  p += 2;
+  if (!write_bytes(hdr, 18))
     return false;
+
+  // Write each run using a 12-byte stack header.
+  for (size_t i = 0; i < run_count; ++i) {
+    const Run& run = runs[i];
+    uint8_t rhdr[12];
+    rhdr[0] = static_cast<uint8_t>(run.style);
+    rhdr[1] = run.size_pct;
+    rhdr[2] = static_cast<uint8_t>(run.vertical_align);
+    uint8_t flags = run.breaking ? 0x01 : 0x00;
+    if (!run.href.empty())
+      flags |= 0x02;
+    rhdr[3] = flags;
+    mrb_write_u16(rhdr + 4, run.margin_left);
+    mrb_write_u16(rhdr + 6, run.margin_right);
+    mrb_write_u32(rhdr + 8, static_cast<uint32_t>(run.text.size()));
+    if (!write_bytes(rhdr, 12))
+      return false;
+    if (!run.text.empty() && !write_bytes(run.text.data(), run.text.size()))
+      return false;
+    if (!run.href.empty()) {
+      uint8_t hlen[2];
+      mrb_write_u16(hlen, static_cast<uint16_t>(run.href.size()));
+      if (!write_bytes(hlen, 2))
+        return false;
+      if (!write_bytes(run.href.data(), run.href.size()))
+        return false;
+    }
+  }
 
   ++chapter_para_count_;
   ++paragraph_count_;

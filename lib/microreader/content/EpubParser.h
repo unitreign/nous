@@ -77,6 +77,10 @@ class Epub {
   const TableOfContents& toc() const {
     return toc_;
   }
+  // Move TOC out (used by MRB converter to avoid a copy on fragmented heap).
+  TableOfContents take_toc() {
+    return std::move(toc_);
+  }
 
   // Access the zip reader (for image extraction etc)
   const ZipReader& zip() const {

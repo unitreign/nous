@@ -47,6 +47,10 @@ class Book {
   const TableOfContents& toc() const {
     return epub_.toc();
   }
+  // Move TOC out (used by MRB converter to avoid a copy on fragmented heap).
+  TableOfContents take_toc() {
+    return epub_.take_toc();
+  }
   size_t chapter_count() const {
     return epub_.chapter_count();
   }
