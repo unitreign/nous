@@ -4,14 +4,16 @@
 #include <string>
 #include <vector>
 
+#include "StringPool.h"
+
 namespace microreader {
 
 class DrawBuffer;
 
 struct BookIndexEntry {
-  std::string path;
-  std::string title;
-  std::string author;
+  StringRef path{};
+  StringRef title{};
+  StringRef author{};
   uint32_t last_open_order = 0;  // 0 = never opened; higher = more recently opened
 };
 
@@ -30,17 +32,26 @@ class BookIndex {
     return entries_;
   }
 
+  const StringPool& pool() const {
+    return pool_;
+  }
+
+  // Add an entry; uses the pool to store strings.
+  void add_entry(std::string_view path, std::string_view title, std::string_view author, uint32_t last_open_order = 0);
+
   // Record that a book was opened. `order` should be a monotonically
   // increasing counter (higher = more recently opened). Updates the in-memory
   // entry only; call save() afterwards to persist.
-  void set_last_opened(const std::string& path, uint32_t order);
+  void set_last_opened(std::string_view path, uint32_t order);
 
   void clear_entries() {
     entries_.clear();
+    pool_ = StringPool{};
   }
 
  private:
   std::vector<BookIndexEntry> entries_;
+  StringPool pool_;
   BookIndex() = default;
 };
 

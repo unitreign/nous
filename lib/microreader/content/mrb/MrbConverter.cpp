@@ -182,7 +182,7 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
   std::vector<FragmentNeed> fragment_needs;
   fragment_needs.reserve(toc_work.entries.size());
   for (size_t i = 0; i < toc_work.entries.size(); ++i) {
-    auto frag = toc_work.entries[i].fragment.to_string();
+    auto frag = toc_work.entries[i].fragment.to_string(toc_work.pool);
     if (!frag.empty()) {
       fragment_needs.push_back({toc_work.entries[i].file_idx, std::string(frag), i});
     }

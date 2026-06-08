@@ -2061,7 +2061,7 @@ EpubError Epub::parse_chapter(IZipFile& file, size_t index, Chapter& out) const 
   out.title.reset();
   for (auto& toc_entry : toc_.entries) {
     if (toc_entry.file_idx == spine_item.file_idx) {
-      out.title = toc_entry.label.to_string();
+      out.title = toc_entry.label.to_string(toc_.pool);
       break;
     }
   }

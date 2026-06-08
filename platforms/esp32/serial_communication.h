@@ -468,7 +468,7 @@ static void handle_serial_cmd() {
       const auto& entries = microreader::BookIndex::instance().entries();
       if (!entries.empty()) {
         for (const auto& e : entries) {
-          std::string out = "  " + e.path + "\n";
+          std::string out = "  " + e.path.to_string(microreader::BookIndex::instance().pool()) + "\n";
           serial_write(out.c_str());
         }
       } else {

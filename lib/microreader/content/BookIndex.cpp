@@ -25,12 +25,23 @@ BookIndex& BookIndex::instance() {
   return instance;
 }
 
+void BookIndex::add_entry(std::string_view path, std::string_view title, std::string_view author,
+                          uint32_t last_open_order) {
+  BookIndexEntry entry;
+  entry.path = pool_.add(path);
+  entry.title = pool_.add(title);
+  entry.author = pool_.add(author);
+  entry.last_open_order = last_open_order;
+  entries_.push_back(entry);
+}
+
 bool BookIndex::load(const std::string& index_file) {
   FILE* f = std::fopen(index_file.c_str(), "rb");
   if (!f)
     return false;
 
   entries_.clear();
+  pool_ = StringPool{};
 
   char line[1024];
   while (std::fgets(line, sizeof(line), f)) {
@@ -55,21 +66,14 @@ bool BookIndex::load(const std::string& index_file) {
       continue;
     *sep2 = '\0';
 
-    BookIndexEntry entry;
-    entry.path = line;
-    entry.title = sep1 + 1;
-
     // Optional 4th field: last_open_order
+    uint32_t order = 0;
     char* sep3 = std::strchr(sep2 + 1, '|');
     if (sep3) {
       *sep3 = '\0';
-      entry.author = sep2 + 1;
-      entry.last_open_order = static_cast<uint32_t>(std::strtoul(sep3 + 1, nullptr, 10));
-    } else {
-      entry.author = sep2 + 1;
+      order = static_cast<uint32_t>(std::strtoul(sep3 + 1, nullptr, 10));
     }
-
-    entries_.push_back(std::move(entry));
+    add_entry(line, sep1 + 1, sep2 + 1, order);
   }
 
   std::fclose(f);
@@ -82,16 +86,21 @@ bool BookIndex::save(const std::string& index_file) const {
     return false;
 
   for (const auto& entry : entries_) {
-    std::fprintf(f, "%s|%s|%s|%u\n", entry.path.c_str(), entry.title.c_str(), entry.author.c_str(),
+    auto path_v = entry.path.view(pool_);
+    auto title_v = entry.title.view(pool_);
+    auto author_v = entry.author.view(pool_);
+    std::fprintf(f, "%.*s|%.*s|%.*s|%u\n", static_cast<int>(path_v.size()), path_v.data(),
+                 static_cast<int>(title_v.size()), title_v.data(),
+                 static_cast<int>(author_v.size()), author_v.data(),
                  static_cast<unsigned>(entry.last_open_order));
   }
   std::fclose(f);
   return true;
 }
 
-void BookIndex::set_last_opened(const std::string& path, uint32_t order) {
+void BookIndex::set_last_opened(std::string_view path, uint32_t order) {
   for (auto& entry : entries_) {
-    if (entry.path == path) {
+    if (entry.path.view(pool_) == path) {
       entry.last_open_order = order;
       return;
     }
@@ -100,6 +109,7 @@ void BookIndex::set_last_opened(const std::string& path, uint32_t order) {
 
 void BookIndex::build_index(const std::string& root_dir, DrawBuffer& buf) {
   entries_.clear();
+  pool_ = StringPool{};
   buf.show_loading("Scanning...", 0);
   // Process epub files as we find them to avoid storing all paths in memory.
   int done = 0;
@@ -115,15 +125,8 @@ void BookIndex::build_index(const std::string& root_dir, DrawBuffer& buf) {
     buf.show_loading("Indexing...", total > 0 ? 10 + (done * 90 / total) : 10);
     book.close();
     if (book.open(path.c_str(), buf.scratch_buf1(), buf.scratch_buf2(), false) == EpubError::Ok) {
-      BookIndexEntry entry;
-      entry.path = path;
       auto meta = book.metadata();
-      entry.title = meta.title;
-      if (meta.author) {
-        entry.author = *meta.author;
-      }
-
-      entries_.push_back(std::move(entry));
+      add_entry(path, meta.title, meta.author.value_or(""));
     }
     book.close();
     done++;

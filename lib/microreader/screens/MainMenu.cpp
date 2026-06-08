@@ -81,14 +81,15 @@ void MainMenu::populate_list_() {
   clear_items();
   entries_.clear();
 
+  const StringPool& bpool = BookIndex::instance().pool();
   for (const auto& index_entry : BookIndex::instance().entries()) {
     BookEntry e;
-    e.path = index_entry.path;
+    e.path = index_entry.path.to_string(bpool);
 
     if (list_format_ == BookListFormat::TitleOnly) {
-      e.label = index_entry.title;
+      e.label = index_entry.title.to_string(bpool);
     } else if (list_format_ == BookListFormat::Filename) {
-      const char* name = index_entry.path.c_str();
+      const char* name = e.path.c_str();
       const char* sep = std::strrchr(name, '/');
 #ifdef _WIN32
       const char* bsep = std::strrchr(name, '\\');
@@ -105,7 +106,7 @@ void MainMenu::populate_list_() {
         e.label = name;
       }
     } else {
-      e.label = index_entry.title + " - " + index_entry.author;  // Title & Author
+      e.label = index_entry.title.to_string(bpool) + " - " + index_entry.author.to_string(bpool);  // Title & Author
     }
 
     entries_.push_back(std::move(e));

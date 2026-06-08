@@ -324,7 +324,7 @@ bool MrbWriter::finish(const EpubMetadata& meta, const TableOfContents& toc,
   mrb_write_u16(toc_hdr, toc_count);
   write_bytes(toc_hdr, 2);
   for (const auto& entry : toc.entries) {
-    auto lbl = entry.label.to_string();
+    auto lbl = entry.label.to_string(toc.pool);
     // Defensive: ensure label fits u16 length field
     if (lbl.size() > 0xFFFF) {
 #ifdef ESP_PLATFORM
