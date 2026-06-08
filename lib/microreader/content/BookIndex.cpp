@@ -3,7 +3,9 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 #include <queue>
+#include <string>
 #include <vector>
 
 #include "../display/DrawBuffer.h"
@@ -118,71 +120,13 @@ void BookIndex::set_last_opened(const std::string& path, uint32_t order) {
 void BookIndex::build_index(const std::string& root_dir, DrawBuffer& buf) {
   entries_.clear();
   buf.show_loading("Scanning...", 0);
-  std::vector<std::string> epub_files;
-
-#ifdef ESP_PLATFORM
-  std::queue<std::string> q;
-  q.push(root_dir);
-
-  while (!q.empty()) {
-    std::string current_dir = q.front();
-    q.pop();
-
-    DIR* dir = opendir(current_dir.c_str());
-    if (!dir)
-      continue;
-
-    struct dirent* ent;
-    while ((ent = readdir(dir)) != nullptr) {
-      if (ent->d_name[0] == '.')
-        continue;
-
-      std::string fullpath = current_dir + "/" + ent->d_name;
-
-      if (ent->d_type == DT_DIR) {
-        q.push(fullpath);
-      } else {
-        size_t len = std::strlen(ent->d_name);
-        if (len > 5) {
-          const char* ext = ent->d_name + len - 5;
-          char ext_lower[6];
-          for (int i = 0; i < 5; i++)
-            ext_lower[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(ext[i])));
-          ext_lower[5] = '\0';
-          if (std::strcmp(ext_lower, ".epub") == 0)
-            epub_files.push_back(fullpath);
-        }
-      }
-    }
-    closedir(dir);
-  }
-#else
-  try {
-    for (const auto& entry : fs::recursive_directory_iterator(root_dir)) {
-      if (!entry.is_regular_file())
-        continue;
-      auto ext = entry.path().extension().string();
-      for (char& c : ext)
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-      if (ext == ".epub") {
-        std::string path_str = entry.path().string();
-        // normalize slashes for index stability across platforms
-        for (char& c : path_str) {
-          if (c == '\\')
-            c = '/';
-        }
-        epub_files.push_back(path_str);
-      }
-    }
-  } catch (...) {}
-#endif
-
-  int total = static_cast<int>(epub_files.size());
+  // Process epub files as we find them to avoid storing all paths in memory.
   int done = 0;
+  int total = 0;
 
-  for (const auto& path : epub_files) {
+  // Helper to process a single epub path (keeps peak memory low)
+  auto process_path = [&](const std::string& path) {
     buf.show_loading("Indexing...", total > 0 ? 10 + (done * 90 / total) : 10);
-
     Book book;
     if (book.open(path.c_str(), buf.scratch_buf1(), buf.scratch_buf2(), false) == EpubError::Ok) {
       BookIndexEntry entry;
@@ -212,10 +156,67 @@ void BookIndex::build_index(const std::string& root_dir, DrawBuffer& buf) {
     }
     book.close();
     done++;
-  }
+  };
+
+  // Single iterator helper: calls `cb(path)` for each .epub found
+  auto iterate_epubs = [&](const std::function<void(const std::string&)>& cb) {
+#ifdef ESP_PLATFORM
+    std::queue<std::string> q;
+    q.push(root_dir);
+    while (!q.empty()) {
+      std::string current_dir = q.front();
+      q.pop();
+      DIR* dir = opendir(current_dir.c_str());
+      if (!dir)
+        continue;
+      struct dirent* ent;
+      while ((ent = readdir(dir)) != nullptr) {
+        if (ent->d_name[0] == '.')
+          continue;
+        std::string fullpath = current_dir + "/" + ent->d_name;
+        if (ent->d_type == DT_DIR) {
+          q.push(fullpath);
+        } else {
+          size_t len = std::strlen(ent->d_name);
+          if (len > 5) {
+            const char* ext = ent->d_name + len - 5;
+            char ext_lower[6];
+            for (int i = 0; i < 5; i++)
+              ext_lower[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(ext[i])));
+            ext_lower[5] = '\0';
+            if (std::strcmp(ext_lower, ".epub") == 0)
+              cb(fullpath);
+          }
+        }
+      }
+      closedir(dir);
+    }
+#else
+    try {
+      for (const auto& entry : fs::recursive_directory_iterator(root_dir)) {
+        if (!entry.is_regular_file())
+          continue;
+        auto ext = entry.path().extension().string();
+        for (char& c : ext)
+          c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (ext == ".epub") {
+          std::string path_str = entry.path().string();
+          for (char& c : path_str)
+            if (c == '\\')
+              c = '/';
+          cb(path_str);
+        }
+      }
+    } catch (...) {}
+#endif
+  };
+
+  // Count then process using the iterator
+  iterate_epubs([&](const std::string& p) { total++; });
+  iterate_epubs(process_path);
 
   // Refresh loading to 100% just before exit
-  if (total > 0) {
+  if (done > 0) {
     buf.show_loading("Indexing...", 100);
   }
 }
