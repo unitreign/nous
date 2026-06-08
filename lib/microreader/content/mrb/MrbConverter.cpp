@@ -65,98 +65,74 @@ static size_t estimated_body_size(const TextParagraph& text) {
   return sz;
 }
 
-void write_split_paragraph(Paragraph& para, const std::function<bool(const Paragraph&)>& write_fn) {
-  if (para.type != ParagraphType::Text) {
-    write_fn(para);
-    return;
-  }
+bool write_split_paragraph(MrbWriter& writer, Paragraph& para) {
+  if (para.type != ParagraphType::Text)
+    return writer.write_paragraph(para);
 
-  size_t est = estimated_body_size(para.text);
+  const size_t est = estimated_body_size(para.text);
+
+  if (est <= kMaxSerializedBody)
+    return writer.write_paragraph(para);
 
 #ifdef ESP_PLATFORM
-  if (est > kMaxSerializedBody) {
-    ESP_LOGI("split", "splitting para: runs=%u est=%u", (unsigned)para.text.runs.size(), (unsigned)est);
-  }
+  ESP_LOGI("split", "splitting para: runs=%u est=%u", (unsigned)para.text.runs.size(), (unsigned)est);
 #endif
 
-  if (est <= kMaxSerializedBody) {
-    write_fn(para);
-    return;
-  }
-
-  // Split into chunks, flushing when the estimated serialized size would exceed the budget.
+  // Write the paragraph as a series of chunks, each within kMaxSerializedBody bytes.
+  // We track slice indices into para.text.runs — no intermediate vector is allocated.
   // Only the first chunk gets indent, spacing_before, and inline_image.
-  Paragraph chunk;
-  chunk.type = ParagraphType::Text;
-  chunk.text.alignment = para.text.alignment;
-  chunk.text.line_height_pct = para.text.line_height_pct;
-  chunk.spacing_before = para.spacing_before;
-  chunk.text.indent = para.text.indent;
-  chunk.text.inline_image = para.text.inline_image;
+  const auto& runs = para.text.runs;
+  const size_t total_runs = runs.size();
 
-  size_t chunk_est = kParaHeaderBytes;  // start with para header cost
+  // Shared metadata for all chunks (no runs vector — passed as pointer slices).
+  TextParagraph meta;
+  meta.alignment = para.text.alignment;
+  meta.line_height_pct = para.text.line_height_pct;
+  meta.indent = para.text.indent;
+  meta.inline_image = para.text.inline_image;
+  const uint16_t first_spacing = para.spacing_before.value_or(kMrbSpacingDefault);
 
-  auto flush_chunk = [&]() {
-    if (!chunk.text.runs.empty()) {
-      write_fn(chunk);
-      chunk = Paragraph{};
-      chunk.type = ParagraphType::Text;
-      chunk.text.alignment = para.text.alignment;
-      chunk.text.line_height_pct = para.text.line_height_pct;
-      // Continuation chunks: no indent/spacing/image
-      chunk_est = kParaHeaderBytes;
+  size_t chunk_start = 0;
+  size_t chunk_est = kParaHeaderBytes;
+  bool is_first = true;
+  bool ok = true;
+
+  auto flush_range = [&](size_t start, size_t end) {
+    if (start == end)
+      return;
+    if (!writer.write_text_paragraph(meta, is_first ? first_spacing : kMrbSpacingDefault, runs.data() + start,
+                                     end - start))
+      ok = false;
+    if (is_first) {
+      is_first = false;
+      meta.indent.reset();
+      meta.inline_image.reset();
     }
+    chunk_est = kParaHeaderBytes;
+    chunk_start = end;
   };
 
-  for (auto& run : para.text.runs) {
-    size_t run_cost = kRunHeaderBytes + run.text.size() + (run.href.empty() ? 0 : 2 + run.href.size());
+  for (size_t i = 0; i < total_runs; ++i) {
+    const Run& run = runs[i];
+    const size_t run_cost = kRunHeaderBytes + run.text.size() + (run.href.empty() ? 0 : 2 + run.href.size());
 
-    // If adding this run would overflow the chunk, flush first.
-    // (Always emit at least one run per chunk to avoid infinite loop.)
-    if (!chunk.text.runs.empty() && chunk_est + run_cost > kMaxSerializedBody)
-      flush_chunk();
-
-    // If a single run is itself larger than the budget, split its text.
-    if (run_cost > kMaxSerializedBody && run.text.size() > 0) {
-      size_t run_pos = 0;
-      while (run_pos < run.text.size()) {
-        size_t space_left = kMaxSerializedBody - kParaHeaderBytes - kRunHeaderBytes;
-        size_t take = run.text.size() - run_pos;
-        if (take > space_left)
-          take = space_left;
-
-        // Don't split in the middle of a UTF-8 multi-byte sequence.
-        if (take < run.text.size() - run_pos) {
-          while (take > 0 && (static_cast<unsigned char>(run.text[run_pos + take]) & 0xC0) == 0x80)
-            --take;
-          if (take == 0)
-            take = space_left;  // degenerate: take it anyway
-        }
-
-        if (!chunk.text.runs.empty())
-          flush_chunk();
-        Run r;
-        r.style = run.style;
-        r.size_pct = run.size_pct;
-        r.vertical_align = run.vertical_align;
-        r.breaking = run.breaking;
-        r.margin_left = run.margin_left;
-        r.margin_right = run.margin_right;
-        r.text = run.text.substr(run_pos, take);
-        if (run_pos == 0 && take == run.text.size())
-          r.href = run.href;
-        chunk_est += kRunHeaderBytes + r.text.size();
-        chunk.text.runs.push_back(std::move(r));
-        flush_chunk();
-        run_pos += take;
-      }
-    } else {
+    // If a single run exceeds the budget on its own, flush whatever we have first,
+    // then emit it as its own chunk (rare — would require >8KB of text in one run).
+    if (run_cost >= kMaxSerializedBody) {
+      flush_range(chunk_start, i);
       chunk_est += run_cost;
-      chunk.text.runs.push_back(run);
+      continue;
     }
+
+    // Would this run overflow the current chunk? Flush first.
+    if (i > chunk_start && chunk_est + run_cost > kMaxSerializedBody)
+      flush_range(chunk_start, i);
+
+    chunk_est += run_cost;
   }
 
-  flush_chunk();
+  flush_range(chunk_start, total_runs);
+  return ok;
 }
 
 }  // namespace
@@ -265,19 +241,16 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
 
     remap_paragraph_images(para, *c.writer, *c.image_map, *c.zip);
 
-    write_split_paragraph(para, [&](const Paragraph& p) -> bool {
 #ifdef ESP_PLATFORM
-      int64_t t0 = esp_timer_get_time();
+    int64_t t0 = esp_timer_get_time();
 #endif
-      bool ok = c.writer->write_paragraph(p);
+    bool write_ok = write_split_paragraph(*c.writer, para);
 #ifdef ESP_PLATFORM
-      c.write_us += esp_timer_get_time() - t0;
-      c.para_count++;
+    c.write_us += esp_timer_get_time() - t0;
+    c.para_count++;
 #endif
-      if (!ok)
-        c.error = true;
-      return ok;
-    });
+    if (!write_ok)
+      c.error = true;
   };
 
   for (size_t ci = 0; ci < book.chapter_count(); ++ci) {

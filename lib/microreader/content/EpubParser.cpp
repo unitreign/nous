@@ -83,20 +83,20 @@ int Epub::find_entry_index(const std::string& path) const {
 // Container.xml parsing
 // ---------------------------------------------------------------------------
 
-EpubError Epub::parse_container(IZipFile& file, std::string& rootfile_path) {
+EpubError Epub::parse_container(IZipFile& file, std::string& rootfile_path, uint8_t* work_buf, size_t work_buf_size,
+                                uint8_t* xml_buf, size_t xml_buf_size) {
   auto* entry = zip_.find("META-INF/container.xml");
   if (!entry)
     return EpubError::ContainerMissing;
 
-  std::vector<uint8_t> data;
-  auto err = extract_entry(file, zip_, *entry, data);
-  if (err != EpubError::Ok)
-    return err;
+  // Stream-parse via ZipEntryInput to avoid allocating the full decompressed
+  // container.xml as a contiguous heap block (can fail after fragmentation).
+  ZipEntryInput zip_input;
+  if (zip_input.open(file, *entry, work_buf, work_buf_size) != ZipError::Ok)
+    return EpubError::ZipError;
 
-  MemoryXmlInput input(data.data(), data.size());
-  uint8_t buf[512];
   XmlReader reader;
-  if (reader.open(input, buf, sizeof(buf)) != XmlError::Ok)
+  if (reader.open(zip_input, xml_buf, xml_buf_size) != XmlError::Ok)
     return EpubError::XmlError;
 
   XmlEvent ev;
@@ -549,12 +549,16 @@ void Epub::close() {
 
 EpubError Epub::open(IZipFile& file, uint8_t* work_buf, uint8_t* xml_buf, bool parse_css_ncx) {
   close();  // release previous data
+  // Pass work_buf for the central-directory bulk read to avoid a heap
+  // allocation that may fail on fragmented ESP32 heap (cd_buf ≤ 48 KB fits).
+  static constexpr size_t kWorkBufSize = ZipEntryInput::kDecompSize + ZipEntryInput::kDictSize + 2048;
   if (zip_.open(file) != ZipError::Ok)
     return EpubError::ZipError;
   HEAP_LOG("epub.open: after zip_.open");
 
   std::string rootfile_path;
-  auto err = parse_container(file, rootfile_path);
+  auto err = parse_container(file, rootfile_path, work_buf,
+                             ZipEntryInput::kDecompSize + ZipEntryInput::kDictSize + 2048, xml_buf, 4096);
   if (err != EpubError::Ok)
     return err;
   HEAP_LOG("epub.open: after parse_container");

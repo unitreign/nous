@@ -124,10 +124,15 @@ void BookIndex::build_index(const std::string& root_dir, DrawBuffer& buf) {
   int done = 0;
   int total = 0;
 
+  // Reuse one Book instance across all iterations so the ZipReader's internal
+  // vectors (entries_, name_blob_) retain their allocated capacity — repeated
+  // alloc/free of same-sized buffers fragments the heap on ESP32.
+  Book book;
+
   // Helper to process a single epub path (keeps peak memory low)
   auto process_path = [&](const std::string& path) {
     buf.show_loading("Indexing...", total > 0 ? 10 + (done * 90 / total) : 10);
-    Book book;
+    book.close();
     if (book.open(path.c_str(), buf.scratch_buf1(), buf.scratch_buf2(), false) == EpubError::Ok) {
       BookIndexEntry entry;
       entry.path = path;

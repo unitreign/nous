@@ -175,7 +175,13 @@ bool MrbWriter::write_paragraph(const Paragraph& para) {
   if (!bw_.is_open())
     return false;
 
-  // Record descriptor: append {file_offset, char_offset} to desc_tmp_.
+  // Text paragraphs are handled entirely by write_text_paragraph (descriptor + counters included).
+  if (para.type == ParagraphType::Text) {
+    uint16_t spacing = para.spacing_before.value_or(kMrbSpacingDefault);
+    return write_text_paragraph(para.text, spacing, para.text.runs.data(), para.text.runs.size());
+  }
+
+  // Record descriptor for non-text paragraphs: append {file_offset, char_offset} to desc_tmp_.
   if (desc_tmp_) {
     uint8_t desc[8];
     mrb_write_u32(desc, bw_.tell());
@@ -183,26 +189,10 @@ bool MrbWriter::write_paragraph(const Paragraph& para) {
     std::fwrite(desc, 1, 8, desc_tmp_);
   }
 
-  // Count chars for text paragraphs.
-  if (para.type == ParagraphType::Text) {
-    for (const auto& run : para.text.runs)
-      chapter_char_count_ += static_cast<uint32_t>(run.text.size());
-  }
-
   // Serialize and write: [type(1)][data_size(4)][data...] — no link header.
   switch (para.type) {
-    case ParagraphType::Text: {
-      uint16_t spacing = para.spacing_before.value_or(kMrbSpacingDefault);
-      serialize_text(para.text, spacing);
-      uint8_t hdr[5];
-      hdr[0] = kMrbParaText;
-      mrb_write_u32(hdr + 1, static_cast<uint32_t>(serialize_buf_.size()));
-      if (!write_bytes(hdr, 5))
-        return false;
-      if (!serialize_buf_.empty() && !write_bytes(serialize_buf_.data(), serialize_buf_.size()))
-        return false;
-      break;
-    }
+    case ParagraphType::Text:
+      break;  // unreachable — handled above
     case ParagraphType::Image: {
       uint8_t buf[9];
       buf[0] = kMrbParaImage;
@@ -372,7 +362,7 @@ bool MrbWriter::finish(const EpubMetadata& meta, const TableOfContents& toc,
 // Paragraph serialization
 // ---------------------------------------------------------------------------
 
-void MrbWriter::serialize_text(const TextParagraph& text, uint16_t spacing) {
+void MrbWriter::serialize_text(const TextParagraph& text, uint16_t spacing, const Run* runs, size_t run_count) {
   // Layout:
   //   alignment(1) + indent(2) + margin_left(2) + margin_right(2) +
   //   spacing_before(2) + line_height_pct(1) + inline_image_idx(2) +
@@ -386,10 +376,10 @@ void MrbWriter::serialize_text(const TextParagraph& text, uint16_t spacing) {
   static constexpr size_t kHeaderSize = 1 + 2 + 2 + 2 + 2 + 1 + 2 + 2 + 2 + 2;  // 18 bytes
   static constexpr size_t kRunHeaderSize = 1 + 1 + 1 + 1 + 2 + 2 + 4;           // 12 bytes per run
   size_t total = kHeaderSize;
-  for (const auto& run : text.runs) {
-    total += kRunHeaderSize + run.text.size();
-    if (!run.href.empty())
-      total += 2 + run.href.size();  // href_len(2) + href bytes
+  for (size_t i = 0; i < run_count; ++i) {
+    total += kRunHeaderSize + runs[i].text.size();
+    if (!runs[i].href.empty())
+      total += 2 + runs[i].href.size();  // href_len(2) + href bytes
   }
 
   serialize_buf_.resize(total);
@@ -425,11 +415,12 @@ void MrbWriter::serialize_text(const TextParagraph& text, uint16_t spacing) {
   }
 
   // Run count
-  mrb_write_u16(p, static_cast<uint16_t>(text.runs.size()));
+  mrb_write_u16(p, static_cast<uint16_t>(run_count));
   p += 2;
 
   // Runs
-  for (const auto& run : text.runs) {
+  for (size_t i = 0; i < run_count; ++i) {
+    const Run& run = runs[i];
     *p++ = static_cast<uint8_t>(run.style);
     *p++ = run.size_pct;
     *p++ = static_cast<uint8_t>(run.vertical_align);
@@ -454,6 +445,42 @@ void MrbWriter::serialize_text(const TextParagraph& text, uint16_t spacing) {
       p += href_len;
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// write_text_paragraph
+// ---------------------------------------------------------------------------
+
+bool MrbWriter::write_text_paragraph(const TextParagraph& meta, uint16_t spacing, const Run* runs,
+                                     size_t run_count) {
+  if (!bw_.is_open())
+    return false;
+
+  // Record descriptor.
+  if (desc_tmp_) {
+    uint8_t desc[8];
+    mrb_write_u32(desc, bw_.tell());
+    mrb_write_u32(desc + 4, chapter_char_count_);
+    std::fwrite(desc, 1, 8, desc_tmp_);
+  }
+
+  // Count chars.
+  for (size_t i = 0; i < run_count; ++i)
+    chapter_char_count_ += static_cast<uint32_t>(runs[i].text.size());
+
+  // Serialize and write: [type(1)][data_size(4)][data...].
+  serialize_text(meta, spacing, runs, run_count);
+  uint8_t hdr[5];
+  hdr[0] = kMrbParaText;
+  mrb_write_u32(hdr + 1, static_cast<uint32_t>(serialize_buf_.size()));
+  if (!write_bytes(hdr, 5))
+    return false;
+  if (!serialize_buf_.empty() && !write_bytes(serialize_buf_.data(), serialize_buf_.size()))
+    return false;
+
+  ++chapter_para_count_;
+  ++paragraph_count_;
+  return true;
 }
 
 // ---------------------------------------------------------------------------

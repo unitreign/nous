@@ -109,7 +109,8 @@ class Epub {
   int cover_idx_ = -1;
 
   // Internal parsing steps
-  EpubError parse_container(IZipFile& file, std::string& rootfile_path);
+  EpubError parse_container(IZipFile& file, std::string& rootfile_path, uint8_t* work_buf, size_t work_buf_size,
+                            uint8_t* xml_buf, size_t xml_buf_size);
   EpubError parse_opf(IZipFile& file, const std::string& opf_path, uint8_t* work_buf, uint8_t* xml_buf,
                       bool parse_css_ncx);
 };

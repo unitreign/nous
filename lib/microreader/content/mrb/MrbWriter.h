@@ -68,6 +68,10 @@ class MrbWriter {
   // Write one paragraph.  Returns false on I/O error.
   bool write_paragraph(const Paragraph& para);
 
+  // Write a text paragraph from a raw run slice — avoids building an intermediate
+  // Paragraph with a heap-allocated runs vector.  Used by the split-write path.
+  bool write_text_paragraph(const TextParagraph& meta, uint16_t spacing, const Run* runs, size_t run_count);
+
   // Call after writing all paragraphs for a chapter.
   void end_chapter();
 
@@ -121,7 +125,7 @@ class MrbWriter {
   std::vector<uint8_t> serialize_buf_;
 
   // Serialize a text paragraph's body into serialize_buf_.
-  void serialize_text(const TextParagraph& text, uint16_t spacing_before);
+  void serialize_text(const TextParagraph& text, uint16_t spacing_before, const Run* runs, size_t run_count);
 
   // Write raw bytes.
   bool write_bytes(const void* data, size_t size);

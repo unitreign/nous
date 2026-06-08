@@ -19,6 +19,7 @@ enum class ZipError {
   UnsupportedCompression,
   DecompressionFailed,
   ReadError,
+  OutOfMemory,
 };
 
 // Metadata for a single file inside a ZIP archive.
@@ -62,6 +63,8 @@ class ZipReader {
   ZipReader() = default;
 
   // Parse the central directory. Populates entries().
+  // Optional work_buf (≥ central-directory size, typically ≤ 48 KB) avoids a
+  // heap allocation for the bulk CD read — useful when heap is fragmented.
   ZipError open(IZipFile& file);
 
   // Number of entries in the archive.

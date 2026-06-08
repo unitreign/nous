@@ -12,6 +12,24 @@
 #define MINIZ_NO_ZLIB_APIS
 #include "miniz.h"
 
+#ifdef ESP_PLATFORM
+#include "esp_heap_caps.h"
+#include "esp_log.h"
+static constexpr char kZipTag[] = "zip";
+// Returns largest contiguous free block on ESP32; always passes on desktop.
+static bool heap_can_alloc(size_t bytes) {
+  size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  bool ok = largest >= bytes + 2048;  // 2 KB overhead margin
+  if (!ok)
+    ESP_LOGW(kZipTag, "heap preflight FAIL: need %u, largest=%u", (unsigned)bytes, (unsigned)largest);
+  return ok;
+}
+#else
+static inline bool heap_can_alloc(size_t) {
+  return true;
+}
+#endif
+
 namespace microreader {
 
 static_assert(sizeof(tinfl_decompressor) <= ZipEntryInput::kDecompSize, "kDecompSize too small for tinfl_decompressor");
@@ -134,8 +152,19 @@ ZipError ZipReader::open(IZipFile& file) {
   const int64_t cd_start = eocd.central_dir_offset;
   file.seek(cd_start, SEEK_SET);
 
+#ifdef ESP_PLATFORM
+  {
+    size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    ESP_LOGI(kZipTag, "open: entries=%u cd_size=%u free_largest=%u", (unsigned)eocd.total_entries, (unsigned)cd_size,
+             (unsigned)largest);
+  }
+#endif
+
+  if (!heap_can_alloc(cd_size))
+    return ZipError::OutOfMemory;
   std::vector<uint8_t> cd_buf(cd_size);
-  if (file.read(cd_buf.data(), cd_size) != cd_size)
+  uint8_t* cd_ptr = cd_buf.data();
+  if (file.read(cd_ptr, cd_size) != cd_size)
     return ZipError::ReadError;
 
   // First pass over in-memory buffer: count total name bytes.
@@ -146,7 +175,7 @@ ZipError ZipReader::open(IZipFile& file) {
       if (pos + sizeof(CentralDirEntry) > cd_size)
         return ZipError::InvalidData;
       CentralDirEntry cde;
-      memcpy(&cde, cd_buf.data() + pos, sizeof(cde));
+      memcpy(&cde, cd_ptr + pos, sizeof(cde));
       if (cde.signature != kCentralDirEntrySig)
         return ZipError::InvalidSignature;
       total_name_bytes += cde.filename_len;
@@ -154,6 +183,11 @@ ZipError ZipReader::open(IZipFile& file) {
     }
   }
 
+#ifdef ESP_PLATFORM
+  ESP_LOGI(kZipTag, "open: name_blob=%u", (unsigned)total_name_bytes);
+#endif
+  if (!heap_can_alloc(total_name_bytes))
+    return ZipError::OutOfMemory;
   name_blob_.resize(total_name_bytes);
 
   // Second pass: build entries, copy names into contiguous blob.
@@ -161,11 +195,11 @@ ZipError ZipReader::open(IZipFile& file) {
   size_t blob_offset = 0;
   for (uint16_t i = 0; i < eocd.total_entries; ++i) {
     CentralDirEntry cde;
-    memcpy(&cde, cd_buf.data() + pos, sizeof(cde));
+    memcpy(&cde, cd_ptr + pos, sizeof(cde));
     pos += sizeof(cde);
 
     // Copy filename into blob.
-    memcpy(name_blob_.data() + blob_offset, cd_buf.data() + pos, cde.filename_len);
+    memcpy(name_blob_.data() + blob_offset, cd_ptr + pos, cde.filename_len);
     pos += cde.filename_len + cde.extra_len + cde.comment_len;
 
     ZipEntry entry;
