@@ -125,6 +125,14 @@ struct ImageRowSink {
   void* ctx = nullptr;
 };
 
+// Callback invoked per pixel during Adam7 interlaced PNG decode.
+// Pixels arrive out of row order; the callback must support random writes.
+// x, y: output pixel coordinates. white: true=white, false=black.
+struct ImagePixelSink {
+  void (*set_pixel)(void* ctx, uint16_t x, uint16_t y, bool white) = nullptr;
+  void* ctx = nullptr;
+};
+
 // Decode an image to 1-bit dithered bitmap.
 // Input: raw image data (JPEG or PNG).
 // Output: DecodedImage with packed 1-bit pixels.
@@ -145,17 +153,23 @@ ImageError decode_jpeg_from_entry(IZipFile& file, const ZipEntry& entry, uint16_
 
 // Decode a PNG image by streaming directly from a ZIP entry.
 // Same work_buf, scale_to_fill, and sink semantics as decode_jpeg_from_entry.
+// pixel_sink: if non-null and the PNG is Adam7 interlaced, pixels are emitted
+// via this random-access callback instead of row_sink (no output buffer needed).
 ImageError decode_png_from_entry(IZipFile& file, const ZipEntry& entry, uint16_t max_w, uint16_t max_h,
                                  DecodedImage& out, uint8_t* work_buf = nullptr, size_t work_buf_size = 0,
-                                 bool scale_to_fill = false, ImageRowSink* sink = nullptr);
+                                 bool scale_to_fill = false, ImageRowSink* sink = nullptr,
+                                 ImagePixelSink* pixel_sink = nullptr);
 
 // Decode a JPEG or PNG image by streaming from a ZIP entry.
 // Detects format from the first bytes of the entry.
 // work_buf: optional caller-provided buffer (>= ZipEntryInput::kMinWorkBufSize).
 // sink: if non-null, rows are emitted via callback (no out.data allocation).
+// pixel_sink: if non-null and the PNG is Adam7 interlaced, pixels are emitted
+// via this random-access callback instead of buffering the full output.
 ImageError decode_image_from_entry(IZipFile& file, const ZipEntry& entry, uint16_t max_w, uint16_t max_h,
                                    DecodedImage& out, uint8_t* work_buf = nullptr, size_t work_buf_size = 0,
-                                   bool scale_to_fill = false, ImageRowSink* sink = nullptr);
+                                   bool scale_to_fill = false, ImageRowSink* sink = nullptr,
+                                   ImagePixelSink* pixel_sink = nullptr);
 
 // Floyd-Steinberg dither a grayscale buffer to 1-bit packed bitmap.
 // grayscale: width*height bytes, 0=black, 255=white.

@@ -103,12 +103,40 @@ bool ReaderScreen::decode_image_to_buffer_(uint16_t img_key, uint32_t offset, Dr
     bc->buf->blit_1bit_row(bc->x, bc->y + dest_row, data, width);
   };
 
+  // Pixel sink for Adam7 interlaced PNGs: writes pixels directly to the
+  // DrawBuffer with no intermediate output buffer.  Caching is skipped for
+  // Adam7 (pixels arrive out of order so we can't write a sequential cache).
+  struct PixelCtx {
+    DrawBuffer* buf;
+    int x, y;
+    uint16_t src_y;
+    uint16_t clip_h;
+    uint16_t out_w;
+    uint16_t out_h;
+  };
+  PixelCtx pctx{&buf, dest_x, dest_y, src_y, clip_h, 0, 0};
+  ImagePixelSink psink;
+  psink.ctx = &pctx;
+  psink.set_pixel = [](void* c, uint16_t px, uint16_t py, bool white) {
+    auto* pc = static_cast<PixelCtx*>(c);
+    if (px >= pc->out_w)
+      pc->out_w = static_cast<uint16_t>(px + 1);
+    if (py >= pc->out_h)
+      pc->out_h = static_cast<uint16_t>(py + 1);
+    if (py < pc->src_y)
+      return;
+    uint16_t dest_row = static_cast<uint16_t>(py - pc->src_y);
+    if (pc->clip_h > 0 && dest_row >= pc->clip_h)
+      return;
+    pc->buf->set_pixel(pc->x + static_cast<int>(px), pc->y + static_cast<int>(dest_row), white);
+  };
+
   // Use the active display buffer as the work buffer to avoid a 44KB heap
   // allocation.  The active buffer is safe to overwrite here: it is not
   // needed for this render pass and will be cleared before the next refresh.
   DecodedImage dims;  // only width/height will be set; data stays empty
   auto err = decode_image_from_entry(file, entry, max_w, max_h, dims, buf.scratch_buf2(), DrawBuffer::kBufSize,
-                                     /*scale_to_fill=*/true, &sink);
+                                     /*scale_to_fill=*/true, &sink, &psink);
 
   if (cache_w) {
     if (err == ImageError::Ok && ctx.out_w > 0 && ctx.out_h > 0) {
@@ -117,7 +145,9 @@ bool ReaderScreen::decode_image_to_buffer_(uint16_t img_key, uint32_t offset, Dr
       std::fwrite(header, 2, 2, cache_w);
     }
     std::fclose(cache_w);
-    if (err != ImageError::Ok) {
+    // Delete cache file if decode failed, or if Adam7 pixel_sink was used
+    // (pixels written directly to DrawBuffer, no sequential cache data written).
+    if (err != ImageError::Ok || ctx.out_w == 0) {
 #ifdef ESP_PLATFORM
       unlink(cache_path);
 #else

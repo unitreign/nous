@@ -9,7 +9,8 @@
 //
 // Supported colour types: greyscale (1/2/4/8/16 bpp), RGB (8/16),
 // palette (1/2/4/8), grey+alpha (8/16), RGBA (8/16).
-// Interlaced (Adam7) images are rejected.
+// Interlaced (Adam7) images: only pass 1 is decoded (blocky but streaming,
+// no full-image buffer required).
 //
 // Peak heap ≈ 7 KB (tinfl_decompressor) + 32 KB (LZ dict) + scanline buffers
 // + output bitmap.
@@ -354,7 +355,7 @@ static void dither_row_png(const uint8_t* src_row, const PngHeader& hdr, const u
 
 ImageError decode_png_from_entry(IZipFile& file, const ZipEntry& entry, uint16_t max_w, uint16_t max_h,
                                  DecodedImage& out, uint8_t* work_buf, size_t work_buf_size, bool scale_to_fill,
-                                 ImageRowSink* sink) {
+                                 ImageRowSink* sink, ImagePixelSink* pixel_sink) {
   // If no work_buf, allocate one
 #ifdef ESP_PLATFORM
   int64_t _t_entry = esp_timer_get_time();
@@ -402,7 +403,7 @@ ImageError decode_png_from_entry(IZipFile& file, const ZipEntry& entry, uint16_t
 
   if (!hdr.src_width || !hdr.src_height)
     return ImageError::InvalidData;
-  if (interlace != 0)
+  if (interlace != 0 && interlace != 1)
     return ImageError::UnsupportedFormat;
   if (hdr.src_width * hdr.src_height > kMaxPixels)
     return ImageError::TooLarge;
@@ -515,6 +516,223 @@ ImageError decode_png_from_entry(IZipFile& file, const ZipEntry& entry, uint16_t
   uint32_t x_step = (src_w << 16) / out_w;
   uint32_t y_step = (src_h << 16) / out_h;
   uint32_t out_stride = (out_w + 7) / 8;
+
+  // ---- Adam7 interlaced path ----
+  // Decodes all 7 passes in a single IDAT stream pass.  Each decoded pixel is
+  // written immediately via pixel_sink (random-access).  No output buffer is
+  // allocated — memory cost is 2 scanlines + 32 KB LZ dict, same as the
+  // non-interlaced path.
+  //
+  // If pixel_sink is null we fall back to allocating an output buffer and
+  // emitting rows at the end (or using row_sink if provided).
+  if (interlace == 1) {
+    // Adam7 pass parameters (XStart, YStart, XDelta, YDelta)
+    static const uint8_t kA7XS[7] = {0, 4, 0, 2, 0, 1, 0};
+    static const uint8_t kA7YS[7] = {0, 0, 4, 0, 2, 0, 1};
+    static const uint8_t kA7XD[7] = {8, 8, 4, 4, 2, 2, 1};
+    static const uint8_t kA7YD[7] = {8, 8, 8, 4, 4, 2, 2};
+
+    // Bayer 4×4 ordered dithering (pixel-independent, no error rows needed)
+    static const uint8_t kBayer[4][4] = {
+        {0,   128, 32,  160},
+        {192, 64,  224, 96 },
+        {48,  176, 16,  144},
+        {240, 112, 208, 80 }
+    };
+
+    // --- fallback: no pixel_sink → allocate full output buffer ---
+    std::unique_ptr<uint8_t[]> a7_out;
+    if (!pixel_sink) {
+      a7_out.reset(new (std::nothrow) uint8_t[out_stride * out_h]);
+      if (!a7_out)
+        return ImageError::ReadError;
+      std::fill(a7_out.get(), a7_out.get() + out_stride * out_h, uint8_t(0xFF));
+    }
+
+    // Scanline buffers sized for the widest pass (pass 7, width = src_width)
+    size_t max_scan_bytes = hdr.scanline_bytes();
+    int bpp_filter_a7 = hdr.bytes_per_pixel();
+    auto prev_row_a7 = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[max_scan_bytes]());
+    auto curr_row_a7 = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[max_scan_bytes]());
+    auto row_buf_a7 = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[1 + max_scan_bytes]);
+    if (!prev_row_a7 || !curr_row_a7 || !row_buf_a7)
+      return ImageError::ReadError;
+
+    auto decomp_a7 = std::unique_ptr<tinfl_decompressor>(new (std::nothrow) tinfl_decompressor{});
+    if (!decomp_a7)
+      return ImageError::ReadError;
+    tinfl_init(decomp_a7.get());
+    auto lz_dict_a7 = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[kLZDictSize]());
+    if (!lz_dict_a7)
+      return ImageError::ReadError;
+
+    // Helper: scanline byte count for a given pass (using its reduced width)
+    auto pass_scan_bytes = [&](int p) -> size_t {
+      uint32_t pw = src_w > kA7XS[p] ? (src_w - kA7XS[p] + kA7XD[p] - 1) / kA7XD[p] : 0;
+      PngHeader ph2 = hdr;
+      ph2.src_width = pw;
+      return ph2.scanline_bytes();
+    };
+
+    uint8_t idat_buf_a7[kIDAT_BufSize];
+    size_t in_avail_a7 = 0;
+    size_t idat_chunk_left_a7 = first_idat_len;
+    bool more_idat_a7 = true;
+    size_t dict_pos_a7 = 0;
+    size_t row_pos_a7 = 0;
+    uint32_t pass_row_a7 = 0;
+
+    // Find first non-empty pass
+    int cur_pass = 0;
+    while (cur_pass < 7) {
+      uint32_t pw = src_w > kA7XS[cur_pass] ? (src_w - kA7XS[cur_pass] + kA7XD[cur_pass] - 1) / kA7XD[cur_pass] : 0;
+      uint32_t ph = src_h > kA7YS[cur_pass] ? (src_h - kA7YS[cur_pass] + kA7YD[cur_pass] - 1) / kA7YD[cur_pass] : 0;
+      if (pw > 0 && ph > 0)
+        break;
+      ++cur_pass;
+    }
+    size_t row_total_a7 = (cur_pass < 7) ? 1 + pass_scan_bytes(cur_pass) : 0;
+
+    for (;;) {
+      // Refill IDAT input buffer
+      while (in_avail_a7 < kIDAT_BufSize) {
+        if (idat_chunk_left_a7 > 0) {
+          size_t space = kIDAT_BufSize - in_avail_a7;
+          size_t want = idat_chunk_left_a7 < space ? idat_chunk_left_a7 : space;
+          size_t got = inp.read(idat_buf_a7 + in_avail_a7, want);
+          if (got == 0) {
+            more_idat_a7 = false;
+            idat_chunk_left_a7 = 0;
+            break;
+          }
+          in_avail_a7 += got;
+          idat_chunk_left_a7 -= got;
+        } else if (more_idat_a7) {
+          if (!zip_skip(inp, 4)) {
+            more_idat_a7 = false;
+            break;
+          }
+          uint8_t next_hdr_a7[8];
+          if (!zip_read_exact(inp, next_hdr_a7, 8)) {
+            more_idat_a7 = false;
+            break;
+          }
+          if (std::memcmp(next_hdr_a7 + 4, "IDAT", 4) == 0)
+            idat_chunk_left_a7 = be32(next_hdr_a7);
+          else {
+            more_idat_a7 = false;
+            break;
+          }
+        } else
+          break;
+      }
+
+      bool has_more_a7 = (idat_chunk_left_a7 > 0) || more_idat_a7;
+      mz_uint32 flags_a7 = TINFL_FLAG_PARSE_ZLIB_HEADER;
+      if (has_more_a7)
+        flags_a7 |= TINFL_FLAG_HAS_MORE_INPUT;
+
+      size_t write_pos_a7 = dict_pos_a7 & (kLZDictSize - 1);
+      size_t in_bytes_a7 = in_avail_a7;
+      size_t out_bytes_a7 = kLZDictSize - write_pos_a7;
+
+      tinfl_status status_a7 = tinfl_decompress(decomp_a7.get(), idat_buf_a7, &in_bytes_a7, lz_dict_a7.get(),
+                                                lz_dict_a7.get() + write_pos_a7, &out_bytes_a7, flags_a7);
+      if (in_bytes_a7 > 0 && in_bytes_a7 < in_avail_a7)
+        std::memmove(idat_buf_a7, idat_buf_a7 + in_bytes_a7, in_avail_a7 - in_bytes_a7);
+      in_avail_a7 -= in_bytes_a7;
+
+      // Feed decompressed bytes into the current pass row buffer
+      const uint8_t* src_d = lz_dict_a7.get() + write_pos_a7;
+      size_t remaining_a7 = out_bytes_a7;
+      while (remaining_a7 > 0 && cur_pass < 7) {
+        size_t chunk = std::min(remaining_a7, row_total_a7 - row_pos_a7);
+        std::memcpy(row_buf_a7.get() + row_pos_a7, src_d, chunk);
+        row_pos_a7 += chunk;
+        src_d += chunk;
+        remaining_a7 -= chunk;
+
+        if (row_pos_a7 == row_total_a7) {
+          size_t pscan = row_total_a7 - 1;
+          uint8_t filter_a7 = row_buf_a7[0];
+          std::memcpy(curr_row_a7.get(), row_buf_a7.get() + 1, pscan);
+          unfilter_row(filter_a7, curr_row_a7.get(), prev_row_a7.get(), pscan, bpp_filter_a7);
+
+          uint32_t pw = (src_w - kA7XS[cur_pass] + kA7XD[cur_pass] - 1) / kA7XD[cur_pass];
+          uint32_t src_row_y = kA7YS[cur_pass] + pass_row_a7 * kA7YD[cur_pass];
+          uint32_t oy = src_row_y * out_h / src_h;
+
+          if (oy < out_h) {
+            uint8_t* out_row_ptr = a7_out ? a7_out.get() + oy * out_stride : nullptr;
+            for (uint32_t pc = 0; pc < pw; ++pc) {
+              uint32_t src_x = kA7XS[cur_pass] + pc * kA7XD[cur_pass];
+              uint32_t ox = src_x * out_w / src_w;
+              if (ox < out_w) {
+                uint8_t g = pixel_to_grey(curr_row_a7.get(), pc, hdr, palette_grey);
+                bool white = g >= kBayer[oy & 3][ox & 3];
+                if (pixel_sink) {
+                  pixel_sink->set_pixel(pixel_sink->ctx, static_cast<uint16_t>(ox), static_cast<uint16_t>(oy), white);
+                } else {
+                  uint8_t bit = static_cast<uint8_t>(0x80u >> (ox & 7));
+                  if (white)
+                    out_row_ptr[ox / 8] |= bit;
+                  else
+                    out_row_ptr[ox / 8] &= static_cast<uint8_t>(~bit);
+                }
+              }
+            }
+          }
+
+          std::swap(prev_row_a7, curr_row_a7);
+          std::fill(curr_row_a7.get(), curr_row_a7.get() + pscan, uint8_t(0));
+          row_pos_a7 = 0;
+          ++pass_row_a7;
+
+          // Advance to next non-empty pass when this one is complete
+          uint32_t ph = (src_h - kA7YS[cur_pass] + kA7YD[cur_pass] - 1) / kA7YD[cur_pass];
+          if (pass_row_a7 >= ph) {
+            ++cur_pass;
+            while (cur_pass < 7) {
+              uint32_t npw =
+                  src_w > kA7XS[cur_pass] ? (src_w - kA7XS[cur_pass] + kA7XD[cur_pass] - 1) / kA7XD[cur_pass] : 0;
+              uint32_t nph =
+                  src_h > kA7YS[cur_pass] ? (src_h - kA7YS[cur_pass] + kA7YD[cur_pass] - 1) / kA7YD[cur_pass] : 0;
+              if (npw > 0 && nph > 0)
+                break;
+              ++cur_pass;
+            }
+            if (cur_pass < 7) {
+              row_total_a7 = 1 + pass_scan_bytes(cur_pass);
+              pass_row_a7 = 0;
+              std::fill(prev_row_a7.get(), prev_row_a7.get() + max_scan_bytes, uint8_t(0));
+            }
+          }
+        }
+      }
+
+      dict_pos_a7 += out_bytes_a7;
+      if (status_a7 == TINFL_STATUS_DONE)
+        break;
+      if (status_a7 < TINFL_STATUS_DONE)
+        return ImageError::InvalidData;
+      if (status_a7 == TINFL_STATUS_NEEDS_MORE_INPUT && !has_more_a7 && in_avail_a7 == 0)
+        return ImageError::InvalidData;
+    }
+
+    out.width = static_cast<uint16_t>(out_w);
+    out.height = static_cast<uint16_t>(out_h);
+    if (!pixel_sink) {
+      // Emit buffered output via row_sink or store in out.data
+      if (sink) {
+        for (uint32_t ay = 0; ay < out_h; ++ay)
+          sink->emit_row(sink->ctx, static_cast<uint16_t>(ay), a7_out.get() + ay * out_stride,
+                         static_cast<uint16_t>(out_w));
+      } else {
+        out.data.assign(a7_out.get(), a7_out.get() + out_stride * out_h);
+      }
+    }
+    return ImageError::Ok;
+  }
 
   // ---- Allocate working buffers ----
   size_t scan_bytes = hdr.scanline_bytes();

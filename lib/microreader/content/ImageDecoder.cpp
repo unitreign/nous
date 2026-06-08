@@ -449,7 +449,7 @@ ImageError decode_image(const uint8_t* /*data*/, size_t /*size*/, uint16_t /*max
 
 ImageError decode_image_from_entry(IZipFile& file, const ZipEntry& entry, uint16_t max_w, uint16_t max_h,
                                    DecodedImage& out, uint8_t* work_buf, size_t work_buf_size, bool scale_to_fill,
-                                   ImageRowSink* sink) {
+                                   ImageRowSink* sink, ImagePixelSink* pixel_sink) {
   if (!images_enabled)
     return ImageError::UnsupportedFormat;
 
@@ -469,7 +469,8 @@ ImageError decode_image_from_entry(IZipFile& file, const ZipEntry& entry, uint16
         auto err = decode_jpeg_from_entry(file, entry, max_w, max_h, out, work_buf, work_buf_size, scale_to_fill, sink);
         if (err == ImageError::Ok)
           return err;
-        return decode_png_from_entry(file, entry, max_w, max_h, out, work_buf, work_buf_size, scale_to_fill, sink);
+        return decode_png_from_entry(file, entry, max_w, max_h, out, work_buf, work_buf_size, scale_to_fill, sink,
+                                     pixel_sink);
       }
       peek_buf = tmp_buf.get();
       peek_buf_size = ZipEntryInput::kMinWorkBufSize;
@@ -493,7 +494,8 @@ ImageError decode_image_from_entry(IZipFile& file, const ZipEntry& entry, uint16
   if (fmt == ImageFormat::Jpeg)
     return decode_jpeg_from_entry(file, entry, max_w, max_h, out, work_buf, work_buf_size, scale_to_fill, sink);
   if (fmt == ImageFormat::Png)
-    return decode_png_from_entry(file, entry, max_w, max_h, out, work_buf, work_buf_size, scale_to_fill, sink);
+    return decode_png_from_entry(file, entry, max_w, max_h, out, work_buf, work_buf_size, scale_to_fill, sink,
+                                 pixel_sink);
 
   return ImageError::UnsupportedFormat;
 }
