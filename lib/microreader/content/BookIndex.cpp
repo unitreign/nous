@@ -31,6 +31,7 @@ bool BookIndex::load(const std::string& index_file) {
     return false;
 
   entries_.clear();
+
   char line[1024];
   while (std::fgets(line, sizeof(line), f)) {
     // Remove newline
@@ -68,29 +69,9 @@ bool BookIndex::load(const std::string& index_file) {
       entry.author = sep2 + 1;
     }
 
-    if (!entry.title.empty()) {
-      entry.label = entry.title;
-      if (!entry.author.empty()) {
-        entry.label += " - ";
-        entry.label += entry.author;
-      }
-    } else {
-      // Fallback label to filename
-      const char* name = entry.path.c_str();
-      const char* sep = std::strrchr(name, '/');
-#ifdef _WIN32
-      const char* bsep = std::strrchr(name, '\\');
-      if (bsep && (!sep || bsep > sep))
-        sep = bsep;
-#endif
-      if (sep)
-        name = sep + 1;
-      const char* dot = std::strrchr(name, '.');
-      size_t name_len = dot ? static_cast<size_t>(dot - name) : std::strlen(name);
-      entry.label = std::string(name, name_len);
-    }
     entries_.push_back(std::move(entry));
   }
+
   std::fclose(f);
   return true;
 }
@@ -142,21 +123,6 @@ void BookIndex::build_index(const std::string& root_dir, DrawBuffer& buf) {
         entry.author = *meta.author;
       }
 
-      if (!entry.title.empty()) {
-        entry.label = entry.title;
-        if (!entry.author.empty()) {
-          entry.label += " - ";
-          entry.label += entry.author;
-        }
-      } else {
-        const char* name = path.c_str();
-        const char* sep = std::strrchr(path.c_str(), '/');
-        if (sep)
-          name = sep + 1;
-        const char* dot = std::strrchr(name, '.');
-        size_t name_len = dot ? static_cast<size_t>(dot - name) : std::strlen(name);
-        entry.label = std::string(name, name_len);
-      }
       entries_.push_back(std::move(entry));
     }
     book.close();

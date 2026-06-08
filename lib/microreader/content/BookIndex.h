@@ -12,7 +12,6 @@ struct BookIndexEntry {
   std::string path;
   std::string title;
   std::string author;
-  std::string label;
   uint32_t last_open_order = 0;  // 0 = never opened; higher = more recently opened
 };
 

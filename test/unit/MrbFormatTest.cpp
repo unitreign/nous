@@ -283,8 +283,8 @@ TEST_F(MrbFormatTest, RoundTrip_Metadata) {
   meta.author = "Jane Doe";
   meta.language = "de";
   TableOfContents toc;
-  toc.entries.push_back({"Chapter One", 0});
-  toc.entries.push_back({"Chapter Two", 5});
+  toc.add_entry("Chapter One", 0, 0);
+  toc.add_entry("Chapter Two", 5, 0);
   ASSERT_TRUE(writer.finish(meta, toc));
 
   MrbReader reader;
@@ -294,9 +294,9 @@ TEST_F(MrbFormatTest, RoundTrip_Metadata) {
   EXPECT_EQ(reader.metadata().language.value_or(""), "de");
 
   ASSERT_EQ(reader.toc().entries.size(), 2u);
-  EXPECT_EQ(reader.toc().entries[0].label, "Chapter One");
+  EXPECT_EQ(reader.toc().label_of(reader.toc().entries[0]), "Chapter One");
   EXPECT_EQ(reader.toc().entries[0].file_idx, 0);
-  EXPECT_EQ(reader.toc().entries[1].label, "Chapter Two");
+  EXPECT_EQ(reader.toc().label_of(reader.toc().entries[1]), "Chapter Two");
   EXPECT_EQ(reader.toc().entries[1].file_idx, 5);
 }
 

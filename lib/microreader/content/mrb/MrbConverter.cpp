@@ -163,7 +163,6 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
   }
 
   std::vector<ImageMapping> image_map;
-  image_map.reserve(16);  // typical epub image count; avoids realloc on fragmented heap
   const auto& zip = book.epub().zip();
 
 #ifdef ESP_PLATFORM
@@ -178,21 +177,19 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
     size_t toc_entry_idx;   // index into toc_work.entries to fill in
   };
   TableOfContents toc_work = book.take_toc();
-  // toc_work.entries may have a large capacity from the NCX parse. Shrink it
-  // to release any excess memory before further allocations on the fragmented heap.
+  // toc_work.blob_ holds all label+fragment data. shrink_to_fit in case of
+  // excess capacity from geometric growth during NCX parse.
+  toc_work.blob_.shrink_to_fit();
   toc_work.entries.shrink_to_fit();
 
   std::vector<FragmentNeed> fragment_needs;
-  fragment_needs.reserve(toc_work.entries.size());  // worst case: all entries have fragments
+  fragment_needs.reserve(toc_work.entries.size());
   for (size_t i = 0; i < toc_work.entries.size(); ++i) {
-    if (!toc_work.entries[i].fragment.empty()) {
-      fragment_needs.push_back({toc_work.entries[i].file_idx, std::move(toc_work.entries[i].fragment), i});
+    auto frag = toc_work.fragment_of(toc_work.entries[i]);
+    if (!frag.empty()) {
+      fragment_needs.push_back({toc_work.entries[i].file_idx, std::string(frag), i});
     }
   }
-  // Fragment strings have been moved into fragment_needs; release the now-empty
-  // strings in toc_work so their small-string buffers are freed.
-  for (auto& e : toc_work.entries)
-    e.fragment.shrink_to_fit();
 
   // Context for the streaming paragraph + ID sinks.
   struct SinkCtx {

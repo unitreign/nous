@@ -324,7 +324,8 @@ bool MrbWriter::finish(const EpubMetadata& meta, const TableOfContents& toc,
   mrb_write_u16(toc_hdr, toc_count);
   write_bytes(toc_hdr, 2);
   for (const auto& entry : toc.entries) {
-    write_string(entry.label);
+    auto lbl = toc.label_of(entry);
+    write_string(std::string(lbl));
     uint8_t buf[5];
     mrb_write_u16(buf, entry.file_idx);
     buf[2] = entry.depth;

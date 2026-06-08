@@ -26,17 +26,23 @@ const char* Application::build_info() const {
 }
 
 void Application::start(DrawBuffer& buf, IRuntime& runtime) {
+  HEAP_LOG("Application: start 0");
+
   ticks_ = 0;
   uptime_ms_ = 0;
   buttons_ = ButtonState{};
   started_ = true;
   running_ = true;
+
   MR_LOGI("app", "%s", build_info());
+
 #ifdef ESP_PLATFORM
   std::srand(esp_random());
 #else
   std::srand(static_cast<unsigned>(std::time(nullptr)));
 #endif
+
+  HEAP_LOG("Application: start 1");
 
   if (reader_font_)
     reader_.set_fonts(reader_font_);
@@ -49,6 +55,8 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   reader_options_.set_app(this);
   chapter_select_.set_app(this);
   links_screen_.set_app(this);
+
+  HEAP_LOG("Application: start 2");
 
   // Set up settings file path if data_dir_ is set
   if (data_dir_)

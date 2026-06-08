@@ -32,7 +32,7 @@ void ReaderOptionsScreen::populate(const TableOfContents& toc, uint16_t current_
     }
   }
   if (best_match >= 0) {
-    chapter_title_ = toc.entries[best_match].label;
+    chapter_title_ = std::string(toc.label_of(toc.entries[best_match]));
   }
 
   book_progress_pct_ = book_progress_pct;
@@ -81,7 +81,8 @@ void ReaderOptionsScreen::on_start() {
       std::string w;
       for (size_t i = 0; i <= book_title_.length(); ++i) {
         if (i == book_title_.length() || book_title_[i] == ' ') {
-          if (!w.empty()) words.push_back(w);
+          if (!w.empty())
+            words.push_back(w);
           w.clear();
         } else {
           w += book_title_[i];
@@ -97,7 +98,8 @@ void ReaderOptionsScreen::on_start() {
         all_w += ww;
       }
       int spaces = static_cast<int>(words.size()) - 1;
-      if (spaces > 0) all_w += spaces * static_cast<int>(header_font_.word_width(" ", 1, FontStyle::Regular));
+      if (spaces > 0)
+        all_w += spaces * static_cast<int>(header_font_.word_width(" ", 1, FontStyle::Regular));
 
       if (all_w <= max_line_w) {
         title_ = book_title_.c_str();
@@ -109,13 +111,16 @@ void ReaderOptionsScreen::on_start() {
         int best_diff = INT_MAX;
         int l1_w = 0;
         for (size_t i = 0; i < words.size(); ++i) {
-          if (i > 0) l1_w += space_w;
+          if (i > 0)
+            l1_w += space_w;
           l1_w += word_w[i];
-          if (l1_w > max_line_w) break;
+          if (l1_w > max_line_w)
+            break;
           if (i + 1 < words.size()) {
             int l2_w = 0;
             for (size_t j = i + 1; j < words.size(); ++j) {
-              if (j > i + 1) l2_w += space_w;
+              if (j > i + 1)
+                l2_w += space_w;
               l2_w += word_w[j];
             }
             int diff = std::abs(l1_w - l2_w);
@@ -128,11 +133,13 @@ void ReaderOptionsScreen::on_start() {
 
         std::string line1, line2;
         for (int i = 0; i < best_split; ++i) {
-          if (i > 0) line1 += ' ';
+          if (i > 0)
+            line1 += ' ';
           line1 += words[i];
         }
         for (int i = best_split; i < static_cast<int>(words.size()); ++i) {
-          if (i > best_split) line2 += ' ';
+          if (i > best_split)
+            line2 += ' ';
           line2 += words[i];
         }
 
@@ -144,13 +151,15 @@ void ReaderOptionsScreen::on_start() {
           int trunc_at = 0;
           for (int i = best_split; i < static_cast<int>(words.size()); ++i) {
             int word_with_space = word_w[i] + ((i > best_split) ? space_w : 0);
-            if (l2_w + word_with_space + ellipsis_w > max_line_w) break;
+            if (l2_w + word_with_space + ellipsis_w > max_line_w)
+              break;
             l2_w += word_with_space;
             trunc_at = i + 1;
           }
           line2.clear();
           for (int i = best_split; i < trunc_at; ++i) {
-            if (i > best_split) line2 += ' ';
+            if (i > best_split)
+              line2 += ' ';
             line2 += words[i];
           }
           line2 += "...";

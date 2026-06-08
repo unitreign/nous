@@ -38,14 +38,17 @@ class Application {
   Application() = default;
 
   const char* build_info() const;
+
   void set_books_dir(const char* dir) {
     menu_.set_books_dir(dir);
   }
+
   void set_data_dir(const char* dir) {
     data_dir_ = dir;
     reader_.set_data_dir(dir ? dir : "");
     settings_.set_data_dir(dir);
   }
+
   // Path to data directory for settings/state persistence
   const char* data_dir_ = nullptr;
   // Path to the single unified settings file (cached after set_data_dir)
@@ -233,6 +236,7 @@ class Application {
   int sleep_image_idx_ = 0;
 
   ScreenManager screen_mgr_;
+
   MainMenu menu_;
   ReaderScreen reader_;
   SettingsScreen settings_;
@@ -241,8 +245,10 @@ class Application {
   ReaderOptionsScreen reader_options_;
   ChapterSelectScreen chapter_select_;
   LinksScreen links_screen_;
+
   ScreenId pending_push_ = ScreenId::None;
   ScreenId pending_replace_ = ScreenId::None;
+
   int pending_pop_count_ = 0;
   const BitmapFontSet* reader_font_ = nullptr;
   FontManager* font_manager_ = nullptr;

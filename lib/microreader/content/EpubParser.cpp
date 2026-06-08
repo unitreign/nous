@@ -325,7 +325,7 @@ static EpubError parse_ncx(IZipFile& file, const ZipReader& zip, const ZipEntry&
           }
           if (idx >= 0) {
             uint8_t depth = static_cast<uint8_t>(nav_depth - 1 < 255 ? nav_depth - 1 : 255);
-            toc.entries.push_back({current_label, static_cast<uint16_t>(idx), depth, std::move(fragment), 0});
+            toc.add_entry(current_label, static_cast<uint16_t>(idx), depth, fragment);
           }
         }
       }
@@ -1245,12 +1245,14 @@ class BodyParser {
       r.margin_right = margin_right_;
       if (!current_href_.empty())
         r.href = current_href_;
-      // If runs_ is full, emit the accumulated runs as a partial paragraph now
-      // rather than letting the vector realloc (which may fail on a fragmented
-      // ESP32 heap). flush_run() calls flush_text() first, but current_run_ is
-      // already cleared (moved into r above), so there is no recursion.
-      if (!runs_.empty() && runs_.size() == runs_.capacity())
+      // On ESP32: if runs_ is at capacity, emit the accumulated runs as a partial
+      // paragraph now rather than letting the vector double in size (which may fail
+      // on a fragmented heap). The capacity >= 16 guard prevents splitting tiny
+      // paragraphs when capacity was never pre-reserved (e.g. desktop/test paths).
+#ifdef ESP_PLATFORM
+      if (runs_.size() == runs_.capacity() && runs_.capacity() >= 16)
         flush_run();
+#endif
       runs_.push_back(std::move(r));
       current_run_.clear();
     }
@@ -2059,7 +2061,7 @@ EpubError Epub::parse_chapter(IZipFile& file, size_t index, Chapter& out) const 
   out.title.reset();
   for (auto& toc_entry : toc_.entries) {
     if (toc_entry.file_idx == spine_item.file_idx) {
-      out.title = toc_entry.label;
+      out.title = std::string(toc_.label_of(toc_entry));
       break;
     }
   }

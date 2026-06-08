@@ -64,7 +64,8 @@ struct Run {
   Run(const char* t, FontStyle s = FontStyle::Regular, bool br = false)
       : text(t), style(s), size_pct(100), breaking(br) {}
   Run(const std::string& t, FontStyle s, int sz, bool br = false) : text(t), style(s), size_pct(sz), breaking(br) {}
-  Run(std::string&& t, FontStyle s, int sz, bool br = false) : text(std::move(t)), style(s), size_pct(sz), breaking(br) {}
+  Run(std::string&& t, FontStyle s, int sz, bool br = false)
+      : text(std::move(t)), style(s), size_pct(sz), breaking(br) {}
   Run(const char* t, FontStyle s, int sz, bool br = false) : text(t), style(s), size_pct(sz), breaking(br) {}
 
   bool operator==(const Run& o) const {
@@ -110,7 +111,7 @@ struct Paragraph {
   TextParagraph text;                      // valid when type == Text
   ImageRef image;                          // valid when type == Image
   std::optional<uint16_t> spacing_before;  // override para_spacing if set
-  std::optional<uint8_t> hr_width_pct;    // HR width as percentage (0-100), nullopt = default (1/3)
+  std::optional<uint8_t> hr_width_pct;     // HR width as percentage (0-100), nullopt = default (1/3)
 
   Paragraph() = default;
 
@@ -169,17 +170,48 @@ struct SpineItem {
 // ---------------------------------------------------------------------------
 // Table of contents entry
 // ---------------------------------------------------------------------------
+// TocEntry stores label + fragment as offsets into TableOfContents::blob_ rather
+// than individual std::string objects. This reduces per-entry memory from ~28 bytes
+// (two std::strings + 2 heap allocations each) to 14 bytes (pure integer fields),
+// and collapses all string data into a single heap allocation. For a 1000-entry TOC
+// this saves ~40-50KB on ESP32 versus individual std::string members.
 
 struct TocEntry {
-  std::string label;
+  uint16_t label_off = 0;  // byte offset into TableOfContents::blob_
+  uint16_t label_len = 0;  // byte length of label (max 65535)
+  uint16_t frag_off = 0;   // byte offset of fragment into TableOfContents::blob_
+  uint16_t frag_len = 0;   // byte length of fragment (0 = no fragment)
   uint16_t file_idx = 0;
   uint8_t depth = 0;        // nesting depth in NCX (0 = top-level)
-  std::string fragment;     // fragment anchor from NCX; resolved during conversion, not stored in MRB
   uint16_t para_index = 0;  // paragraph index within chapter (stored in MRB v6+)
 };
 
 struct TableOfContents {
   std::vector<TocEntry> entries;
+  std::string blob_;  // all label + fragment data packed contiguously
+
+  // Accessors
+  std::string_view label_of(const TocEntry& e) const {
+    return {blob_.data() + e.label_off, e.label_len};
+  }
+  std::string_view fragment_of(const TocEntry& e) const {
+    if (e.frag_len == 0)
+      return {};
+    return {blob_.data() + e.frag_off, e.frag_len};
+  }
+
+  // Add an entry during parsing; appends label+fragment to the blob.
+  // blob_ may reallocate, but entries store integer offsets so they remain valid.
+  void add_entry(std::string_view label, uint16_t file_idx, uint8_t depth, std::string_view fragment = {},
+                 uint16_t para_index = 0) {
+    auto loff = static_cast<uint16_t>(blob_.size());
+    auto llen = static_cast<uint16_t>(std::min(label.size(), size_t(0xFFFF)));
+    blob_.append(label.data(), llen);
+    auto foff = static_cast<uint16_t>(blob_.size());
+    auto flen = static_cast<uint16_t>(std::min(fragment.size(), size_t(0xFFFF)));
+    blob_.append(fragment.data(), flen);
+    entries.push_back({loff, llen, foff, flen, file_idx, depth, para_index});
+  }
 };
 
 }  // namespace microreader

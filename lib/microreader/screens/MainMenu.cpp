@@ -86,7 +86,7 @@ void MainMenu::populate_list_() {
     e.path = index_entry.path;
 
     if (list_format_ == BookListFormat::TitleOnly) {
-      e.label = index_entry.title.empty() ? index_entry.label : index_entry.title;
+      e.label = index_entry.title;
     } else if (list_format_ == BookListFormat::Filename) {
       const char* name = index_entry.path.c_str();
       const char* sep = std::strrchr(name, '/');
@@ -105,7 +105,7 @@ void MainMenu::populate_list_() {
         e.label = name;
       }
     } else {
-      e.label = index_entry.label;  // Title & Author
+      e.label = index_entry.title + " - " + index_entry.author;  // Title & Author
     }
 
     entries_.push_back(std::move(e));

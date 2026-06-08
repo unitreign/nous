@@ -10,7 +10,7 @@ void ChapterSelectScreen::populate(const TableOfContents& toc, uint16_t current_
   initial_selected_ = 0;
   for (const auto& entry : toc.entries) {
     Entry e{};
-    e.label = entry.label;
+    e.label = std::string(toc.label_of(entry));
     e.chapter_idx = entry.file_idx;
     e.para_index = entry.para_index;
     e.depth = entry.depth;
