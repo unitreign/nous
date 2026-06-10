@@ -45,7 +45,7 @@ bool BookIndex::load(const std::string& index_file) {
   pool_.reset();
 
   char line[1024];
-  while (std::fgets(line, sizeof(line), f)) {
+  while (std::fgets(line, sizeof(line), f) && static_cast<int>(entries_.size()) < MAX_BOOKS) {
     // Remove newline
     size_t len = std::strlen(line);
     if (len > 0 && line[len - 1] == '\n') {
@@ -127,6 +127,8 @@ void BookIndex::build_index(const std::string& root_dir, DrawBuffer& buf) {
 
   // Helper to process a single epub path (keeps peak memory low)
   auto process_path = [&](const std::string& path) {
+    if (static_cast<int>(entries_.size()) >= MAX_BOOKS)
+      return;
     buf.show_loading("Indexing...", total > 0 ? 10 + (done * 90 / total) : 10);
     book.close();
     if (book.open(path.c_str(), buf.scratch_buf1(), buf.scratch_buf2(), false) == EpubError::Ok) {

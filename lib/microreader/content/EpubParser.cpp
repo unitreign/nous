@@ -4,9 +4,9 @@
 #include <cctype>
 #include <memory>
 
+#include "../HeapLog.h"
 #include "ImageDecoder.h"
 #include "XmlReader.h"
-#include "../HeapLog.h"
 
 #ifdef ESP_PLATFORM
 #include "esp_heap_caps.h"
@@ -378,7 +378,8 @@ EpubError Epub::parse_opf(IZipFile& file, const std::string& opf_path, uint8_t* 
   XmlEventType opf_exit_type = XmlEventType::EndOfFile;
   for (;;) {
     opf_exit_err = reader.next_event(ev);
-    if (opf_exit_err != XmlError::Ok) break;
+    if (opf_exit_err != XmlError::Ok)
+      break;
     opf_exit_type = ev.type;
     if (ev.type == XmlEventType::EndOfFile)
       break;
@@ -478,9 +479,9 @@ EpubError Epub::parse_opf(IZipFile& file, const std::string& opf_path, uint8_t* 
     }
   }
 
-  MR_LOGI("opf", "parse loop exit: err=%d type=%d section=%d manifest=%u spine=%u",
-          (int)opf_exit_err, (int)opf_exit_type, (int)section,
-          (unsigned)manifest.size(), (unsigned)spine_.size());
+  // MR_LOGI("opf", "parse loop exit: err=%d type=%d section=%d manifest=%u spine=%u",
+  //         (int)opf_exit_err, (int)opf_exit_type, (int)section,
+  //         (unsigned)manifest.size(), (unsigned)spine_.size());
 
   // Resolve toc NCX reference
   if (!toc_id_ref.empty() && ncx_file_idx >= 0) {
@@ -492,8 +493,8 @@ EpubError Epub::parse_opf(IZipFile& file, const std::string& opf_path, uint8_t* 
     }
   }
 
-  MR_LOGI("opf", "root='%s' manifest=%u spine=%u css=%u", root_dir_.c_str(),
-          (unsigned)manifest.size(), (unsigned)spine_.size(), (unsigned)css_idxs.size());
+  // MR_LOGI("opf", "root='%s' manifest=%u spine=%u css=%u", root_dir_.c_str(), (unsigned)manifest.size(),
+  //         (unsigned)spine_.size(), (unsigned)css_idxs.size());
 
   // Manifest is no longer needed — free its heap allocation.
   manifest.clear();

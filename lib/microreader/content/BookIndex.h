@@ -17,6 +17,8 @@ struct BookIndexEntry {
   uint32_t last_open_order = 0;  // 0 = never opened; higher = more recently opened
 };
 
+static constexpr int MAX_BOOKS = 250;
+
 class BookIndex {
  public:
   static BookIndex& instance();
