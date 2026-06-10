@@ -53,6 +53,7 @@ add_library(microreader_content STATIC
     ${CONTENT_DIR}/ImageDecoder.cpp
     ${CONTENT_DIR}/JpegDecoder.cpp
     ${CONTENT_DIR}/PngDecoder.cpp
+    ${CONTENT_DIR}/BmpSleepConverter.cpp
     ${CONTENT_DIR}/Book.cpp
     ${CONTENT_DIR}/BookIndex.cpp
     ${CONTENT_DIR}/TextLayout.cpp

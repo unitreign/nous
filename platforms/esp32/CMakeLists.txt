@@ -29,7 +29,8 @@ set(lib_sources
     ${LIB}/content/mrb/MrbConverter.cpp
     ${LIB}/content/ImageDecoder.cpp
     ${LIB}/content/JpegDecoder.cpp
-    ${LIB}/content/PngDecoder.cpp)
+    ${LIB}/content/PngDecoder.cpp
+    ${LIB}/content/BmpSleepConverter.cpp)
 
 # miniz: vendored in third_party/miniz/. Compiled as C++ via miniz_wrapper.cpp
 # to avoid IDF applying C++-only flags (-fuse-cxa-atexit) to .c files.

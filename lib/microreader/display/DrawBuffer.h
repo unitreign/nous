@@ -516,7 +516,6 @@ class DrawBuffer {
     display_.write_ram_red(inactive_());
 
     display_.grayscale_refresh_1pass(/*turnOffScreen=*/true);
-    display_.deep_sleep();
 
     std::fclose(f);
     return true;
@@ -646,7 +645,8 @@ class DrawBuffer {
       return;  // skip if panel is still refreshing
     uint8_t new_buf[kLoadBufBytes];
     render_loading_box_(new_buf, text, progress_pct);
-    display_.partial_refresh_region(kLoadPhysX + DisplayFrame::kPanelOffsetX, kLoadPhysY, kLoadPhysW, kLoadPhysH, new_buf, kLoadStride);
+    display_.partial_refresh_region(kLoadPhysX + DisplayFrame::kPanelOffsetX, kLoadPhysY, kLoadPhysW, kLoadPhysH,
+                                    new_buf, kLoadStride);
   }
 
  private:

@@ -1,6 +1,6 @@
-# microreader2
+# Microreader
 
-Minimal EPUB reader for ESP32-C3 + SSD1677 e-ink display (480×800 portrait).
+Minimal EPUB reader for the [Xteink X4](https://xteink.com) device (ESP32-C3 + SSD1677 e-ink display, 480×800 portrait).
 Includes a desktop SDL2 emulator for development without hardware.
 
 ## Hardware
@@ -13,10 +13,41 @@ Includes a desktop SDL2 emulator for development without hardware.
 | Flash | 16 MB |
 | Input | ADC buttons |
 
+## Device Management
+
+Books (`.epub`) can go anywhere on the SD card — the device scans recursively from the root. Fonts (`.mfb`) go in the `fonts/` folder on the SD card.
+
+Simply copy files to the SD card while it is connected to your computer, then reinsert it into the device.
+
+## Sleep Screen
+
+The device displays an image when it enters deep sleep. Several images are built into the firmware. You can also add your own by placing BMP files in the `.sleep/` folder on the SD card.
+
+Supported BMP variants: 1 bpp monochrome, 4 bpp indexed, 8 bpp indexed, 16 bpp RGB565 / BGR555, 24 bpp BGR, 32 bpp BGRA. Use 800×480 pixels for best quality (landscape) or 480×800 (portrait — automatically rotated 90° CCW). Other sizes are scaled to fit.
+
+The first time an image is shown it is converted and cached; subsequent sleeps load the cache directly. The cache is cleared by **Settings → Clear Cache**.
+
+### Adding sleep images
+
+```powershell
+python tools/serial_cmd.py --port COM4 --upload-sleep "path/to/my_image.bmp"
+```
+
+**Desktop emulator:** copy any `.bmp` file into `sd/.sleep/`.
+
+### Selecting a sleep image
+
+Open **Settings → Sleep Image**:
+
+- **Auto** — cycles through all images in `.sleep/`, picking a different one each sleep.
+- **\<filename\>** — pins the device to that specific image.
+
+---
+
 ## Project Structure
 
 ```
-lib/microreader/       shared core (platform-agnostic C++17)
+lib/microreader/       shared core (platform-agnostic C++20)
   content/             EPUB parsing, layout, MRB binary format
   display/             Canvas, DisplayQueue, Font interfaces
   screens/             UI screen implementations
@@ -60,32 +91,6 @@ cmake --build build2 --config Debug
 .\build2\Debug\microreader_tests.exe   # includes real EPUB integration tests
 ```
 
-## Device Management
-
-Books (`.epub`) can go anywhere on the SD card — the device scans recursively from the root. Fonts (`.mfb`) go in `/fonts/`. You can copy files directly or use `tools/serial_cmd.py` to transfer over serial:
-
-```powershell
-# Upload an EPUB book
-python tools/serial_cmd.py --port COM4 --upload path/to/book.epub
-
-# Upload all EPUB books in a directory
-python tools/serial_cmd.py --port COM4 --upload-dir path/to/books/
-
-# Upload an SD card font (no firmware rebuild needed)
-python tools/serial_cmd.py --port COM4 --upload-sd-font "resources/sd fonts/Cartisse.mfb"
-
-# Upload all SD fonts
-foreach ($f in (Get-ChildItem "resources/sd fonts/*.mfb")) {
-    python tools/serial_cmd.py --port COM4 --upload-sd-font $f.FullName
-}
-
-# Interactive console (status, button injection, file management, benchmarks)
-python tools/serial_cmd.py --port COM4
-
-# Delete a specific file from the device
-# (interactive: rm /sdcard/books/book.epub)
-```
-
 ## Font Generation
 
 Reader fonts are FNTS bundles (`.mfb`), generated from TTF/OTF sources via `tools/generate_font.py`.
@@ -127,9 +132,9 @@ python tools/generate_font.py resources/fonts/terminus/Terminus-Bold.ttf 32 --he
 
 ## Firmware Backup & Restore
 
-> **Note:** Built-in fonts and sleep images are embedded directly in the firmware
+> **Note:** Built-in fonts and the default sleep image are embedded directly in the firmware
 > image (`EMBED_FILES`), so `firmware.bin` is a standard IDF binary that any web
-> flasher can validate and flash without issues.  The tradeoff is that the assets
+> flasher can validate and flash without issues. The tradeoff is that the assets
 > (~2 MB) consume DROM MMU pages.
 
 ```powershell
@@ -142,15 +147,6 @@ python -m esptool --port COM4 write_flash 0x10000 app0_backup.bin
 # Switch OTA boot partition
 python tools/switch_partition.py app0 --port COM4 --flash
 python tools/switch_partition.py app1 --port COM4 --flash
-```
-
-## Sleep Screen
-
-Sleep screen images (`.mgr`) go in `/sleep/` on the SD card. Convert a JPEG first, then copy manually or upload via serial:
-
-```powershell
-python tools/image_to_mgr.py "resources/sleep/sleep_2.jpg" --out-prefix "resources/sleep/sleep_2" --bin
-python tools/serial_cmd.py --port COM4 --upload-sleep "resources/sleep/sleep_2.mgr"
 ```
 
 ## Hyphenation

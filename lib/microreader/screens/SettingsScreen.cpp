@@ -66,7 +66,7 @@ static std::string get_sleep_image_label(const std::string& path) {
     int idx = std::atoi(path.c_str() + 9);
     label += (idx == 0 ? "bird" : (idx == 1 ? "stone" : "bebop"));
   } else {
-    const char* p = path.c_str();
+    const char* p = path.rfind("bmp:", 0) == 0 ? path.c_str() + 4 : path.c_str();
     const char* slash = nullptr;
     for (const char* c = p; *c; ++c)
       if (*c == '/' || *c == '\\')
@@ -144,24 +144,30 @@ void SettingsScreen::on_start() {
   std::vector<std::string> sd_sleep;
 #ifdef ESP_PLATFORM
   {
-    DIR* sd = opendir("/sdcard/sleep");
+    DIR* sd = opendir("/sdcard/.sleep");
     if (sd) {
       struct dirent* ent;
       while ((ent = readdir(sd)) != nullptr) {
         if (ent->d_name[0] == '.')
           continue;
         const char* ext = std::strrchr(ent->d_name, '.');
-        if (ext && strcmp(ext, ".mgr") == 0)
-          sd_sleep.push_back(std::string("/sdcard/sleep/") + ent->d_name);
+        if (!ext) continue;
+        if (strcmp(ext, ".mgr") == 0)
+          sd_sleep.push_back(std::string("/sdcard/.sleep/") + ent->d_name);
+        else if (strcmp(ext, ".bmp") == 0)
+          sd_sleep.push_back(std::string("bmp:/sdcard/.sleep/") + ent->d_name);
       }
       closedir(sd);
     }
   }
 #else
   try {
-    for (const auto& entry : fs::directory_iterator("sd/sleep")) {
-      if (entry.path().extension() == ".mgr")
-        sd_sleep.push_back(entry.path().string());
+    for (const auto& entry : fs::directory_iterator("sd/.sleep")) {
+      const auto& p = entry.path();
+      if (p.extension() == ".mgr")
+        sd_sleep.push_back(p.string());
+      else if (p.extension() == ".bmp")
+        sd_sleep.push_back("bmp:" + p.string());
     }
   } catch (...) {}
 #endif

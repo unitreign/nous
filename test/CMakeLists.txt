@@ -66,6 +66,7 @@ add_library(microreader_content STATIC
     ${LIB_DIR}/content/ImageDecoder.cpp
     ${LIB_DIR}/content/JpegDecoder.cpp
     ${LIB_DIR}/content/PngDecoder.cpp
+    ${LIB_DIR}/content/BmpSleepConverter.cpp
     ${LIB_DIR}/content/Book.cpp
     ${LIB_DIR}/content/BookIndex.cpp
     ${LIB_DIR}/content/TextLayout.cpp
@@ -118,6 +119,7 @@ add_executable(unit_tests
     unit/StreamingPipelineTest.cpp
     unit/NavigationTest.cpp
     unit/HyphenationTest.cpp
+    unit/BmpSleepConverterTest.cpp
 )
 target_include_directories(unit_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/support
@@ -150,6 +152,7 @@ add_executable(microreader_tests
     unit/MrbLayoutComparisonTest.cpp
     unit/StreamingPipelineTest.cpp
     unit/NavigationTest.cpp
+    unit/BmpSleepConverterTest.cpp
     integration/RealBookTest.cpp
     integration/BulkBookTest.cpp
     integration/HtmlExportTest.cpp

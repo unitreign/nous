@@ -6,9 +6,11 @@
 
 #include "HeapLog.h"
 #include "content/BookIndex.h"
+#include "content/BmpSleepConverter.h"
 
 #ifdef ESP_PLATFORM
 #include <dirent.h>
+#include <sys/stat.h>
 
 #include "esp_random.h"
 #else
@@ -96,6 +98,37 @@ void Application::auto_open_book(const char* epub_path, DrawBuffer& buf, IRuntim
   screen_mgr_.push(&reader_, buf, runtime);
 }
 
+// Convert/cache a BMP sleep image and display it. Returns true if shown.
+static bool show_bmp_sleep(const char* bmp_path, const char* data_dir, DrawBuffer& buf) {
+  if (!data_dir) return false;
+  const char* slash = std::strrchr(bmp_path, '/');
+  const char* back  = std::strrchr(bmp_path, '\\');
+  if (back > slash) slash = back;
+  const char* bname = slash ? slash + 1 : bmp_path;
+  const char* dot   = std::strrchr(bname, '.');
+  int nlen = dot ? (int)(dot - bname) : (int)std::strlen(bname);
+  char cache_dir[256];
+  std::snprintf(cache_dir, sizeof(cache_dir), "%s/cache/sleep", data_dir);
+  char cache_path[384];
+  std::snprintf(cache_path, sizeof(cache_path), "%s/%.*s.mgr", cache_dir, nlen, bname);
+  bool cached = false;
+  { std::FILE* cf = std::fopen(cache_path, "rb"); if (cf) { std::fclose(cf); cached = true; } }
+  if (!cached) {
+#ifdef ESP_PLATFORM
+    char parent[256];
+    std::snprintf(parent, sizeof(parent), "%s/cache", data_dir);
+    mkdir(parent, 0775);
+    mkdir(cache_dir, 0775);
+#else
+    try { fs::create_directories(cache_dir); } catch (...) {}
+#endif
+    MR_LOGI("sleep", "converting BMP: %s", bmp_path);
+    cached = convert_bmp_to_mgr2(bmp_path, cache_path);
+    MR_LOGI("sleep", "BMP convert result: %d cache=%s", (int)cached, cache_path);
+  }
+  return cached && buf.show_sleep_image(cache_path);
+}
+
 void Application::do_sleep_(DrawBuffer& buf) {
   // Stop the active screen so it can save state (e.g. reading position).
   if (IScreen* top = screen_mgr_.top())
@@ -108,11 +141,10 @@ void Application::do_sleep_(DrawBuffer& buf) {
     buf.set_rotation(Rotation::Deg90);
     bool shown = false;
     if (sleep_image_path_.rfind("embedded:", 0) == 0) {
-      int eidx = std::atoi(sleep_image_path_.c_str() + 9);
-      MR_LOGI("sleep", "showing pinned embedded:%d", eidx);
-      shown = buf.show_sleep_image_embedded(eidx);
+      shown = buf.show_sleep_image_embedded(std::atoi(sleep_image_path_.c_str() + 9));
+    } else if (sleep_image_path_.rfind("bmp:", 0) == 0) {
+      shown = show_bmp_sleep(sleep_image_path_.c_str() + 4, data_dir_, buf);
     } else {
-      MR_LOGI("sleep", "showing pinned file: %s", sleep_image_path_.c_str());
       shown = buf.show_sleep_image(sleep_image_path_.c_str());
     }
     MR_LOGI("sleep", "show result: %d", (int)shown);
@@ -125,23 +157,30 @@ void Application::do_sleep_(DrawBuffer& buf) {
   // Auto-cycle: build list. Custom SD images take priority over embedded ones.
   std::vector<std::string> images;
 #ifdef ESP_PLATFORM
-  DIR* d = opendir("/sdcard/sleep");
+  DIR* d = opendir("/sdcard/.sleep");
   if (d) {
     struct dirent* ent;
     while ((ent = readdir(d)) != nullptr) {
       if (ent->d_name[0] == '.')
         continue;
       const char* ext = std::strrchr(ent->d_name, '.');
-      if (ext && std::strcmp(ext, ".mgr") == 0)
-        images.push_back(std::string("/sdcard/sleep/") + ent->d_name);
+      if (!ext) continue;
+      if (std::strcmp(ext, ".mgr") == 0) {
+        images.push_back(std::string("/sdcard/.sleep/") + ent->d_name);
+      } else if (std::strcmp(ext, ".bmp") == 0 && data_dir_) {
+        images.push_back(std::string("bmp:/sdcard/.sleep/") + ent->d_name);
+      }
     }
     closedir(d);
   }
 #else
   try {
-    for (const auto& entry : fs::directory_iterator("sd/sleep")) {
-      if (entry.path().extension() == ".mgr")
-        images.push_back(entry.path().string());
+    for (const auto& entry : fs::directory_iterator("sd/.sleep")) {
+      const auto& p = entry.path();
+      if (p.extension() == ".mgr")
+        images.push_back(p.string());
+      else if (p.extension() == ".bmp" && data_dir_)
+        images.push_back("bmp:" + p.string());
     }
   } catch (...) {}
 #endif
@@ -167,6 +206,8 @@ void Application::do_sleep_(DrawBuffer& buf) {
   bool sleep_shown = false;
   if (path.rfind("embedded:", 0) == 0) {
     sleep_shown = buf.show_sleep_image_embedded(std::atoi(path.c_str() + 9));
+  } else if (path.rfind("bmp:", 0) == 0) {
+    sleep_shown = show_bmp_sleep(path.c_str() + 4, data_dir_, buf);
   } else {
     sleep_shown = buf.show_sleep_image(path.c_str());
   }
