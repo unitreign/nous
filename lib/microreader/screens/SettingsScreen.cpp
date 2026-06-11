@@ -39,7 +39,7 @@ static std::string get_side_paging_label(bool inverted) {
 }
 
 static std::string get_sort_order_label(BookSortOrder order) {
-  return std::string("Sort: ") + (order == BookSortOrder::ByLastOpened ? "Last Opened" : "By Name");
+  return std::string("Sort: ") + (order == BookSortOrder::LastOpened ? "Last Opened" : "Alphabetical");
 }
 
 static std::string get_list_format_label(BookListFormat fmt) {
@@ -204,7 +204,7 @@ void SettingsScreen::on_start() {
   }
 
   idx_sort_order_ = count();
-  add_item(get_sort_order_label(app_ ? app_->sort_order() : BookSortOrder::ByName));
+  add_item(get_sort_order_label(app_ ? app_->sort_order() : BookSortOrder::Alphabetical));
 
   idx_font_ = count();
   add_item(get_font_label(sd_fonts_[font_sel_idx_]));
@@ -297,6 +297,7 @@ void SettingsScreen::on_select(int index) {
       std::string index_path = std::string(app_->data_dir_) + "/book_index.dat";
 
       buf_->sync_bw_ram();
+      BookIndex::instance().load(index_path);
       BookIndex::instance().build_index(root_dir, *buf_);
       BookIndex::instance().save(index_path);
       buf_->reset_after_scratch(true);
@@ -306,7 +307,7 @@ void SettingsScreen::on_select(int index) {
   }
   if (index == idx_sort_order_) {
     if (app_) {
-      BookSortOrder order = (app_->sort_order() == BookSortOrder::ByName) ? BookSortOrder::ByLastOpened : BookSortOrder::ByName;
+      BookSortOrder order = (app_->sort_order() == BookSortOrder::Alphabetical) ? BookSortOrder::LastOpened : BookSortOrder::Alphabetical;
       app_->set_sort_order(order);
       set_item_label(idx_sort_order_, get_sort_order_label(order));
     }

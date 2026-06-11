@@ -426,7 +426,7 @@ void microreader::Application::load_settings_() {
     else if (std::sscanf(line, "list_format=%u", &uval) == 1)
       menu_.set_list_format(uval <= 2 ? static_cast<BookListFormat>(uval) : BookListFormat::TitleAndAuthor);
     else if (std::sscanf(line, "sort_order=%u", &uval) == 1)
-      menu_.set_sort_order(uval == 1 ? BookSortOrder::ByLastOpened : BookSortOrder::ByName);
+      menu_.set_sort_order(uval == 1 ? BookSortOrder::LastOpened : BookSortOrder::Alphabetical);
     else if (std::sscanf(line, "open_counter=%u", &uval) == 1)
       open_counter_ = uval;
     else if (std::sscanf(line, "inv_menu=%u", &uval) == 1)

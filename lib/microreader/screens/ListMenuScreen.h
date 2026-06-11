@@ -104,6 +104,9 @@ class ListMenuScreen : public IScreen {
     selected_ = index;
     on_start_set_selection_ = true;
   }
+  virtual bool is_separator(int index) const {
+    return index >= 0 && index < static_cast<int>(separators_.size()) && separators_[index];
+  }
   virtual int count() const {
     return static_cast<int>(labels_.size());
   }

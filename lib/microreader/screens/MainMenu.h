@@ -12,7 +12,7 @@
 namespace microreader {
 
 enum class BookListFormat { TitleOnly, TitleAndAuthor, Filename };
-enum class BookSortOrder { ByName, ByLastOpened };
+enum class BookSortOrder { Alphabetical, LastOpened };
 
 // Main screen — lists EPUB books from a directory.
 // Button1 = open book, Button0 = settings.
@@ -37,7 +37,7 @@ class MainMenu final : public ListMenuScreen {
 
   // The full path of the currently highlighted entry (even if not yet opened).
   const std::string& current_book_path() const {
-    int idx = selected();
+    int idx = entries_index_for(selected());
     if (idx >= 0 && idx < static_cast<int>(entries_.size()))
       return entries_[idx].path;
     static const std::string kEmpty;
@@ -74,8 +74,9 @@ class MainMenu final : public ListMenuScreen {
     app_ = app;
   }
 
-  int count() const override;
   std::string_view get_item_label(int index) const override;
+  bool is_separator(int index) const override;
+  int count() const override;
 
   void start(DrawBuffer& buf, IRuntime& runtime) override {
     buf_ = &buf;
@@ -97,7 +98,7 @@ class MainMenu final : public ListMenuScreen {
   std::string last_selected_path_;  // path of the most recently opened book
   DrawBuffer* buf_ = nullptr;
   BookListFormat list_format_ = BookListFormat::TitleOnly;
-  BookSortOrder sort_order_ = BookSortOrder::ByName;
+  BookSortOrder sort_order_ = BookSortOrder::Alphabetical;
   bool needs_scan_ = false;
 
   struct BookEntry {
@@ -107,7 +108,18 @@ class MainMenu final : public ListMenuScreen {
     uint32_t last_open_order = 0;
   };
   std::vector<BookEntry> entries_;
-  mutable std::string label_buf_;  // scratch for TitleAndAuthor format
+  mutable std::string label_buf_;
+  int separator_visual_index_ = -1;
+
+  int entries_index_for(int visual) const {
+    if (separator_visual_index_ < 0 || visual < separator_visual_index_) return visual;
+    return visual - 1;
+  }
+
+  int visual_for_entries(int real) const {
+    if (separator_visual_index_ < 0 || real < separator_visual_index_) return real;
+    return real + 1;
+  }
 
   void scan_directory_(DrawBuffer& buf);
   void populate_list_();

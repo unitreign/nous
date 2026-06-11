@@ -32,6 +32,13 @@ static std::string_view filename_sv(const std::string& path) {
   return {name, len};
 }
 
+static bool ci_less(std::string_view a, std::string_view b) {
+  size_t min_len = std::min(a.size(), b.size());
+  int cmp = strncasecmp(a.data(), b.data(), min_len);
+  if (cmp != 0) return cmp < 0;
+  return a.size() < b.size();
+}
+
 void MainMenu::on_start() {
   title_ = "Microreader";
 
@@ -64,9 +71,11 @@ void MainMenu::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& run
 }
 
 void MainMenu::on_select(int index) {
-  last_selected_path_ = entries_[index].path;
-  app_->record_book_opened(entries_[index].path);
-  app_->reader()->set_path(entries_[index].path.c_str());
+  if (is_separator(index)) return;
+  int real = entries_index_for(index);
+  last_selected_path_ = entries_[real].path;
+  app_->record_book_opened(entries_[real].path);
+  app_->reader()->set_path(entries_[real].path.c_str());
   app_->push_screen(ScreenId::Reader);
 }
 
@@ -102,14 +111,22 @@ void MainMenu::scan_directory_(DrawBuffer& buf) {
 }
 
 int MainMenu::count() const {
-  return static_cast<int>(entries_.size());
+  int n = static_cast<int>(entries_.size());
+  if (separator_visual_index_ >= 0) ++n;
+  return n;
+}
+
+bool MainMenu::is_separator(int index) const {
+  return separator_visual_index_ >= 0 && index == separator_visual_index_;
 }
 
 std::string_view MainMenu::get_item_label(int index) const {
-  if (index < 0 || index >= static_cast<int>(entries_.size()))
+  if (is_separator(index)) return {};
+  int real = entries_index_for(index);
+  if (real < 0 || real >= static_cast<int>(entries_.size()))
     return {};
   const StringPool& pool = BookIndex::instance().pool();
-  const BookEntry& e = entries_[index];
+  const BookEntry& e = entries_[real];
   if (list_format_ == BookListFormat::TitleOnly) {
     return e.title_ref.view(pool);
   } else if (list_format_ == BookListFormat::Filename) {
@@ -125,6 +142,7 @@ std::string_view MainMenu::get_item_label(int index) const {
 void MainMenu::populate_list_() {
   clear_items();
   entries_.clear();
+  separator_visual_index_ = -1;
 
   const StringPool& bpool = BookIndex::instance().pool();
   for (const auto& idx : BookIndex::instance().entries()) {
@@ -136,24 +154,37 @@ void MainMenu::populate_list_() {
     entries_.push_back(std::move(e));
   }
 
-  if (sort_order_ == BookSortOrder::ByLastOpened) {
+  if (sort_order_ == BookSortOrder::LastOpened) {
+    const auto fmt = list_format_;
     std::stable_sort(entries_.begin(), entries_.end(),
-                     [](const BookEntry& a, const BookEntry& b) { return a.last_open_order > b.last_open_order; });
+                     [&bpool, fmt](const BookEntry& a, const BookEntry& b) {
+                      if (a.last_open_order != b.last_open_order)
+                        return a.last_open_order > b.last_open_order;
+                      if (fmt == BookListFormat::Filename)
+                        return ci_less(filename_sv(a.path), filename_sv(b.path));
+                      return ci_less(a.title_ref.view(bpool), b.title_ref.view(bpool));
+                     });
+    for (int i = 0; i < static_cast<int>(entries_.size()); ++i) {
+      if (i > 0 && entries_[i].last_open_order == 0 &&
+          entries_[i - 1].last_open_order > 0) {
+        separator_visual_index_ = i;
+        break;
+      }
+    }
   } else if (list_format_ == BookListFormat::Filename) {
     std::stable_sort(entries_.begin(), entries_.end(),
-                     [](const BookEntry& a, const BookEntry& b) { return filename_sv(a.path) < filename_sv(b.path); });
+                      [](const BookEntry& a, const BookEntry& b) { return ci_less(filename_sv(a.path), filename_sv(b.path)); });
   } else {
     std::stable_sort(entries_.begin(), entries_.end(),
                      [&bpool](const BookEntry& a, const BookEntry& b) {
-                       return a.title_ref.view(bpool) < b.title_ref.view(bpool);
+                        return ci_less(a.title_ref.view(bpool), b.title_ref.view(bpool));
                      });
   }
 
-  // Restore cursor to the saved path.
   if (!initial_selection_.empty()) {
     for (int i = 0; i < static_cast<int>(entries_.size()); ++i) {
       if (entries_[i].path == initial_selection_) {
-        set_selected(i);
+        set_selected(visual_for_entries(i));
         break;
       }
     }

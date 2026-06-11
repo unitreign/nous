@@ -56,7 +56,7 @@ void ListMenuScreen::start(DrawBuffer& buf, IRuntime& runtime) {
     center_on_selected_();
   else
     ensure_visible_();
-  while (selected_ < count() && selected_ < (int)separators_.size() && separators_[selected_])
+  while (selected_ < count() && is_separator(selected_))
     ++selected_;
   draw_all_(buf, runtime.battery_percentage());
 }
@@ -237,8 +237,8 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
   // Total pixel height of the currently visible item slots (for centering).
   int total_h = 0;
   for (int i = scroll_offset_; i < end; ++i) {
-    if (i < (int)separators_.size() && separators_[i])
-      total_h += (i < (int)labels_.size() && !labels_[i].empty()) ? line_h : line_h / 2;
+    if (is_separator(i))
+      total_h += !get_item_label(i).empty() ? line_h : line_h / 2;
     else
       total_h += line_h;
   }
@@ -277,7 +277,7 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
   int y = items_y;
   for (int i = scroll_offset_; i < end; ++i) {
     // Separator row
-    if (i < (int)separators_.size() && separators_[i]) {
+    if (is_separator(i)) {
       const std::string_view hdr = get_item_label(i);
       if (!hdr.empty()) {
         const int hw = ui_font_.word_width(hdr.data(), hdr.size(), FontStyle::Regular);
@@ -414,14 +414,14 @@ void ListMenuScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntim
   // Helper lambdas for selection movement (skip separators).
   auto move_up = [&]() {
     int next = selected_ > 0 ? selected_ - 1 : n - 1;
-    while (next != selected_ && next < (int)separators_.size() && separators_[next])
+    while (next != selected_ && is_separator(next))
       next = next > 0 ? next - 1 : n - 1;
     selected_ = next;
     ensure_visible_();
   };
   auto move_down = [&]() {
     int next = selected_ < n - 1 ? selected_ + 1 : 0;
-    while (next != selected_ && next < (int)separators_.size() && separators_[next])
+    while (next != selected_ && is_separator(next))
       next = next < n - 1 ? next + 1 : 0;
     selected_ = next;
     ensure_visible_();
