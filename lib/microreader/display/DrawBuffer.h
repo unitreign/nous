@@ -354,13 +354,18 @@ class DrawBuffer {
     draw_text_proportional(x, y + static_cast<int>(f.baseline()), text, f, !white);
   }
 
-  // Draw text centered at (cx, y) using the UI font with background fill.
-  void draw_text_centered(int cx, int y, const char* text, bool white) {
+  // Draw text centered at (cx, y) using the UI font.
+  // fill_bg=true (default): fills a background rect behind the text.
+  // fill_bg=false: only paints text pixels, leaving the background untouched.
+  void draw_text_centered(int cx, int y, const char* text, bool white, bool fill_bg = true) {
     if (!text || !*text)
       return;
     const BitmapFont& f = ui_font_();
     const int w = static_cast<int>(f.word_width(text, strlen(text), FontStyle::Regular));
-    draw_text(cx - w / 2, y, text, white);
+    if (fill_bg)
+      draw_text(cx - w / 2, y, text, white);
+    else
+      draw_text_no_bg(cx - w / 2, y, text, !white);
   }
 
   void draw_text_no_bg(int x, int y, const char* text, bool white, int /*scale*/ = 1) {
@@ -475,104 +480,42 @@ class DrawBuffer {
     FILE* f = std::fopen(path, "rb");
     if (!f)
       return false;
-
-    char magic[4];
-    if (std::fread(magic, 1, 4, f) != 4 || std::memcmp(magic, "MGR2", 4) != 0) {
-      std::fclose(f);
-      return false;
-    }
-
-    uint16_t w, h;
-    if (std::fread(&w, 2, 1, f) != 1 || std::fread(&h, 2, 1, f) != 1) {
-      std::fclose(f);
-      return false;
-    }
-
-    const size_t src_stride = (static_cast<size_t>(w) + 3) / 4;
-    const long data_start = std::ftell(f);
-
-    // Two passes over the file: first extract BW bits (state & 1), then RED bits (state >> 1).
-    auto decode_pass = [&](bool red_bit) {
-      std::fseek(f, data_start, SEEK_SET);
-      fill(false);  // start all-zero; OR in bits that should be 1
-      uint8_t src_row[256];
-      for (uint16_t y = 0; y < h && y < DisplayFrame::kPhysicalHeight; ++y) {
-        size_t read_len = std::fread(src_row, 1, std::min<size_t>(src_stride, sizeof(src_row)), f);
-        if (read_len < src_stride)
-          std::fseek(f, static_cast<long>(src_stride - read_len), SEEK_CUR);
-        uint8_t* dst = inactive_() + static_cast<size_t>(y) * DisplayFrame::kStride;
-        for (int x = 0; x < static_cast<int>(w); x++) {
-          int state = (src_row[x / 4] >> (6 - (x % 4) * 2)) & 0x3;
-          if (red_bit ? (state >> 1) : (state & 1))
-            dst[x / 8] |= static_cast<uint8_t>(0x80 >> (x % 8));
-        }
-      }
-    };
-
-    decode_pass(false);
-    display_.write_ram_bw(inactive_());
-
-    decode_pass(true);
-    display_.write_ram_red(inactive_());
-
-    display_.grayscale_refresh_1pass(/*turnOffScreen=*/true);
-
+    Mgr2Source_ src = Mgr2Source_::from_file(f);
+    if (src.valid())
+      show_mgr2_sleep_(src, false);
     std::fclose(f);
-    return true;
+    return src.valid();
   }
 
   bool show_sleep_image_embedded(int idx = 0) {
-#ifdef ESP_PLATFORM
-    // Sleep images live in the appended asset blob (see asset_blob.h).  Mmap
-    // on demand so they don't occupy MMU pages outside this call.
-    const char* name = (idx == 1) ? "sleep_1.mgr" : (idx == 2) ? "sleep_2.mgr" : "sleep_0.mgr";
+    Mgr2Source_ src;
 
+#ifdef ESP_PLATFORM
+    const char* name = (idx == 1) ? "sleep_1.mgr" : (idx == 2) ? "sleep_2.mgr" : "sleep_0.mgr";
     size_t size = 0;
     esp_partition_mmap_handle_t mmap_h = 0;
-    const uint8_t* start = static_cast<const uint8_t*>(asset_blob::g_assets.map(name, size, mmap_h));
-    if (!start)
+    const uint8_t* data = static_cast<const uint8_t*>(asset_blob::g_assets.map(name, size, mmap_h));
+    if (!data)
       return false;
-
-    bool ok = false;
-    if (size >= 8 && std::memcmp(start, "MGR2", 4) == 0) {
-      uint16_t w = start[4] | (start[5] << 8);
-      uint16_t h = start[6] | (start[7] << 8);
-      const size_t src_stride = (static_cast<size_t>(w) + 3) / 4;
-      const size_t pixel_bytes = src_stride * static_cast<size_t>(h);
-
-      if (size >= 8 + pixel_bytes) {
-        const uint8_t* src = start + 8;
-
-        auto decode_pass = [&](bool red_bit) {
-          fill(false);
-          for (uint16_t y = 0; y < h && y < DisplayFrame::kPhysicalHeight; ++y) {
-            const uint8_t* src_row = src + static_cast<size_t>(y) * src_stride;
-            uint8_t* dst = inactive_() + static_cast<size_t>(y) * DisplayFrame::kStride;
-            for (int x = 0; x < static_cast<int>(w); x++) {
-              int state = (src_row[x / 4] >> (6 - (x % 4) * 2)) & 0x3;
-              if (red_bit ? (state >> 1) : (state & 1))
-                dst[x / 8] |= static_cast<uint8_t>(0x80 >> (x % 8));
-            }
-          }
-        };
-
-        decode_pass(false);
-        display_.write_ram_bw(inactive_());
-        decode_pass(true);
-        display_.write_ram_red(inactive_());
-        display_.grayscale_refresh_1pass(/*turnOffScreen=*/true);
-        display_.deep_sleep();
-        ok = true;
-      }
-    }
-    asset_blob::g_assets.unmap(mmap_h);
-    return ok;
+    src = Mgr2Source_::from_memory(data, size);
 #else
-    // Desktop emulator uses the resources folder relative file
     char path[64];
     snprintf(path, sizeof(path), "resources/sleep/sleep_%d.mgr", idx);
-    return show_sleep_image(path);
+    FILE* f = std::fopen(path, "rb");
+    if (!f)
+      return false;
+    src = Mgr2Source_::from_file(f);
 #endif
+
+    if (src.valid())
+      show_mgr2_sleep_(src, true);
+
+#ifdef ESP_PLATFORM
+    asset_blob::g_assets.unmap(mmap_h);
+#else
+    std::fclose(f);
+#endif
+    return src.valid();
   }
 
   // -- Scratch buffer loan (for EPUB conversion / image decode) ------------
@@ -807,6 +750,84 @@ class DrawBuffer {
   static const BitmapFont& ui_font_() {
     static BitmapFont font(kFontData_ui_small_mbf, sizeof(kFontData_ui_small_mbf));
     return font;
+  }
+
+  // Unified source for MGR2 sleep images — wraps either a file or a memory blob.
+  // Parses the 8-byte MGR2 header on construction; get_row() returns a pointer to
+  // the 2bpp data for any given row (reads from file into row_buf_ or returns a
+  // direct pointer into the memory blob).
+  struct Mgr2Source_ {
+    uint16_t w = 0, h = 0;
+    size_t src_stride = 0;
+    FILE* file_ = nullptr;
+    long file_data_start_ = 0;
+    uint8_t row_buf_[256]{};
+    const uint8_t* mem_ = nullptr;
+
+    bool valid() const {
+      return (file_ || mem_) && w > 0 && h > 0;
+    }
+
+    const uint8_t* get_row(uint16_t y) {
+      if (mem_)
+        return mem_ + static_cast<size_t>(y) * src_stride;
+      std::fseek(file_, file_data_start_ + static_cast<long>(static_cast<size_t>(y) * src_stride), SEEK_SET);
+      size_t n = std::fread(row_buf_, 1, std::min(src_stride, static_cast<size_t>(sizeof(row_buf_))), file_);
+      if (n < src_stride)
+        std::fseek(file_, static_cast<long>(src_stride - n), SEEK_CUR);
+      return row_buf_;
+    }
+
+    static Mgr2Source_ from_file(FILE* f) {
+      Mgr2Source_ s;
+      char magic[4];
+      if (std::fread(magic, 1, 4, f) != 4 || std::memcmp(magic, "MGR2", 4) != 0)
+        return s;
+      if (std::fread(&s.w, 2, 1, f) != 1 || std::fread(&s.h, 2, 1, f) != 1)
+        return s;
+      s.src_stride = (static_cast<size_t>(s.w) + 3) / 4;
+      s.file_ = f;
+      s.file_data_start_ = std::ftell(f);
+      return s;
+    }
+
+    static Mgr2Source_ from_memory(const uint8_t* data, size_t size) {
+      Mgr2Source_ s;
+      if (size < 8 || std::memcmp(data, "MGR2", 4) != 0)
+        return s;
+      s.w = data[4] | (data[5] << 8);
+      s.h = data[6] | (data[7] << 8);
+      s.src_stride = (static_cast<size_t>(s.w) + 3) / 4;
+      if (size < 8 + s.src_stride * static_cast<size_t>(s.h))
+        return s;
+      s.mem_ = data + 8;
+      return s;
+    }
+  };
+
+  void show_mgr2_sleep_(Mgr2Source_& src, bool deep_sleep_after) {
+    auto decode_pass = [&](bool red_bit) {
+      fill(false);
+      for (uint16_t y = 0; y < src.h && y < DisplayFrame::kPhysicalHeight; ++y) {
+        const uint8_t* src_row = src.get_row(y);
+        uint8_t* dst = inactive_() + static_cast<size_t>(y) * DisplayFrame::kStride;
+        for (int x = 0; x < static_cast<int>(src.w); x++) {
+          int state = (src_row[x / 4] >> (6 - (x % 4) * 2)) & 0x3;
+          if (red_bit ? (state >> 1) : (state & 1))
+            dst[x / 8] |= static_cast<uint8_t>(0x80 >> (x % 8));
+        }
+      }
+    };
+
+    decode_pass(false);
+    draw_text_centered(kWidth / 2, kHeight - 24, "sleeping...", false, false);
+    display_.write_ram_bw(inactive_());
+    decode_pass(true);
+    draw_text_centered(kWidth / 2, kHeight - 24, "sleeping...", false, false);
+    display_.write_ram_red(inactive_());
+    display_.grayscale_refresh_1pass(/*turnOffScreen=*/true);
+    if (deep_sleep_after)
+      display_.deep_sleep();
   }
 
   // Render target for the full inactive buffer.

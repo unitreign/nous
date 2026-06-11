@@ -121,6 +121,9 @@ int main() {
 
     app.start(buf, runtime);
     microreader::run_loop(app, buf, input, runtime);
+
+    // sleep for 3 second so we see the sleep screen
+    SDL_Delay(3000);
   } catch (const std::exception& e) {
     std::cerr << "Fatal: " << e.what() << std::endl;
     return 1;
