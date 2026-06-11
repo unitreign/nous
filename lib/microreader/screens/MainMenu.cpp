@@ -34,7 +34,11 @@ static std::string_view filename_sv(const std::string& path) {
 
 static bool ci_less(std::string_view a, std::string_view b) {
   size_t min_len = std::min(a.size(), b.size());
+#ifdef _WIN32
+  int cmp = _strnicmp(a.data(), b.data(), min_len);
+#else
   int cmp = strncasecmp(a.data(), b.data(), min_len);
+#endif
   if (cmp != 0) return cmp < 0;
   return a.size() < b.size();
 }
