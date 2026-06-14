@@ -19,6 +19,10 @@ Books (`.epub`) can go anywhere on the SD card — the device scans recursively 
 
 There are three ways to transfer content while the device is connected via USB:
 
+### Browser Manager
+
+Open [microreader-manager](https://cidvonhighwind.github.io/microreader/) in Chrome or Edge (Web Serial API). It provides a file browser, EPUB/font/sleep-image upload, and auto-reconnects when the page is refreshed.
+
 ### Calibre Plugin
 
 Install the plugin to send books directly from [Calibre](https://calibre-ebook.com):
@@ -29,10 +33,6 @@ Install the plugin to send books directly from [Calibre](https://calibre-ebook.c
 The device is detected automatically (VID `0x303A` / PID `0x1001`). Books on the device show checkmarks in the library; you can send, delete, and download books from the Device menu.
 
 > Requires Calibre 5+ and the device connected over USB.
-
-### Browser Manager
-
-Open `tools/microreader-manager.html` in Chrome/Edge/Firefox (Web Serial API). It provides a file browser, EPUB/font/sleep-image upload, and auto-reconnects when the page is refreshed.
 
 ### Command Line
 
@@ -56,7 +56,7 @@ The first time an image is shown it is converted and cached; subsequent sleeps l
 
 ```powershell
 python tools/serial_cmd.py --port COM4 --upload-sleep "path/to/my_image.bmp"
-# or use the browser manager (tools/microreader-manager.html)
+# or use the browser manager (https://cidvonhighwind.github.io/microreader/)
 ```
 
 **Desktop emulator:** copy any `.bmp` file into `sd/.sleep/`.
@@ -82,7 +82,7 @@ platforms/esp32/          ESP-IDF + PlatformIO firmware
 test/                     Google Test suite
 tools/                    Python scripts and dev tools
   calibre-plugin/         Calibre device plugin (build.ps1 → microreader.zip)
-  microreader-manager.html  browser-based file manager (Web Serial API)
+docs/                     GitHub Pages — browser-based file manager (Web Serial API)
 resources/                Fonts, sleep images
 ```
 
