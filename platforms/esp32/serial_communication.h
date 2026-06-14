@@ -91,6 +91,13 @@ static volatile bool g_font_uploaded = false;
 static volatile bool g_book_uploaded = false;
 static char g_new_book_path[256];
 
+// Set while a chunked file upload (EPUB/SDFN/SIMG/FONT/CMND-W) is in
+// progress. The main loop skips app.update() when this is true to prevent
+// display SPI traffic (SPI2_HOST) from contending with SD-card fwrite()
+// (also SPI2_HOST). We also silence esp_log during this window so no log
+// line can interleave with 0x06 ACK bytes in the shared USB serial TX buffer.
+static volatile bool g_upload_in_progress = false;
+
 // Call from the main loop. Returns true (and copies into `out`) when a fresh
 // LUT has been received since the last call.
 // Returns true and sets *type_out if a new LUT is available.
@@ -242,16 +249,23 @@ static void handle_file_upload(const char* target_dir) {
   ESP_LOGI(kUpTag, "receiving '%s' (%lu bytes)", name, (unsigned long)file_size);
   serial_write("READY\n");
 
-  // Receive payload in chunks with flow control.
-  // After each chunk is written to SD, send ACK (0x06) so the host
-  // knows to send the next chunk.  This prevents RX buffer overflow
-  // for large files.
+  // Silence all ESP_LOG output and signal the main loop to pause UI updates
+  // for the duration of the ACK-based transfer. Any log bytes written to the
+  // shared USB serial TX buffer while the host expects a 0x06 ACK will be
+  // read as garbage (e.g. 'I' from ESP_LOGI) causing "Bad ACK" and abort.
+  // Pausing app.update() also prevents display SPI (SPI2_HOST) from
+  // contending with SD-card fwrite() (also SPI2_HOST).
+  g_upload_in_progress = true;
+  esp_log_level_set("*", ESP_LOG_NONE);
+
   uint32_t crc = 0;
   uint32_t remaining = file_size;
   uint8_t chunk[2048];
   while (remaining > 0) {
     size_t want = remaining < sizeof(chunk) ? remaining : sizeof(chunk);
     if (!serial_read_exact(chunk, want, 30000)) {
+      g_upload_in_progress = false;
+      esp_log_level_set("*", ESP_LOG_INFO);
       ESP_LOGE(kUpTag, "timeout, %lu bytes remaining", (unsigned long)remaining);
       fclose(f);
       remove(path);
@@ -268,18 +282,24 @@ static void handle_file_upload(const char* target_dir) {
   // Verify CRC.
   uint8_t crc_buf[4];
   if (!serial_read_exact(crc_buf, 4, 2000)) {
+    g_upload_in_progress = false;
+    esp_log_level_set("*", ESP_LOG_INFO);
     remove(path);
     serial_write("ERR:crc_missing\n");
     return;
   }
   uint32_t expected = crc_buf[0] | (crc_buf[1] << 8) | (crc_buf[2] << 16) | (crc_buf[3] << 24);
   if (crc != expected) {
+    g_upload_in_progress = false;
+    esp_log_level_set("*", ESP_LOG_INFO);
     ESP_LOGE(kUpTag, "CRC mismatch: got 0x%08lx, expected 0x%08lx", (unsigned long)crc, (unsigned long)expected);
     remove(path);
     serial_write("ERR:crc\n");
     return;
   }
 
+  g_upload_in_progress = false;
+  esp_log_level_set("*", ESP_LOG_INFO);
   ESP_LOGI(kUpTag, "saved %s (%lu bytes, CRC OK)", path, (unsigned long)file_size);
   if (strcmp(target_dir, "/sdcard/books") == 0) {
     strncpy(g_new_book_path, path, sizeof(g_new_book_path) - 1);
@@ -354,7 +374,9 @@ static void handle_font_upload() {
   // Now signal the host to start sending data.
   serial_write("READY\n");
 
-  // Receive and write data in chunks.
+  g_upload_in_progress = true;
+  esp_log_level_set("*", ESP_LOG_NONE);
+
   uint32_t crc = 0;
   uint32_t remaining = file_size;
   uint32_t flash_offset = kFontPartHeaderSize;
@@ -363,6 +385,8 @@ static void handle_font_upload() {
   while (remaining > 0) {
     size_t want = remaining < sizeof(chunk) ? remaining : sizeof(chunk);
     if (!serial_read_exact(chunk, want, 30000)) {
+      g_upload_in_progress = false;
+      esp_log_level_set("*", ESP_LOG_INFO);
       ESP_LOGE(kUpTag, "font upload timeout, %lu remaining", (unsigned long)remaining);
       serial_write("ERR:timeout\n");
       return;
@@ -370,6 +394,8 @@ static void handle_font_upload() {
     crc = esp_rom_crc32_le(crc, chunk, want);
 
     if (esp_partition_write(part, flash_offset, chunk, want) != ESP_OK) {
+      g_upload_in_progress = false;
+      esp_log_level_set("*", ESP_LOG_INFO);
       serial_write("ERR:write\n");
       return;
     }
@@ -381,16 +407,22 @@ static void handle_font_upload() {
   // Verify CRC.
   uint8_t crc_buf[4];
   if (!serial_read_exact(crc_buf, 4, 2000)) {
+    g_upload_in_progress = false;
+    esp_log_level_set("*", ESP_LOG_INFO);
     serial_write("ERR:crc_missing\n");
     return;
   }
   uint32_t expected = crc_buf[0] | (crc_buf[1] << 8) | (crc_buf[2] << 16) | (crc_buf[3] << 24);
   if (crc != expected) {
+    g_upload_in_progress = false;
+    esp_log_level_set("*", ESP_LOG_INFO);
     ESP_LOGE(kUpTag, "font CRC mismatch: got 0x%08lx expected 0x%08lx", (unsigned long)crc, (unsigned long)expected);
     serial_write("ERR:crc\n");
     return;
   }
 
+  g_upload_in_progress = false;
+  esp_log_level_set("*", ESP_LOG_INFO);
   ESP_LOGI(kUpTag, "font saved to partition (%lu bytes, CRC OK)", (unsigned long)file_size);
   g_font_uploaded = true;
   serial_write("OK\n");
@@ -769,11 +801,15 @@ static void handle_serial_cmd() {
       }
       ESP_LOGI(kCmdTag, "write: '%s' (%lu bytes)", g_cmd_path, (unsigned long)wfsize);
       serial_write("READY\n");
+      g_upload_in_progress = true;
+      esp_log_level_set("*", ESP_LOG_NONE);
       uint32_t wcrc = 0, wrem = wfsize;
       uint8_t wchunk[2048];
       while (wrem > 0) {
         const size_t wwant = wrem < sizeof(wchunk) ? wrem : sizeof(wchunk);
         if (!serial_read_exact(wchunk, wwant, 30000)) {
+          g_upload_in_progress = false;
+          esp_log_level_set("*", ESP_LOG_INFO);
           ESP_LOGE(kCmdTag, "write: timeout, %lu remaining", (unsigned long)wrem);
           fclose(wf); remove(g_cmd_path);
           serial_write("ERR:timeout\n"); return;
@@ -785,12 +821,20 @@ static void handle_serial_cmd() {
       }
       fclose(wf);
       uint8_t wcb[4];
-      if (!serial_read_exact(wcb, 4, 2000)) { remove(g_cmd_path); serial_write("ERR:crc_missing\n"); return; }
+      if (!serial_read_exact(wcb, 4, 2000)) {
+        g_upload_in_progress = false;
+        esp_log_level_set("*", ESP_LOG_INFO);
+        remove(g_cmd_path); serial_write("ERR:crc_missing\n"); return;
+      }
       const uint32_t wexp = wcb[0] | (wcb[1] << 8) | (wcb[2] << 16) | (wcb[3] << 24);
       if (wcrc != wexp) {
+        g_upload_in_progress = false;
+        esp_log_level_set("*", ESP_LOG_INFO);
         ESP_LOGE(kCmdTag, "write: CRC mismatch: got 0x%08lx expected 0x%08lx", (unsigned long)wcrc, (unsigned long)wexp);
         remove(g_cmd_path); serial_write("ERR:crc\n"); return;
       }
+      g_upload_in_progress = false;
+      esp_log_level_set("*", ESP_LOG_INFO);
       ESP_LOGI(kCmdTag, "write: saved %s (%lu bytes, CRC OK)", g_cmd_path, (unsigned long)wfsize);
       serial_write("OK\n");
       break;

@@ -256,6 +256,13 @@ extern "C" void app_main(void) {
       }
     }
 
+    // Skip UI update during upload: prevents display SPI (SPI2_HOST) from
+    // contending with SD-card fwrite() (also SPI2_HOST).
+    if (g_upload_in_progress) {
+      vTaskDelay(pdMS_TO_TICKS(10));
+      continue;
+    }
+
     microreader::run_loop_iteration(app, buf, input, runtime);
   }
 
