@@ -270,7 +270,11 @@ class MicroreaderPlugin(DevicePlugin):
             print(f'[Microreader] opened {port}')
         except Exception as e:
             print(f'[Microreader] open failed: {e}')
-            raise OpenFailed(f'Microreader: could not open {port}: {e}')
+            msg = str(e)
+            if 'PermissionError' in msg and '31' in msg:
+                msg = (f'{port} is already in use by another application '
+                       f'(e.g. the browser manager). Close it and try again.')
+            raise OpenFailed(f'Microreader: {msg}')
 
     def close(self):
         if self._conn:

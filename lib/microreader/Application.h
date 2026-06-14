@@ -206,6 +206,10 @@ class Application {
   }
 
   void start(DrawBuffer& buf, IRuntime& runtime);
+
+  // Reset the inactivity timer so the device won't sleep. Call each tick
+  // whenever an external connection (e.g. USB serial) is active.
+  void keep_awake() { inactivity_ms_ = 0; }
   // Auto-open a book by path (skips menu, for debugging).
   void auto_open_book(const char* epub_path, DrawBuffer& buf, IRuntime& runtime);
   void update(const ButtonState& buttons, uint32_t dt_ms, DrawBuffer& buf, IRuntime& runtime);

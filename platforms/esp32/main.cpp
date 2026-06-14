@@ -165,6 +165,13 @@ extern "C" void app_main(void) {
   input.clear_button(microreader::Button::Power);
 
   while (runtime.should_continue() && app.running()) {
+    // Suppress auto-sleep while a PC is connected over USB.
+#ifndef QEMU_BUILD
+    if (usb_serial_jtag_is_connected()) {
+      app.keep_awake();
+    }
+#endif
+
     // Check if a new font was uploaded via serial.
     if (g_font_uploaded) {
       g_font_uploaded = false;
