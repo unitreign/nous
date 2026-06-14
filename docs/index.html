@@ -7,6 +7,10 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, -apple-system, sans-serif; background: #f0f0f0; color: #222; padding: 20px; max-width: 920px; margin: 0 auto; }
+    nav { display: flex; gap: 4px; margin-bottom: 20px; }
+    nav a { padding: 5px 12px; border-radius: 6px; font-size: 0.82rem; text-decoration: none; color: #555; border: 1px solid transparent; }
+    nav a:hover { background: #e8e8e8; }
+    nav a.active { background: #fff; border-color: #ddd; color: #222; font-weight: 500; }
     h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 18px; }
 
     .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
@@ -89,6 +93,11 @@
   </style>
 </head>
 <body>
+
+<nav>
+  <a href="index.html" class="active">File Manager</a>
+  <a href="font-generator.html">Font Generator</a>
+</nav>
 
 <h1>Microreader Manager</h1>
 
