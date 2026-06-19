@@ -37,11 +37,6 @@
     .crumb.current:hover { background: transparent; }
     .crumb-sep { color: #bbb; padding: 0 1px; }
 
-    /* Drop zone */
-    .drop-zone { border: 2px dashed #ccc; border-radius: 10px; padding: 22px; text-align: center; color: #aaa; cursor: pointer; font-size: 0.875rem; transition: border-color 0.15s, background 0.15s, color 0.15s; margin-bottom: 12px; }
-    .drop-zone:hover, .drop-zone.over { border-color: #1a73e8; background: #e8f0fe; color: #1a73e8; }
-    .drop-zone.disabled { pointer-events: none; opacity: 0.4; }
-
     /* Progress */
     .progress-wrap { display: none; margin-bottom: 12px; }
     .progress-wrap.visible { display: block; }
@@ -50,7 +45,9 @@
     .progress-fill { height: 100%; background: #1a73e8; width: 0%; transition: width 0.1s; border-radius: 3px; }
 
     /* File table */
-    .file-browser { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden; margin-bottom: 16px; }
+    .file-browser { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden; margin-bottom: 16px; transition: border-color 0.15s, box-shadow 0.15s; }
+    .file-browser.drag-over { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
+    .file-browser.drag-over thead th { background: #e8f0fe; }
     table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     thead th { text-align: left; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #999; padding: 10px 14px; border-bottom: 1px solid #eee; background: #fafafa; }
     tbody tr { border-bottom: 1px solid #f2f2f2; }
@@ -110,6 +107,7 @@
 
 <div class="path-bar">
   <div class="breadcrumb" id="breadcrumb"></div>
+  <button id="btn-upload" disabled>Upload</button>
   <button id="btn-new-folder" disabled>New Folder</button>
   <button id="btn-refresh" disabled>Refresh</button>
 </div>
@@ -135,11 +133,6 @@
   <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
 </div>
 
-<div class="drop-zone disabled" id="drop-zone">
-  Drop files here to upload to current folder, or click to browse
-  <input type="file" id="file-input" multiple style="display:none">
-</div>
-
 <details>
   <summary>Log</summary>
   <div class="log-box" id="log-box"></div>
@@ -156,6 +149,8 @@
     </div>
   </div>
 </div>
+
+<input type="file" id="file-input" multiple style="display:none">
 
 <script>
 // ── CRC32 (matches zlib.crc32 / esp_rom_crc32_le) ────────────────────────────
@@ -370,12 +365,13 @@ const btnNewFolder  = $('btn-new-folder');
 const connBadge     = $('conn-badge');
 const statusBar     = $('status-bar');
 const breadcrumb    = $('breadcrumb');
-const dropZone      = $('drop-zone');
+const btnUpload     = $('btn-upload');
 const fileInput     = $('file-input');
 const progressWrap  = $('progress-wrap');
 const progressFill  = $('progress-fill');
 const progressLabel = $('progress-label');
 const fileTbody     = $('file-tbody');
+const fileBrowser   = document.querySelector('.file-browser');
 const logBox        = $('log-box');
 const modal         = $('modal');
 const modalTitle    = $('modal-title');
@@ -435,7 +431,7 @@ function setBusy(b) {
   const ok = !b && !!conn;
   btnRefresh.disabled = !ok;
   btnNewFolder.disabled = !ok;
-  dropZone.classList.toggle('disabled', !ok);
+  btnUpload.disabled = !ok;
   fileTbody.querySelectorAll('.btn-del, .btn-ren').forEach(btn => btn.disabled = b);
 }
 
@@ -691,11 +687,26 @@ async function onUpload(files) {
 btnConnect.addEventListener('click', onConnect);
 btnRefresh.addEventListener('click', () => navigate(currentPath));
 btnNewFolder.addEventListener('click', onNewFolder);
-dropZone.addEventListener('click', () => { if (!busy && conn) fileInput.click(); });
+btnUpload.addEventListener('click', () => { if (!busy && conn) fileInput.click(); });
 fileInput.addEventListener('change', () => { if (fileInput.files.length) onUpload(fileInput.files); fileInput.value = ''; });
-dropZone.addEventListener('dragover', e => { e.preventDefault(); if (!busy && conn) dropZone.classList.add('over'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
-dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('over'); onUpload(e.dataTransfer.files); });
+let dragDepth = 0;
+fileBrowser.addEventListener('dragenter', e => {
+  e.preventDefault();
+  if (busy || !conn) return;
+  dragDepth++;
+  fileBrowser.classList.add('drag-over');
+});
+fileBrowser.addEventListener('dragover', e => { e.preventDefault(); });
+fileBrowser.addEventListener('dragleave', () => {
+  dragDepth--;
+  if (dragDepth <= 0) { dragDepth = 0; fileBrowser.classList.remove('drag-over'); }
+});
+fileBrowser.addEventListener('drop', e => {
+  e.preventDefault();
+  dragDepth = 0;
+  fileBrowser.classList.remove('drag-over');
+  onUpload(e.dataTransfer.files);
+});
 
 // Init
 renderBreadcrumb();
