@@ -23,6 +23,12 @@ There are three ways to transfer content while the device is connected via USB:
 
 Open [microreader-manager](https://cidvonhighwind.github.io/microreader/) in Chrome, Edge, or Firefox (Web Serial API). It provides a file browser, EPUB/font/sleep-image upload, and auto-reconnects when the page is refreshed.
 
+It also includes a **Font Generator** page for building `.mfb` reader fonts in the browser with:
+- live device preview
+- size presets
+- script/range presets (Western, Greek, Cyrillic, Japanese)
+- optional manual Unicode ranges for advanced size tuning
+
 ### Calibre Plugin
 
 Install the plugin to send books directly from [Calibre](https://calibre-ebook.com):
@@ -121,7 +127,11 @@ cmake --build build2 --config Debug
 
 ## Font Generation
 
-Reader fonts are FNTS bundles (`.mfb`), generated from TTF/OTF sources via `tools/generate_font.py`.
+Reader fonts are FNTS bundles (`.mfb`).
+
+Recommended workflow: use the browser **Font Generator** page in `docs/font-generator.html` / microreader-manager for live preview and range selection.
+
+CLI workflow: generate from TTF/OTF sources via `tools/generate_font.py`.
 
 Two kinds:
 - **Built-in** (`resources/fonts/`) — embedded in the firmware asset blob. Require a firmware rebuild to update.

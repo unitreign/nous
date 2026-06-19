@@ -6,7 +6,7 @@
   <title>Microreader Font Generator</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, -apple-system, sans-serif; background: #f0f0f0; color: #222; padding: 20px; max-width: 920px; margin: 0 auto; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: linear-gradient(180deg, #f4f4f5 0%, #ececee 100%); color: #222; padding: 24px; max-width: 1440px; margin: 0 auto; }
 
     nav { display: flex; gap: 4px; margin-bottom: 20px; }
     nav a { padding: 5px 12px; border-radius: 6px; font-size: 0.82rem; text-decoration: none; color: #555; border: 1px solid transparent; }
@@ -16,23 +16,31 @@
     h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 18px; }
     h2 { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #999; margin-bottom: 10px; }
 
-    .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 16px 20px; margin-bottom: 14px; }
+    .page-shell { display: grid; grid-template-columns: minmax(360px, 440px) minmax(0, 1fr); gap: 18px; align-items: start; }
+    .control-column,
+    .preview-column { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    .card { background: rgba(255,255,255,0.94); border: 1px solid #dedede; border-radius: 14px; padding: 18px 20px; box-shadow: 0 10px 24px rgba(18,18,20,0.04); }
 
     /* Font inputs */
-    .font-rows { display: grid; gap: 8px; }
-    .font-row { display: flex; align-items: center; gap: 10px; }
-    .font-label { font-size: 0.82rem; color: #666; width: 80px; flex-shrink: 0; }
+    .folder-picker { margin-bottom: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+    .font-rows { display: flex; flex-direction: column; gap: 8px; }
+    .font-row { display: grid; grid-template-columns: 90px auto minmax(0, 1fr); align-items: center; gap: 8px 10px; padding: 8px 10px; border: 1px solid #ededed; border-radius: 10px; background: #fafafa; min-width: 0; }
+    .font-label { font-size: 0.8rem; color: #666; min-width: 0; }
     .font-badge { font-size: 0.75rem; color: #aaa; margin-left: 2px; }
     .font-file-btn { padding: 5px 12px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.82rem; white-space: nowrap; }
     .font-file-btn:hover { background: #f4f4f4; }
-    .font-filename { font-size: 0.82rem; color: #555; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .font-filename { font-size: 0.78rem; color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .font-filename.empty { color: #bbb; }
 
     /* Font name */
-    .field-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-    .field-label { font-size: 0.82rem; color: #666; width: 80px; flex-shrink: 0; }
-    .field-input { flex: 1; max-width: 260px; padding: 5px 9px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.85rem; }
+    .settings-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+    .settings-block { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .field-row { display: flex; align-items: flex-start; gap: 10px; }
+    .field-label { font-size: 0.82rem; color: #666; width: 88px; flex-shrink: 0; padding-top: 6px; }
+    .field-stack { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .field-input { flex: 1; width: 100%; max-width: none; padding: 5px 9px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.85rem; }
     .field-input:focus { outline: none; border-color: #1a73e8; box-shadow: 0 0 0 3px rgba(26,115,232,0.12); }
+    .field-textarea { display: block; min-height: 132px; resize: vertical; overflow: auto; line-height: 1.35; }
     .field-hint { font-size: 0.75rem; color: #aaa; }
 
     /* Size chips */
@@ -40,6 +48,10 @@
     .chip { display: flex; align-items: center; gap: 4px; padding: 3px 8px 3px 11px; border: 1px solid #1a73e8; border-radius: 20px; font-size: 0.8rem; background: #e8f0fe; color: #1558b0; user-select: none; }
     .chip-remove { background: none; border: none; padding: 0; margin: 0; cursor: pointer; color: #7baaf7; font-size: 0.9rem; line-height: 1; display: flex; align-items: center; }
     .chip-remove:hover { color: #c0392b; }
+    .size-presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .size-preset-btn { padding: 3px 10px; border: 1px solid #d0d0d0; border-radius: 999px; background: #fff; cursor: pointer; font-size: 0.78rem; color: #555; }
+    .size-preset-btn:hover { background: #f4f4f4; }
+    .size-preset-btn.active { border-color: #1a73e8; background: #e8f0fe; color: #1558b0; }
     .size-add { display: flex; align-items: center; gap: 5px; }
     .size-input { width: 52px; padding: 3px 7px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.82rem; text-align: center; }
     .size-input:focus { outline: none; border-color: #1a73e8; }
@@ -47,9 +59,39 @@
     .size-add-btn:hover { background: #f0f0f0; }
 
     /* Range checkboxes */
-    .range-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px 12px; }
+    .range-presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+    .range-preset-btn { padding: 3px 10px; border: 1px solid #d0d0d0; border-radius: 999px; background: #fff; cursor: pointer; font-size: 0.78rem; color: #555; }
+    .range-preset-btn:hover { background: #f4f4f4; }
+    .range-preset-btn.active { border-color: #1a73e8; background: #e8f0fe; color: #1558b0; }
+    .range-hint { margin-bottom: 10px; }
+    .range-meta { margin-bottom: 10px; }
+    .range-groups { display: flex; flex-direction: column; gap: 12px; }
+    .range-group { padding: 10px 12px; border: 1px solid #ececec; border-radius: 10px; background: #fafafa; }
+    .range-group-title { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8a8a8a; margin-bottom: 8px; }
+    .range-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px 12px; }
     .range-item { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: #444; cursor: pointer; }
     .range-item input { cursor: pointer; }
+    .range-advanced { margin-top: 10px; padding: 10px 12px; border: 1px solid #ececec; border-radius: 10px; background: #fafafa; }
+    .range-advanced summary { cursor: pointer; font-size: 0.8rem; color: #666; user-select: none; }
+    .range-advanced-body { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+    .manual-range-help { display: flex; flex-wrap: wrap; gap: 6px 16px; color: #8b8b8b; }
+    .manual-range-rows { display: flex; flex-direction: column; gap: 10px; }
+    .manual-range-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px 10px; align-items: center; padding: 10px 12px; border: 1px solid #e7e7e7; border-radius: 10px; background: #fff; }
+    .manual-range-mode { min-width: 0; }
+    .manual-range-select { width: 100%; padding: 5px 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.8rem; background: #fff; }
+    .manual-range-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .manual-range-label { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8a8a8a; }
+    .manual-range-value { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .manual-range-prefix { font-size: 0.78rem; color: #777; white-space: nowrap; }
+    .manual-range-input { min-height: 0; width: 100%; min-width: 0; max-width: 10ch; padding-left: 8px; padding-right: 8px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-variant-numeric: tabular-nums; text-transform: uppercase; }
+    .manual-range-input::placeholder { color: #b8b8b8; }
+    .manual-range-field.disabled { opacity: 0.45; }
+    .manual-range-field.disabled .manual-range-input { background: #f4f4f4; }
+    .manual-range-preview { grid-column: 2 / 4; grid-row: 2; font-size: 0.76rem; color: #777; min-width: 0; }
+    .manual-range-preview.invalid { color: #c62828; }
+    .manual-range-remove { grid-column: 4; grid-row: 1 / span 2; align-self: center; padding: 5px 10px; }
+    .range-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .range-error { color: #c62828; }
 
     /* Options row */
     .options-row { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #444; cursor: pointer; }
@@ -71,10 +113,51 @@
     .progress-fill { height: 100%; background: #1a73e8; width: 0%; transition: width 0.1s; border-radius: 3px; }
 
     .status-bar { font-size: 0.8rem; color: #777; min-height: 1.2em; margin-top: 8px; }
+    .status-bar.status-warning { color: #c62828; font-weight: 600; }
+    .status-bar.status-error { color: #b71c1c; font-weight: 600; }
+    .status-bar.status-ok { color: #2e7d32; }
+
+    /* Preview */
+    .preview-card { position: sticky; top: 24px; min-height: calc(100vh - 48px); display: flex; flex-direction: column; }
+    .preview-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 0.76rem; color: #8a8a8a; margin-bottom: 12px; }
+    .empty-state { padding: 18px; border: 1px dashed #d7d7d7; border-radius: 10px; background: #fafafa; color: #888; font-size: 0.84rem; }
+    .device-preview-grid { display: none; flex-direction: column; gap: 16px; align-items: stretch; min-width: 0; }
+    .preview-size-group { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid #e4e4e4; border-radius: 10px; background: #fafafa; min-width: 0; }
+    .preview-size-title { font-size: 0.78rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: #7f7f7f; }
+    .preview-style-strip { display: flex; gap: 12px; overflow-x: auto; overflow-y: hidden; padding-bottom: 6px; min-width: 0; scrollbar-gutter: stable; }
+    .preview-swatch { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: 0 0 auto; }
+    .preview-label { font-size: 0.75rem; color: #8d8d8d; }
+    .preview-viewport { overflow: auto; max-width: 100%; border: 1px solid #d6d6d6; border-radius: 8px; background:
+      linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px),
+      linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+      #fff;
+      background-size: 16px 16px, 16px 16px, auto;
+      background-position: -1px -1px, -1px -1px, 0 0; }
+    .preview-viewport canvas { display: block; }
 
     /* Log */
-    details summary { cursor: pointer; font-size: 0.8rem; color: #aaa; user-select: none; }
-    .log-box { background: #1c1c1e; color: #bbb; font-family: monospace; font-size: 0.75rem; padding: 12px; border-radius: 8px; max-height: 160px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; margin-top: 8px; }
+    details.card { padding: 0; overflow: hidden; }
+    details summary { cursor: pointer; font-size: 0.8rem; color: #777; user-select: none; padding: 16px 20px; }
+    .log-box { background: #1c1c1e; color: #bbb; font-family: monospace; font-size: 0.75rem; padding: 12px; max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; border-top: 1px solid #303034; }
+
+    @media (max-width: 1100px) {
+      .page-shell { grid-template-columns: 1fr; }
+      .preview-card { position: static; min-height: 0; }
+    }
+
+    @media (max-width: 700px) {
+      body { padding: 16px; }
+      .card { padding: 16px; }
+      .font-row { grid-template-columns: 1fr; align-items: flex-start; }
+      .manual-range-row { grid-template-columns: 1fr; align-items: stretch; }
+      .manual-range-mode,
+      .manual-range-field,
+      .manual-range-preview,
+      .manual-range-remove { grid-column: auto; grid-row: auto; }
+      .manual-range-remove { justify-self: start; }
+      .field-row { flex-direction: column; gap: 6px; }
+      .field-label { width: auto; padding-top: 0; }
+    }
   </style>
 </head>
 <body>
@@ -86,146 +169,223 @@
 
 <h1>Font Generator</h1>
 
-<!-- ── Font files ─────────────────────────────────────────────────────────── -->
-<div class="card">
-  <h2>Fonts</h2>
-  <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
-    <button class="font-file-btn" id="btn-browse-folder">Browse Folder…</button>
-    <span style="font-size:0.78rem;color:#aaa">auto-detects Regular / Bold / Italic / Bold-Italic from filenames</span>
-    <input type="file" id="file-folder" webkitdirectory style="display:none">
-  </div>
-  <div class="font-rows">
-    <div class="font-row">
-      <span class="font-label">Regular</span>
-      <button class="font-file-btn" data-style="regular">Browse…</button>
-      <span class="font-filename empty" id="name-regular">required</span>
-      <input type="file" id="file-regular" accept=".ttf,.otf" style="display:none">
-    </div>
-    <div class="font-row">
-      <span class="font-label">Bold <span class="font-badge">optional</span></span>
-      <button class="font-file-btn" data-style="bold">Browse…</button>
-      <span class="font-filename empty" id="name-bold">—</span>
-      <input type="file" id="file-bold" accept=".ttf,.otf" style="display:none">
-    </div>
-    <div class="font-row">
-      <span class="font-label">Italic <span class="font-badge">optional</span></span>
-      <button class="font-file-btn" data-style="italic">Browse…</button>
-      <span class="font-filename empty" id="name-italic">—</span>
-      <input type="file" id="file-italic" accept=".ttf,.otf" style="display:none">
-    </div>
-    <div class="font-row">
-      <span class="font-label">Bold-Italic <span class="font-badge">optional</span></span>
-      <button class="font-file-btn" data-style="bold-italic">Browse…</button>
-      <span class="font-filename empty" id="name-bold-italic">—</span>
-      <input type="file" id="file-bold-italic" accept=".ttf,.otf" style="display:none">
-    </div>
-    <div class="font-row" style="margin-top:6px;padding-top:6px;border-top:1px solid #f0f0f0">
-      <span class="font-label" style="color:#aaa">Fallback <span class="font-badge">optional</span></span>
-      <button class="font-file-btn" id="btn-fallback">Browse…</button>
-      <span class="font-filename empty" id="name-fallback">fills in glyphs missing from the main font</span>
-      <input type="file" id="file-fallback" accept=".ttf,.otf" style="display:none">
-    </div>
-  </div>
-</div>
-
-<!-- ── Settings ───────────────────────────────────────────────────────────── -->
-<div class="card">
-  <h2>Settings</h2>
-
-  <div class="field-row">
-    <span class="field-label">Font name</span>
-    <input class="field-input" id="input-font-name" type="text" placeholder="auto-detect">
-    <span class="field-hint">embedded in .mfb bundle</span>
-  </div>
-
-  <div class="field-row" style="margin-bottom:14px;align-items:flex-start;padding-top:2px">
-    <span class="field-label">Sizes (px)</span>
-    <div style="display:flex;flex-direction:column;gap:8px">
-      <div class="chips" id="size-chips"></div>
-      <div class="size-add">
-        <input class="size-input" id="size-input" type="number" min="8" max="64" placeholder="px">
-        <button class="size-add-btn" id="size-add-btn">Add</button>
-        <span style="font-size:0.75rem;color:#aaa">8 – 64 px</span>
+<div class="page-shell">
+  <div class="control-column">
+    <div class="card">
+      <h2>Fonts</h2>
+      <div class="folder-picker">
+        <button class="font-file-btn" id="btn-browse-folder">Browse Folder...</button>
+        <span style="font-size:0.76rem;color:#aaa">Auto-detects the style files from filenames.</span>
+        <input type="file" id="file-folder" webkitdirectory style="display:none">
+      </div>
+      <div class="font-rows">
+        <div class="font-row">
+          <span class="font-label">Regular</span>
+          <button class="font-file-btn" data-style="regular">Browse...</button>
+          <span class="font-filename empty" id="name-regular">required</span>
+          <input type="file" id="file-regular" accept=".ttf,.otf" style="display:none">
+        </div>
+        <div class="font-row">
+          <span class="font-label">Bold <span class="font-badge">optional</span></span>
+          <button class="font-file-btn" data-style="bold">Browse...</button>
+          <span class="font-filename empty" id="name-bold">-</span>
+          <input type="file" id="file-bold" accept=".ttf,.otf" style="display:none">
+        </div>
+        <div class="font-row">
+          <span class="font-label">Italic <span class="font-badge">optional</span></span>
+          <button class="font-file-btn" data-style="italic">Browse...</button>
+          <span class="font-filename empty" id="name-italic">-</span>
+          <input type="file" id="file-italic" accept=".ttf,.otf" style="display:none">
+        </div>
+        <div class="font-row">
+          <span class="font-label">Bold-Italic <span class="font-badge">optional</span></span>
+          <button class="font-file-btn" data-style="bold-italic">Browse...</button>
+          <span class="font-filename empty" id="name-bold-italic">-</span>
+          <input type="file" id="file-bold-italic" accept=".ttf,.otf" style="display:none">
+        </div>
+        <div class="font-row">
+          <span class="font-label" style="color:#888">Fallback <span class="font-badge">optional</span></span>
+          <button class="font-file-btn" id="btn-fallback">Browse...</button>
+          <span class="font-filename empty" id="name-fallback">missing glyph fallback</span>
+          <input type="file" id="file-fallback" accept=".ttf,.otf" style="display:none">
+        </div>
       </div>
     </div>
+
+    <div class="card">
+      <h2>Settings</h2>
+      <div class="settings-grid">
+        <div class="settings-block">
+          <div class="field-row">
+            <span class="field-label">Font name</span>
+            <div class="field-stack">
+              <input class="field-input" id="input-font-name" type="text" placeholder="auto-detect">
+              <span class="field-hint">Embedded in the generated `.mfb` bundle.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-block">
+          <div class="field-row">
+            <span class="field-label">Preview text</span>
+            <div class="field-stack">
+              <textarea id="preview-text" class="field-input field-textarea"></textarea>
+              <span class="field-hint">Used for the live device preview.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-block">
+          <div class="field-row">
+            <span class="field-label">Sizes (px)</span>
+            <div class="field-stack">
+              <div class="size-presets">
+                <button type="button" class="size-preset-btn" data-preset="small">Small</button>
+                <button type="button" class="size-preset-btn" data-preset="normal">Normal</button>
+                <button type="button" class="size-preset-btn" data-preset="big">Big</button>
+              </div>
+              <div class="chips" id="size-chips"></div>
+              <div class="size-add">
+                <input class="size-input" id="size-input" type="number" min="8" max="64" placeholder="px">
+                <button class="size-add-btn" id="size-add-btn">Add</button>
+                <span style="font-size:0.75rem;color:#aaa">8-64 px</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <span class="field-label">Rendering</span>
+            <div class="field-stack">
+              <label class="options-row">
+                <input type="checkbox" id="cb-bw-only">
+                BW only
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-block">
+          <h2 style="margin-bottom:8px">Character Ranges</h2>
+          <div class="range-presets">
+            <button type="button" class="range-preset-btn" data-range-preset="western">Western</button>
+            <button type="button" class="range-preset-btn" data-range-preset="greek">Greek</button>
+            <button type="button" class="range-preset-btn" data-range-preset="cyrillic">Cyrillic</button>
+            <button type="button" class="range-preset-btn" data-range-preset="japanese">Japanese</button>
+            <button type="button" class="range-preset-btn" data-range-preset="all">All</button>
+            <button type="button" class="range-preset-btn" data-range-preset="clear">Clear</button>
+          </div>
+          <div class="field-hint range-hint">Preset buttons replace the current selection.</div>
+          <div class="field-hint range-meta" id="range-meta"></div>
+          <div class="range-groups" id="range-grid">
+            <!-- populated by JS -->
+          </div>
+          <details class="range-advanced">
+            <summary>Custom Ranges</summary>
+            <div class="range-advanced-body">
+              <div class="field-hint manual-range-help">
+                <span>Use hex codepoints only, for example `2190` or `1F600`.</span>
+                <span>Pick `Single` for one character or `Range` for a full block.</span>
+              </div>
+              <div class="manual-range-rows" id="manual-range-rows"></div>
+              <div class="range-actions">
+                <button type="button" id="manual-ranges-add">Add Row</button>
+                <button type="button" id="manual-ranges-apply">Apply Custom Ranges</button>
+                <button type="button" id="manual-ranges-clear">Back To Checkboxes</button>
+              </div>
+              <div class="field-hint" id="manual-ranges-status"></div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="actions">
+        <button class="btn-primary" id="btn-generate" disabled>Generate</button>
+        <button id="btn-download" style="display:none">Download .mfb</button>
+      </div>
+      <div class="progress-wrap" id="progress-wrap">
+        <div class="progress-label" id="progress-label"></div>
+        <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+      </div>
+      <div class="status-bar" id="status-bar"></div>
+    </div>
   </div>
 
-  <h2 style="margin-bottom:8px">Character Ranges</h2>
-  <div class="range-grid" id="range-grid">
-    <!-- populated by JS -->
-  </div>
+  <div class="preview-column">
+    <div class="card preview-card" id="device-preview-details">
+      <h2>Device Preview</h2>
+      <div id="device-preview-empty" class="empty-state">Load a regular font to render the live device preview.</div>
+      <div id="device-preview-grid" class="device-preview-grid"></div>
+    </div>
 
-  <div style="margin-top:14px">
-    <label class="options-row">
-      <input type="checkbox" id="cb-bw-only">
-      BW only <span style="font-size:0.75rem;color:#aaa;margin-left:4px">(no grayscale planes — use for UI fonts)</span>
-    </label>
+    <details class="card">
+      <summary>Log</summary>
+      <div class="log-box" id="log-box"></div>
+    </details>
   </div>
 </div>
 
-<!-- ── Generate ───────────────────────────────────────────────────────────── -->
-<div class="card">
-  <div class="actions">
-    <button class="btn-primary" id="btn-generate" disabled>Generate</button>
-    <button id="btn-download" style="display:none">Download .mfb</button>
-  </div>
-  <div class="progress-wrap" id="progress-wrap">
-    <div class="progress-label" id="progress-label"></div>
-    <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
-  </div>
-  <div class="status-bar" id="status-bar"></div>
-</div>
-
-<details id="preview-details" style="display:none">
-  <summary>Glyph preview</summary>
-  <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
-    <div style="font-size:0.75rem;color:#aaa">Gray (5-level)</div>
-    <div style="overflow-x:auto;max-width:100%">
-      <canvas id="canvas-gray" style="image-rendering:pixelated;border:1px solid #eee;border-radius:4px;background:#fff;display:block"></canvas>
-    </div>
-    <div style="font-size:0.75rem;color:#aaa">BW (1-bit threshold)</div>
-    <div style="overflow-x:auto;max-width:100%">
-      <canvas id="canvas-bw" style="image-rendering:pixelated;border:1px solid #eee;border-radius:4px;background:#fff;display:block"></canvas>
-    </div>
-  </div>
-</details>
-
-<details id="device-preview-details" style="display:none">
-  <summary>Device Preview (480×800)</summary>
-  <div style="font-size:0.75rem;color:#aaa;margin-top:8px;margin-bottom:10px">Each canvas is the actual device resolution (480×800) — one per generated size.</div>
-  <div id="device-preview-grid" style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start"></div>
-</details>
-
-<details>
-  <summary>Log</summary>
-  <div class="log-box" id="log-box"></div>
-</details>
-
-<script src="https://cdn.jsdelivr.net/npm/opentype.js@2.0.0/dist/opentype.min.js"></script>
 <script type="module">
-// ── Module-level state ────────────────────────────────────────────────────
-let FT = null;
-let _previewRunning = false;
+// Ã¢â€â‚¬Ã¢â€â‚¬ Module-level state Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+let worker = null;
 let fallbackFile = null;
 const fontFiles = {};
+let previewSeq = 0;
+let previewTimer = null;
+let workerRequestId = 1;
+const pendingWorkerRequests = new Map();
+const DEFAULT_PREVIEW_TEXT = `The quick brown fox jumps over the lazy dog.
+Pack my box with five dozen liquor jugs.
+How vexingly quick daft zebras jump!
+It was the best of times, it was the worst of times.`;
+const PREVIEW_STYLE_LABELS = ['Regular', 'Bold', 'Italic', 'Bold-Italic'];
+const DEVICE_PREVIEW_SCALE = 1;
+const SIZE_PRESETS = {
+  small: [12, 14, 16, 18, 20, 22, 24],
+  normal: [20, 22, 24, 26, 28, 30, 32],
+  big: [28, 30, 32, 34, 36],
+};
 
-// ── Size chips ─────────────────────────────────────────────────────────────
-const selectedSizes = new Set([20, 22, 24, 26, 28, 30, 32]);
+// Ã¢â€â‚¬Ã¢â€â‚¬ Size chips Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+const selectedSizes = new Set(SIZE_PRESETS.normal);
 const sizeChipsEl = document.getElementById('size-chips');
+const sizePresetButtons = [...document.querySelectorAll('.size-preset-btn')];
+
+function arraysEqual(a, b) {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+function updateSizePresetButtons() {
+  const current = [...selectedSizes].sort((a, b) => a - b);
+  for (const btn of sizePresetButtons) {
+    const preset = SIZE_PRESETS[btn.dataset.preset] ?? [];
+    btn.classList.toggle('active', arraysEqual(current, preset));
+  }
+}
 
 function renderSizeChips() {
   sizeChipsEl.innerHTML = '';
   for (const s of [...selectedSizes].sort((a, b) => a - b)) {
     const chip = document.createElement('span');
     chip.className = 'chip';
-    chip.innerHTML = `${s} <button class="chip-remove" title="Remove" data-size="${s}">×</button>`;
+    chip.innerHTML = `${s} <button class="chip-remove" title="Remove" data-size="${s}">x</button>`;
     chip.querySelector('.chip-remove').addEventListener('click', () => {
       selectedSizes.delete(s);
       renderSizeChips();
     });
     sizeChipsEl.appendChild(chip);
   }
-  triggerDevicePreview();
+  updateSizePresetButtons();
+  scheduleLivePreview();
+}
+
+function setSizePreset(name) {
+  const preset = SIZE_PRESETS[name];
+  if (!preset) return;
+  selectedSizes.clear();
+  for (const size of preset) selectedSizes.add(size);
+  renderSizeChips();
 }
 
 function addSize(val) {
@@ -250,27 +410,30 @@ document.getElementById('size-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('size-add-btn').click();
 });
 
-renderSizeChips();
+for (const btn of sizePresetButtons) {
+  btn.addEventListener('click', () => setSizePreset(btn.dataset.preset));
+}
 
-// ── Range presets ─────────────────────────────────────────────────────────
+renderSizeChips();
+showPreviewSections(false);
+document.getElementById('preview-text').value = DEFAULT_PREVIEW_TEXT;
+document.getElementById('preview-text').addEventListener('input', () => scheduleLivePreview());
+
+// Ã¢â€â‚¬Ã¢â€â‚¬ Range presets Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const RANGE_LABELS = [
   ['ascii',          'ASCII'],
   ['latin1',         'Latin-1'],
-  ['latin-ext-a',    'Latin Ext-A'],
-  ['latin-ext-b',    'Latin Ext-B'],
-  ['latin-ext-add',  'Latin Ext (Vietnamese)'],
+  ['latin-ext-a',    'Latin Extended-A'],
+  ['latin-ext-b',    'Latin Extended-B'],
+  ['latin-ext-add',  'Latin Extended Additional'],
   ['combining',      'Combining Diacritics'],
   ['spacing-mod',    'Spacing Modifiers'],
+  ['general-punct',  'General Punctuation'],
+  ['currency',       'Currency Symbols'],
+  ['super-sub',      'Superscripts/Subscripts'],
   ['greek',          'Greek'],
   ['cyrillic',       'Cyrillic'],
-  ['general-punct',  'General Punctuation'],
-  ['super-sub',      'Superscripts/Subscripts'],
-  ['currency',       'Currency Symbols'],
-  ['letterlike',     'Letterlike Symbols'],
-  ['number-forms',   'Number Forms'],
-  ['arrows',         'Arrows'],
-  ['ui-shapes',      'UI Shapes (▲▶▼◀)'],
-  ['specials',       'Specials (U+FFFD)'],
+  ['specials',       'Replacement/Specials'],
   ['hiragana',       'Hiragana'],
   ['katakana',       'Katakana'],
   ['cjk-punct',      'CJK Punctuation'],
@@ -278,24 +441,329 @@ const RANGE_LABELS = [
 ];
 
 const DEFAULT_ON_RANGES = new Set([
-  'ascii','latin1','latin-ext-a','greek','combining','spacing-mod',
-  'general-punct','super-sub','currency','letterlike','number-forms','ui-shapes','specials',
+  'ascii','latin1','latin-ext-a','general-punct','currency','super-sub','specials',
 ]);
+const RANGE_PRESET_SETS = {
+  western: ['ascii','latin1','latin-ext-a','general-punct','currency','super-sub','specials'],
+  greek: ['ascii','latin1','latin-ext-a','general-punct','currency','super-sub','specials','greek'],
+  cyrillic: ['ascii','latin1','general-punct','currency','super-sub','specials','cyrillic'],
+  japanese: ['ascii','latin1','general-punct','specials','hiragana','katakana','cjk-punct','cjk'],
+  all: [],
+  clear: [],
+};
+const RANGE_GROUPS = [
+  {
+    title: 'Languages & Scripts',
+    ids: ['ascii','latin1','latin-ext-a','latin-ext-b','latin-ext-add','greek','cyrillic','hiragana','katakana','cjk-punct','cjk'],
+  },
+  {
+    title: 'Reading & Symbols',
+    ids: ['combining','spacing-mod','general-punct','currency','super-sub','specials'],
+  },
+];
 
 const rangeGrid = document.getElementById('range-grid');
-for (const [id, label] of RANGE_LABELS) {
-  const item = document.createElement('label');
-  item.className = 'range-item';
-  const cb = document.createElement('input');
-  cb.type = 'checkbox';
-  cb.id = 'range-' + id;
-  cb.checked = DEFAULT_ON_RANGES.has(id);
-  item.appendChild(cb);
-  item.appendChild(document.createTextNode(label));
-  rangeGrid.appendChild(item);
+const rangePresetButtons = [...document.querySelectorAll('.range-preset-btn')];
+const rangeLabelMap = new Map(RANGE_LABELS);
+const rangeMetaEl = document.getElementById('range-meta');
+const manualRangeRowsEl = document.getElementById('manual-range-rows');
+const manualRangesStatusEl = document.getElementById('manual-ranges-status');
+let manualRangePairs = null;
+for (const groupDef of RANGE_GROUPS) {
+  const section = document.createElement('section');
+  section.className = 'range-group';
+
+  const title = document.createElement('div');
+  title.className = 'range-group-title';
+  title.textContent = groupDef.title;
+  section.appendChild(title);
+
+  const groupGrid = document.createElement('div');
+  groupGrid.className = 'range-grid';
+
+  for (const id of groupDef.ids) {
+    const label = rangeLabelMap.get(id);
+    if (!label) continue;
+    const item = document.createElement('label');
+    item.className = 'range-item';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = 'range-' + id;
+    cb.checked = DEFAULT_ON_RANGES.has(id);
+    cb.addEventListener('change', () => {
+      if (manualRangePairs) disableManualRanges(false);
+      updateRangePresetButtons();
+      updateRangeMeta();
+      scheduleLivePreview();
+    });
+    item.appendChild(cb);
+    item.appendChild(document.createTextNode(label));
+    groupGrid.appendChild(item);
+  }
+
+  section.appendChild(groupGrid);
+  rangeGrid.appendChild(section);
 }
 
-// ── File inputs ───────────────────────────────────────────────────────────
+RANGE_PRESET_SETS.all = RANGE_LABELS.map(([id]) => id);
+
+function getSelectedRangeIds() {
+  return RANGE_LABELS
+    .map(([id]) => id)
+    .filter(id => document.getElementById('range-' + id)?.checked);
+}
+
+function normalizeRangeIds(ids) {
+  const wanted = new Set(ids);
+  return RANGE_LABELS
+    .map(([id]) => id)
+    .filter(id => wanted.has(id));
+}
+
+function updateRangePresetButtons() {
+  if (manualRangePairs) {
+    for (const btn of rangePresetButtons) btn.classList.remove('active');
+    return;
+  }
+  const current = getSelectedRangeIds();
+  for (const btn of rangePresetButtons) {
+    const preset = normalizeRangeIds(RANGE_PRESET_SETS[btn.dataset.rangePreset] ?? []);
+    btn.classList.toggle('active', arraysEqual(current, preset));
+  }
+}
+
+function mergeRangePairs(raw) {
+  const sorted = [...raw].sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  for (const [s, e] of sorted) {
+    if (merged.length && s <= merged[merged.length - 1][1] + 1) {
+      merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], e);
+    } else {
+      merged.push([s, e]);
+    }
+  }
+  return merged;
+}
+
+function countRangeCodepoints(ranges) {
+  let total = 0;
+  for (const [s, e] of ranges) total += (e - s + 1);
+  return total;
+}
+
+function formatRangeHex(value) {
+  return `U+${value.toString(16).toUpperCase().padStart(4, '0')}`;
+}
+
+
+function updateRangeMeta() {
+  const ranges = getSelectedRanges();
+  const codepoints = countRangeCodepoints(ranges);
+  const mode = manualRangePairs ? 'Custom ranges active' : 'Checkbox ranges active';
+  rangeMetaEl.textContent = `${mode} - ${ranges.length} block${ranges.length === 1 ? '' : 's'} - ${codepoints} codepoints`;
+}
+
+function setManualRangesStatus(msg, isError = false) {
+  manualRangesStatusEl.textContent = msg;
+  manualRangesStatusEl.classList.toggle('range-error', isError);
+}
+
+function formatCodepointPreview(cp) {
+  if (cp < 0x20 || cp === 0x7F) return '(control)';
+  return String.fromCodePoint(cp);
+}
+
+function parseHexCodepoint(value) {
+  const cleaned = value.trim().replace(/^U\+/i, '').replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+  if (!cleaned) return null;
+  const cp = parseInt(cleaned, 16);
+  if (Number.isNaN(cp) || cp < 0 || cp > 0x10FFFF) return NaN;
+  return cp;
+}
+
+function sanitizeHexInput(input) {
+  input.value = input.value.replace(/^U\+/i, '').replace(/[^0-9A-Fa-f]/g, '').toUpperCase().slice(0, 6);
+}
+
+function updateManualRangeRowPreview(row) {
+  const fromInput = row.querySelector('.manual-range-from');
+  const toInput = row.querySelector('.manual-range-to');
+  const preview = row.querySelector('.manual-range-preview');
+  const from = parseHexCodepoint(fromInput.value);
+  const to = parseHexCodepoint(toInput.value);
+
+  preview.classList.remove('invalid');
+  if (!fromInput.value.trim() && !toInput.value.trim()) {
+    preview.textContent = 'Empty row';
+    return;
+  }
+  if (Number.isNaN(from) || Number.isNaN(to)) {
+    preview.textContent = 'Invalid hex';
+    preview.classList.add('invalid');
+    return;
+  }
+  if (from === null) {
+    preview.textContent = 'Enter a From value';
+    preview.classList.add('invalid');
+    return;
+  }
+
+  const end = to === null ? from : to;
+  if (end < from) {
+    preview.textContent = 'To must be >= From';
+    preview.classList.add('invalid');
+    return;
+  }
+
+  if (from === end) {
+    preview.textContent = `${formatRangeHex(from)} ${formatCodepointPreview(from)}`;
+    return;
+  }
+  preview.textContent = `${formatRangeHex(from)}-${formatRangeHex(end)} (${end - from + 1} cps)`;
+}
+
+function addManualRangeRow(fromValue = '', toValue = '') {
+  const row = document.createElement('div');
+  row.className = 'manual-range-row';
+
+  const fromField = document.createElement('div');
+  fromField.className = 'manual-range-field';
+  const fromPrefix = document.createElement('span');
+  fromPrefix.className = 'manual-range-prefix';
+  fromPrefix.textContent = 'From U+';
+  const fromInput = document.createElement('input');
+  fromInput.type = 'text';
+  fromInput.className = 'field-input manual-range-input manual-range-from';
+  fromInput.placeholder = '0020';
+  fromInput.value = fromValue;
+  fromInput.addEventListener('input', () => {
+    sanitizeHexInput(fromInput);
+    updateManualRangeRowPreview(row);
+  });
+  fromField.appendChild(fromPrefix);
+  fromField.appendChild(fromInput);
+
+  const toField = document.createElement('div');
+  toField.className = 'manual-range-field';
+  const toPrefix = document.createElement('span');
+  toPrefix.className = 'manual-range-prefix';
+  toPrefix.textContent = 'To U+';
+  const toInput = document.createElement('input');
+  toInput.type = 'text';
+  toInput.className = 'field-input manual-range-input manual-range-to';
+  toInput.placeholder = '007E';
+  toInput.value = toValue;
+  toInput.addEventListener('input', () => {
+    sanitizeHexInput(toInput);
+    updateManualRangeRowPreview(row);
+  });
+  toField.appendChild(toPrefix);
+  toField.appendChild(toInput);
+
+  const preview = document.createElement('div');
+  preview.className = 'manual-range-preview';
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'manual-range-remove';
+  removeBtn.textContent = 'Remove';
+  removeBtn.addEventListener('click', () => {
+    row.remove();
+    if (!manualRangeRowsEl.children.length) addManualRangeRow();
+  });
+
+  row.appendChild(fromField);
+  row.appendChild(toField);
+  row.appendChild(preview);
+  row.appendChild(removeBtn);
+  manualRangeRowsEl.appendChild(row);
+  updateManualRangeRowPreview(row);
+  return fromInput;
+}
+
+function getManualRangeRows() {
+  return [...manualRangeRowsEl.querySelectorAll('.manual-range-row')];
+}
+
+function countFilledManualRangeRows() {
+  return getManualRangeRows().filter(row => row.querySelector('.manual-range-from').value.trim()).length;
+}
+
+function disableManualRanges(clearText = false) {
+  manualRangePairs = null;
+  if (clearText) {
+    manualRangeRowsEl.innerHTML = '';
+    addManualRangeRow();
+  }
+  setManualRangesStatus(clearText ? '' : 'Custom range mode disabled. Using checkbox selection.');
+}
+
+function collectManualRangePairs() {
+  const ranges = [];
+  for (const row of getManualRangeRows()) {
+    const fromInput = row.querySelector('.manual-range-from');
+    const toInput = row.querySelector('.manual-range-to');
+    const from = parseHexCodepoint(fromInput.value);
+    const to = parseHexCodepoint(toInput.value);
+
+    if (!fromInput.value.trim() && !toInput.value.trim()) continue;
+    if (Number.isNaN(from) || Number.isNaN(to)) throw new Error('One or more custom range rows contain invalid hex.');
+    if (from === null) throw new Error('Every custom range row needs a From value.');
+    const end = to === null ? from : to;
+    if (end < from) throw new Error('A custom range row has To smaller than From.');
+    ranges.push([from, end]);
+  }
+  if (!ranges.length) throw new Error('Enter at least one custom range.');
+  return mergeRangePairs(ranges);
+}
+
+function setRangePreset(name) {
+  const preset = new Set(RANGE_PRESET_SETS[name] ?? []);
+  disableManualRanges(false);
+  for (const [id] of RANGE_LABELS) {
+    const cb = document.getElementById('range-' + id);
+    if (cb) cb.checked = preset.has(id);
+  }
+  updateRangePresetButtons();
+  updateRangeMeta();
+  scheduleLivePreview();
+}
+
+for (const btn of rangePresetButtons) {
+  btn.addEventListener('click', () => setRangePreset(btn.dataset.rangePreset));
+}
+updateRangePresetButtons();
+
+document.getElementById('manual-ranges-add').addEventListener('click', () => {
+  addManualRangeRow().focus();
+});
+
+document.getElementById('manual-ranges-apply').addEventListener('click', () => {
+  try {
+    const parsed = collectManualRangePairs();
+    const rowCount = countFilledManualRangeRows();
+    manualRangePairs = parsed;
+    for (const [id] of RANGE_LABELS) {
+      const cb = document.getElementById('range-' + id);
+      if (cb) cb.checked = false;
+    }
+    updateRangePresetButtons();
+    updateRangeMeta();
+    setManualRangesStatus(`Applied ${countRangeCodepoints(parsed)} codepoints from ${rowCount} row${rowCount === 1 ? '' : 's'}.`);
+    scheduleLivePreview();
+  } catch (err) {
+    setManualRangesStatus(err.message, true);
+  }
+});
+
+document.getElementById('manual-ranges-clear').addEventListener('click', () => {
+  disableManualRanges(true);
+  setRangePreset('western');
+});
+
+addManualRangeRow();
+
+// Ã¢â€â‚¬Ã¢â€â‚¬ File inputs Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const STYLES = ['regular', 'bold', 'italic', 'bold-italic'];
 
 function assignFontFile(style, file) {
@@ -303,7 +771,7 @@ function assignFontFile(style, file) {
   const nameEl = document.getElementById('name-' + style);
   nameEl.textContent = file.name;
   nameEl.classList.remove('empty');
-  if (style === 'regular') triggerDevicePreview();
+  scheduleLivePreview();
 }
 
 // Folder picker: score each .ttf/.otf file against each style slot
@@ -372,7 +840,7 @@ for (const style of STYLES) {
   });
 }
 
-// ── Fallback font file picker ─────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬ Fallback font file picker Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 document.getElementById('btn-fallback').addEventListener('click', () => document.getElementById('file-fallback').click());
 document.getElementById('file-fallback').addEventListener('change', function () {
   const file = this.files[0];
@@ -381,75 +849,189 @@ document.getElementById('file-fallback').addEventListener('change', function () 
   const nameEl = document.getElementById('name-fallback');
   nameEl.textContent = file.name;
   nameEl.classList.remove('empty');
-  triggerDevicePreview();
+  scheduleLivePreview();
 });
 
 function updateGenerateBtn() {
   document.getElementById('btn-generate').disabled = !fontFiles['regular'];
 }
 
-// ── Live device preview (triggered when font files or sizes change) ────────
-async function triggerDevicePreview() {
-  if (_previewRunning || !fontFiles['regular']) return;
-  _previewRunning = true;
-  try {
-    await ensureFT();
-    const buf = await fontFiles['regular'].arrayBuffer();
-    const faces = FT.LoadFontFromBytes(new Uint8Array(buf));
-    if (!faces?.length) return;
-    const ftFace = faces[0];
+document.getElementById('cb-bw-only').addEventListener('change', () => {
+  scheduleLivePreview();
+});
 
-    let fbFace = null;
-    if (fallbackFile) {
-      const fbBuf = await fallbackFile.arrayBuffer();
-      const fbFaces = FT.LoadFontFromBytes(new Uint8Array(fbBuf));
-      if (fbFaces?.length) fbFace = fbFaces[0];
-    }
-
-    const sizes = [...selectedSizes].sort((a, b) => a - b);
-    if (!sizes.length) return;
-
-    const bwOnly = document.getElementById('cb-bw-only').checked;
-    const reg = { ftFace, otFont: null }; // otFont not needed for preview rendering
-
-    // renderDevicePreview uses FT directly; otFont is only used by renderStyleGlyphs
-    await renderDevicePreview(sizes, reg, fbFace, bwOnly);
-  } catch (e) {
-    console.warn('Device preview failed:', e);
-  } finally {
-    _previewRunning = false;
-  }
-}
-
-// ── UI helpers ────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬ UI helpers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function log(msg) {
   const ts = new Date().toLocaleTimeString();
   const box = document.getElementById('log-box');
   box.textContent += `[${ts}] ${msg}\n`;
   box.scrollTop = box.scrollHeight;
 }
-function setStatus(msg) { document.getElementById('status-bar').textContent = msg; }
+function setStatus(msg) {
+  const statusEl = document.getElementById('status-bar');
+  statusEl.textContent = msg;
+  statusEl.classList.remove('status-warning', 'status-error', 'status-ok');
+  if (!msg) return;
+  if (msg.startsWith('WARNING:')) {
+    statusEl.classList.add('status-warning');
+  } else if (msg.startsWith('Error:')) {
+    statusEl.classList.add('status-error');
+  } else if (msg.startsWith('OK:')) {
+    statusEl.classList.add('status-ok');
+  }
+}
 function setProgress(pct, label) {
-  document.getElementById('progress-fill').style.width = pct.toFixed(1) + '%';
+  document.getElementById('progress-fill').style.width = Number(pct).toFixed(1) + '%';
   if (label !== undefined) document.getElementById('progress-label').textContent = label;
 }
 function showProgress(visible) {
   document.getElementById('progress-wrap').classList.toggle('visible', visible);
 }
 
-// ── Library loading ───────────────────────────────────────────────────────
-async function ensureFT() {
-  if (FT) return;
-  log('Loading FreeType WASM…');
-  setStatus('Loading FreeType…');
-  const { default: FreeTypeInit } = await import('https://cdn.jsdelivr.net/npm/freetype-wasm@0.0.4/dist/freetype.js');
-  FT = await FreeTypeInit({
-    locateFile: () => 'https://cdn.jsdelivr.net/npm/freetype-wasm@0.0.4/dist/freetype.wasm'
-  });
-  log('FreeType ready');
+function showPreviewSections(visible) {
+  document.getElementById('device-preview-empty').style.display = visible ? 'none' : '';
+  document.getElementById('device-preview-grid').style.display = visible ? 'flex' : 'none';
 }
 
-// ── Range presets (mirrors Python script) ────────────────────────────────
+function quantizePreviewValue(whiteLevel, bwOnly) {
+  if (bwOnly) return whiteLevel >= 154 ? 255 : 0;
+  if (whiteLevel >= 205) return 255;
+  if (whiteLevel >= 154) return 200;
+  if (whiteLevel >= 103) return 140;
+  if (whiteLevel >= 52)  return 80;
+  return 0;
+}
+
+function paintPreviewImage(canvas, image, scale = 1, displayScale = scale) {
+  canvas.width = image.width * scale;
+  canvas.height = image.height * scale;
+  canvas.style.width = (image.width * displayScale) + 'px';
+  canvas.style.height = (image.height * displayScale) + 'px';
+  canvas.style.imageRendering = 'pixelated';
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const img = ctx.createImageData(canvas.width, canvas.height);
+  const data = img.data;
+  for (let y = 0; y < image.height; y++) {
+    for (let x = 0; x < image.width; x++) {
+      const value = image.pixels[y * image.width + x];
+      for (let sy = 0; sy < scale; sy++) {
+        for (let sx = 0; sx < scale; sx++) {
+          const dx = x * scale + sx;
+          const dy = y * scale + sy;
+          const i = (dy * canvas.width + dx) * 4;
+          data[i] = data[i + 1] = data[i + 2] = value;
+          data[i + 3] = 255;
+        }
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+async function renderLivePreview(seq) {
+  if (!fontFiles['regular']) {
+    showPreviewSections(false);
+    return;
+  }
+  try {
+    const sizes = [...selectedSizes].sort((a, b) => a - b);
+    if (!sizes.length) {
+      showPreviewSections(false);
+      return;
+    }
+    const ranges = getSelectedRanges();
+    if (!ranges.length) {
+      showPreviewSections(false);
+      return;
+    }
+
+    const readFile = f => f ? f.arrayBuffer().then(b => new Uint8Array(b)) : Promise.resolve(new Uint8Array(0));
+    const [regData, boldData, italData, biData, fbData] = await Promise.all([
+      readFile(fontFiles['regular']),
+      readFile(fontFiles['bold']),
+      readFile(fontFiles['italic']),
+      readFile(fontFiles['bold-italic']),
+      readFile(fallbackFile),
+    ]);
+    if (seq !== previewSeq) return;
+
+    const preview = await callPreview(
+      regData,
+      boldData,
+      italData,
+      biData,
+      fbData,
+      sizes,
+      ranges,
+      document.getElementById('cb-bw-only').checked,
+      document.getElementById('preview-text').value
+    );
+    if (seq !== previewSeq) return;
+
+    const grid = document.getElementById('device-preview-grid');
+    grid.innerHTML = '';
+    const groupedSections = new Map();
+    for (const section of preview.deviceSections) {
+      if (!groupedSections.has(section.size)) groupedSections.set(section.size, []);
+      groupedSections.get(section.size).push(section);
+    }
+
+    for (const [size, sections] of groupedSections) {
+      const group = document.createElement('section');
+      group.className = 'preview-size-group';
+
+      const title = document.createElement('div');
+      title.className = 'preview-size-title';
+      title.textContent = `${size}px`;
+      group.appendChild(title);
+
+      const strip = document.createElement('div');
+      strip.className = 'preview-style-strip';
+
+      sections.sort((a, b) => a.styleId - b.styleId);
+      for (const section of sections) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'preview-swatch';
+
+        const label = document.createElement('div');
+        const styleLabel = PREVIEW_STYLE_LABELS[section.styleId] || `Style ${section.styleId}`;
+        label.textContent = styleLabel;
+        label.className = 'preview-label';
+        wrapper.appendChild(label);
+
+        const viewport = document.createElement('div');
+        viewport.className = 'preview-viewport';
+
+        const canvas = document.createElement('canvas');
+        canvas.style.display = 'block';
+        paintPreviewImage(canvas, section, 1, DEVICE_PREVIEW_SCALE);
+        viewport.appendChild(canvas);
+        wrapper.appendChild(viewport);
+        strip.appendChild(wrapper);
+      }
+
+      group.appendChild(strip);
+      grid.appendChild(group);
+    }
+    showPreviewSections(preview.deviceSections.length > 0);
+  } catch (err) {
+    showPreviewSections(false);
+    console.warn('Live preview failed:', err);
+  }
+}
+
+function scheduleLivePreview() {
+  previewSeq += 1;
+  const seq = previewSeq;
+  if (previewTimer) clearTimeout(previewTimer);
+  previewTimer = window.setTimeout(() => {
+    void renderLivePreview(seq);
+  }, 60);
+}
+
+// Ã¢â€â‚¬Ã¢â€â‚¬ Worker communication Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// â”€â”€ Range presets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const RANGE_PRESETS = {
   'ascii':         [[0x0020, 0x007E]],
   'latin1':        [[0x00A0, 0x00FF]],
@@ -463,10 +1045,6 @@ const RANGE_PRESETS = {
   'general-punct': [[0x2000, 0x206F]],
   'super-sub':     [[0x2070, 0x209F]],
   'currency':      [[0x20A0, 0x20CF]],
-  'letterlike':    [[0x2100, 0x214F]],
-  'number-forms':  [[0x2150, 0x218F]],
-  'arrows':        [[0x2190, 0x21FF]],
-  'ui-shapes':     [[0x25B2, 0x25B2],[0x25BC, 0x25BC],[0x25C0, 0x25C0],[0x25B6, 0x25B6]],
   'specials':      [[0xFFF0, 0xFFFF]],
   'hiragana':      [[0x3040, 0x309F]],
   'katakana':      [[0x30A0, 0x30FF]],
@@ -475,493 +1053,256 @@ const RANGE_PRESETS = {
 };
 
 function getSelectedRanges() {
+  if (manualRangePairs) return manualRangePairs.map(([s, e]) => [s, e]);
   const raw = [];
   for (const [id] of RANGE_LABELS) {
     if (document.getElementById('range-' + id)?.checked)
       raw.push(...(RANGE_PRESETS[id] ?? []));
   }
-  raw.sort((a, b) => a[0] - b[0]);
-  const merged = [];
-  for (const [s, e] of raw) {
-    if (merged.length && s <= merged[merged.length-1][1] + 1)
-      merged[merged.length-1][1] = Math.max(merged[merged.length-1][1], e);
-    else merged.push([s, e]);
-  }
-  return merged;
+  return mergeRangePairs(raw);
 }
 
-// ── Binary helpers ────────────────────────────────────────────────────────
-function concat(chunks) {
-  const total = chunks.reduce((s, c) => s + c.length, 0);
-  const out = new Uint8Array(total);
-  let o = 0;
-  for (const c of chunks) { out.set(c, o); o += c.length; }
-  return out;
-}
+updateRangeMeta();
 
-// ── MBF binary packing ────────────────────────────────────────────────────
-function packRangesAndGlyphs(ranges, allGlyphs, bitmapBase) {
-  const buf = new ArrayBuffer(ranges.length * 8 + allGlyphs.length * 10);
-  const v = new DataView(buf); let o = 0;
-  for (const [firstCp, count, glyphStart] of ranges) {
-    v.setUint32(o, firstCp, true); o += 4;
-    v.setUint16(o, count, true);   o += 2;
-    v.setUint16(o, glyphStart, true); o += 2;
-  }
-  for (const g of allGlyphs) {
-    v.setUint32(o, (g.bitmap_offset || 0) + bitmapBase, true); o += 4;
-    v.setUint8(o,  g.x_advance   & 0xFF); o++;
-    v.setUint8(o,  g.bitmap_width  & 0xFF); o++;
-    v.setUint8(o,  g.bitmap_height & 0xFF); o++;
-    v.setInt8(o,   g.x_offset); o++;
-    v.setInt8(o,   g.y_offset); o++;
-    v.setUint8(o,  0); o++; // padding
-  }
-  return new Uint8Array(buf);
-}
-
-function buildMBF(styleMap, size, otFont, bwOnly) {
-  // styleMap keys: 'regular' (required), 'bold', 'italic', 'bold_italic' (optional)
-  const reg         = styleMap.regular;
-  const extraNames  = ['bold','italic','bold_italic'].filter(s => styleMap[s]);
-  const styleFlags  = extraNames.length
-    ? 0x01 | (styleMap.bold?0x02:0) | (styleMap.italic?0x04:0) | (styleMap.bold_italic?0x08:0)
-    : 0;
-
-  const post    = otFont.tables.post;
-  const em      = otFont.unitsPerEm;
-  const ulPos   = Math.max(1, Math.round(-(post?.underlinePosition  ?? -100) * size / em));
-  const ulThick = Math.max(1, Math.round( (post?.underlineThickness ?? 50)   * size / em));
-
-  const baseline       = reg.ascender;
-  const yAdvance       = reg.ascender - reg.descender;
-  const defaultAdvance = Math.floor(size / 2) * 4;
-  const maxHeight      = Math.max(reg.maxHeight, ...extraNames.map(s => styleMap[s].maxHeight));
-
-  const HEADER = 50;
-  const regRangesSz = reg.ranges.length * 8;
-  const regGlyphsSz = reg.allGlyphs.length * 10;
-  const kernOffset  = HEADER + regRangesSz + regGlyphsSz;
-
-  // Lay out extra style section offsets
-  let cursor = kernOffset + reg.kerningBytes.length;
-  const styleOffsets = {};
-  for (const s of extraNames) {
-    styleOffsets[s] = cursor;
-    cursor += 8 + styleMap[s].ranges.length * 8 + styleMap[s].allGlyphs.length * 10 + styleMap[s].kerningBytes.length;
-  }
-  const bitmapDataOffset = cursor;
-
-  // Concatenate bitmaps, track per-style base offsets
-  const bwParts = [reg.bwData], lsbParts = [reg.lsbData], msbParts = [reg.msbData];
-  const bitmapBases = { regular: 0 };
-  let bwBase = reg.bwData.length;
-  for (const s of extraNames) {
-    bitmapBases[s] = bwBase;
-    bwParts.push(styleMap[s].bwData);
-    lsbParts.push(styleMap[s].lsbData);
-    msbParts.push(styleMap[s].msbData);
-    bwBase += styleMap[s].bwData.length;
-  }
-  const totalBW  = concat(bwParts);
-  const totalLSB = bwOnly ? new Uint8Array() : concat(lsbParts);
-  const totalMSB = bwOnly ? new Uint8Array() : concat(msbParts);
-
-  const grayLsbOffset = totalLSB.length ? bitmapDataOffset + totalBW.length : 0;
-  const grayMsbOffset = totalMSB.length ? grayLsbOffset + totalLSB.length   : 0;
-
-  // Header
-  const hbuf = new ArrayBuffer(HEADER);
-  const hv = new DataView(hbuf); let ho = 0;
-  hv.setUint32(ho, 0x3446424D, true); ho += 4; // "MBF4"
-  hv.setUint8(ho, 4); ho++;
-  hv.setUint8(ho, maxHeight & 0xFF); ho++;
-  hv.setUint8(ho, baseline  & 0xFF); ho++;
-  hv.setUint8(ho, yAdvance  & 0xFF); ho++;
-  hv.setUint8(ho, defaultAdvance & 0xFF); ho++;
-  hv.setUint8(ho, styleFlags); ho++;
-  hv.setUint16(ho, reg.ranges.length,    true); ho += 2;
-  hv.setUint16(ho, reg.allGlyphs.length, true); ho += 2;
-  hv.setUint16(ho, size, true); ho += 2;
-  hv.setUint32(ho, reg.kerningBytes.length, true); ho += 4;
-  hv.setUint32(ho, bitmapDataOffset, true); ho += 4;
-  hv.setUint32(ho, styleOffsets.bold        ?? 0, true); ho += 4;
-  hv.setUint32(ho, styleOffsets.italic      ?? 0, true); ho += 4;
-  hv.setUint32(ho, styleOffsets.bold_italic ?? 0, true); ho += 4;
-  hv.setUint32(ho, kernOffset, true); ho += 4;
-  hv.setUint32(ho, grayLsbOffset, true); ho += 4;
-  hv.setUint32(ho, grayMsbOffset, true); ho += 4;
-  hv.setInt8(ho,   ulPos);   ho++;
-  hv.setUint8(ho,  ulThick); ho++;
-
-  const parts = [
-    new Uint8Array(hbuf),
-    packRangesAndGlyphs(reg.ranges, reg.allGlyphs, bitmapBases.regular),
-    reg.kerningBytes,
-  ];
-
-  for (const s of extraNames) {
-    const sd = styleMap[s];
-    const shbuf = new ArrayBuffer(8);
-    const shv = new DataView(shbuf);
-    shv.setUint16(0, sd.ranges.length,    true);
-    shv.setUint16(2, sd.allGlyphs.length, true);
-    shv.setUint32(4, sd.kerningBytes.length, true);
-    parts.push(new Uint8Array(shbuf));
-    parts.push(packRangesAndGlyphs(sd.ranges, sd.allGlyphs, bitmapBases[s]));
-    parts.push(sd.kerningBytes);
-  }
-
-  parts.push(totalBW, totalLSB, totalMSB);
-  return concat(parts);
-}
-
-// ── FNTS bundle ───────────────────────────────────────────────────────────
-function buildFNTSBundle(mbfFiles, fontName) {
-  // mbfFiles: [{ size, bytes }]
-  const num      = mbfFiles.length;
-  const nameEnc  = new TextEncoder().encode(fontName.slice(0, 31));
-  const namePad  = new Uint8Array(32);
-  namePad.set(nameEnc);
-
-  // Header: "FNTS" + num + version + reserved(2) + name(32) + sizes(num*4)
-  const hbuf = new ArrayBuffer(4 + 1 + 1 + 2 + 32 + num * 4);
-  const hv   = new DataView(hbuf);
-  hv.setUint8(0, 0x46); hv.setUint8(1, 0x4E); hv.setUint8(2, 0x54); hv.setUint8(3, 0x53); // "FNTS"
-  hv.setUint8(4, num);
-  hv.setUint8(5, 2); // version
-  new Uint8Array(hbuf).set(namePad, 8);
-  mbfFiles.forEach(({ bytes }, i) => hv.setUint32(40 + i * 4, bytes.length, true));
-
-  return concat([new Uint8Array(hbuf), ...mbfFiles.map(f => f.bytes)]);
-}
-
-// ── Glyph rendering ───────────────────────────────────────────────────────
-
-// FT_LOAD flags (numeric values match FreeType constants)
-const FT_LOAD_RENDER      = 4;
-const FT_LOAD_NO_HINTING  = 2;
-const FT_LOAD_NO_BITMAP   = 8;
-
-// For a rendered glyph, extract raw grayscale pixels from the FreeType ImageData.
-// FreeType GRAY mode: alpha channel = ink coverage (0=bg, 255=full ink).
-// We invert to: 0=ink(black), 255=white(background).
-function extractPixels(glyph) {
-  const bm = glyph.bitmap;
-  const w = bm.width, h = bm.rows;
-  if (w === 0 || h === 0 || !bm.imagedata) return null;
-  const src = bm.imagedata.data; // Uint8ClampedArray RGBA
-  const pixels = new Float32Array(w * h);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4;
-      pixels[y * w + x] = 255 - src[i + 3]; // alpha = ink → invert
+function ensureWorker() {
+  if (worker) return;
+  worker = new Worker('./font_gen_worker.js', { type: 'module' });
+  worker.addEventListener('message', e => {
+    const { type, requestId } = e.data;
+    if (type === 'log') {
+      log(e.data.msg);
+      return;
     }
-  }
-  return pixels;
-}
-
-// Apply gamma correction and quantize to 5 levels (0=white … 4=black).
-// Matches the Python script's pipeline exactly.
-function toGray5(rawPixels) {
-  return rawPixels.map(p => {
-    const g = Math.pow(p / 255, 1.6) * 255;
-    if (g >= 205) return 0;
-    if (g >= 154) return 1;
-    if (g >= 103) return 2;
-    if (g >= 52)  return 3;
-    return 4;
+    if (type === 'progress') {
+      setProgress(e.data.pct, e.data.label);
+      return;
+    }
+    if (type !== 'result' && type !== 'error') return;
+    const pending = pendingWorkerRequests.get(requestId);
+    if (!pending) return;
+    pendingWorkerRequests.delete(requestId);
+    if (type === 'result') pending.resolve(e.data.result);
+    else pending.reject(new Error(e.data.msg));
   });
 }
 
-// Pack one glyph's pixels into BW, LSB, MSB bit-plane bytes.
-// BW polarity: bit=1 → white, bit=0 → ink  (matches MBF convention).
-function packBitPlanes(rawPixels, w, h, bwOnly) {
-  const rowStride = Math.ceil(w / 8);
-  const bw  = new Uint8Array(rowStride * h);
-  const lsb = bwOnly ? null : new Uint8Array(rowStride * h);
-  const msb = bwOnly ? null : new Uint8Array(rowStride * h);
+function callWorker(type, payload) {
+  ensureWorker();
+  const requestId = `req-${workerRequestId++}`;
+  return new Promise((resolve, reject) => {
+    pendingWorkerRequests.set(requestId, { resolve, reject });
+    worker.postMessage({ type, requestId, ...payload });
+  });
+}
 
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const p     = Math.pow(rawPixels[y * w + x] / 255, 1.6) * 255;
-      const byteI = y * rowStride + (x >> 3);
-      const bit   = 0x80 >> (x & 7);
+function callFontGen(regData, boldData, italData, biData, fbData, fontName, sizes, rangePairs, bwOnly) {
+  return callWorker('generate', {
+    regData, boldData, italData, biData, fbData,
+    fontName, sizes, rangePairs, bwOnly
+  });
+}
 
-      // BW: white if pixel >= 154 (same threshold as Python)
-      if (p >= 154) bw[byteI] |= bit;
+function callPreview(regData, boldData, italData, biData, fbData, sizes, rangePairs, bwOnly, previewText) {
+  return callWorker('preview', {
+    regData, boldData, italData, biData, fbData, sizes, rangePairs, bwOnly, previewText
+  });
+}
 
-      if (!bwOnly) {
-        // 2-bit gray: 0=white,1=light,2=gray,3=dark  (4th level maps to 0 in Python)
-        let gray = 0;
-        if      (p >= 205) gray = 0;
-        else if (p >= 154) gray = 1;
-        else if (p >= 103) gray = 2;
-        else if (p >= 52)  gray = 3;
-        if (gray & 1) lsb[byteI] |= bit;
-        if (gray & 2) msb[byteI] |= bit;
+// Ã¢â€â‚¬Ã¢â€â‚¬ MBF / FNTS parser Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+function parseFnts(bytes) {
+  const v = new DataView(bytes.buffer, bytes.byteOffset);
+  const num = bytes[4];
+  const mbfSizes = [];
+  for (let i = 0; i < num; i++) mbfSizes.push(v.getUint32(40 + i * 4, true));
+  let off = 40 + num * 4;
+  return mbfSizes.map(sz => { const m = bytes.slice(off, off + sz); off += sz; return m; });
+}
+
+function parseMbf(bytes) {
+  const v = new DataView(bytes.buffer, bytes.byteOffset);
+  const nr      = v.getUint16(10, true);
+  const ng      = v.getUint16(12, true);
+  const pxSize  = v.getUint16(14, true);
+  const bdo     = v.getUint32(20, true);
+  const lsbOff  = v.getUint32(40, true);
+  const msbOff  = v.getUint32(44, true);
+  const baseline = bytes[6];
+  const yAdvance = bytes[7];
+
+  const ranges = [];
+  for (let i = 0; i < nr; i++) {
+    const o = 50 + i * 8;
+    ranges.push({ fcp: v.getUint32(o, true), cnt: v.getUint16(o+4, true), gs: v.getUint16(o+6, true) });
+  }
+  const glyphs = [];
+  const goff = 50 + nr * 8;
+  for (let i = 0; i < ng; i++) {
+    const o = goff + i * 10;
+    glyphs.push({ bmpOff: v.getUint32(o, true), xadv: bytes[o+4],
+                  bw: bytes[o+5], bh: bytes[o+6], xo: v.getInt8(o+7), yo: v.getInt8(o+8) });
+  }
+  const cpMap = new Map();
+  for (const { fcp, cnt, gs } of ranges)
+    for (let j = 0; j < cnt; j++) cpMap.set(fcp + j, gs + j);
+  return { pxSize, bdo, lsbOff, msbOff, baseline, yAdvance, ranges, glyphs, cpMap };
+}
+
+// Decode one glyph's pixels from MBF byte array.
+// Returns { pixels: Uint8Array (0=black Ã¢â‚¬Â¦ 255=white), w, h } or null.
+function decodeMbfGlyph(mbfData, mbf, glyphIdx) {
+  const g = mbf.glyphs[glyphIdx];
+  if (!g || g.bw === 0 || g.bh === 0) return null;
+  const stride = Math.ceil(g.bw / 8);
+  const bmpOff = g.bmpOff;
+  const hasGray = mbf.lsbOff && mbf.msbOff;
+  const pixels = new Uint8Array(g.bw * g.bh);
+  for (let y = 0; y < g.bh; y++) {
+    for (let x = 0; x < g.bw; x++) {
+      const bi   = y * stride + (x >> 3);
+      const mask = 0x80 >> (x & 7);
+      const bwBit = (mbfData[mbf.bdo + bmpOff + bi] & mask) !== 0; // 1=white/bg
+      if (!bwBit) {
+        pixels[y * g.bw + x] = 0;   // black
+      } else if (!hasGray) {
+        pixels[y * g.bw + x] = 255; // BW-only: white
+      } else {
+        const lsb = (mbfData[mbf.lsbOff + bmpOff + bi] & mask) !== 0;
+        const msb = (mbfData[mbf.msbOff + bmpOff + bi] & mask) !== 0;
+        pixels[y * g.bw + x] = [255, 200, 140, 80][(msb ? 2 : 0) | (lsb ? 1 : 0)];
       }
     }
   }
-  return { bw, lsb, msb };
+  return { pixels, w: g.bw, h: g.bh };
 }
 
-// Draw an array of {gray5, w, h} glyph descriptors onto a canvas, left-aligned.
-const GRAY5_PALETTE = [255, 200, 140, 80, 0];
-function drawPreview(canvasId, glyphs, scale = 2) {
-  const PAD = 2;
-  const maxH = Math.max(...glyphs.map(g => g.h), 1);
-  const totalW = glyphs.reduce((s, g) => s + g.w + PAD, PAD);
+// Ã¢â€â‚¬Ã¢â€â‚¬ Glyph grid preview Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+const SAMPLE_CHARS = 'ABCDEFGHIJKLabcdefghijkl0123456789';
 
+function drawGlyphPreview(mbfData, mbf, canvasId, scale) {
+  const PAD = 2;
+  const glyphs = [];
+  for (const ch of SAMPLE_CHARS) {
+    const gi = mbf.cpMap.get(ch.codePointAt(0));
+    if (gi === undefined) continue;
+    const d = decodeMbfGlyph(mbfData, mbf, gi);
+    if (d) glyphs.push(d);
+  }
+  if (!glyphs.length) return;
+
+  const maxH   = Math.max(...glyphs.map(g => g.h), 1);
+  const totalW = glyphs.reduce((s, g) => s + g.w + PAD, PAD);
   const canvas = document.getElementById(canvasId);
-  canvas.width  = totalW  * scale;
-  canvas.height = maxH * scale;
-  canvas.style.width  = (totalW  * scale) + 'px';
-  canvas.style.height = (maxH * scale) + 'px';
+  canvas.width  = totalW * scale;
+  canvas.height = maxH  * scale;
+  canvas.style.width  = (totalW * scale) + 'px';
+  canvas.style.height = (maxH  * scale) + 'px';
 
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
   const img = ctx.createImageData(canvas.width, canvas.height);
   const d = img.data;
-  // fill white
   for (let i = 0; i < d.length; i += 4) { d[i]=d[i+1]=d[i+2]=255; d[i+3]=255; }
-
   let cx = PAD;
-  for (const g of glyphs) {
-    const cy = Math.floor((maxH - g.h) / 2);
-    for (let y = 0; y < g.h; y++) {
-      for (let x = 0; x < g.w; x++) {
-        const v = g.pixels[y * g.w + x];
-        // scale up
-        for (let sy = 0; sy < scale; sy++) {
+  for (const { pixels, w, h } of glyphs) {
+    const cy = Math.floor((maxH - h) / 2);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const v = pixels[y * w + x];
+        for (let sy = 0; sy < scale; sy++)
           for (let sx = 0; sx < scale; sx++) {
-            const pi = (((cy + y) * scale + sy) * canvas.width + (cx + x) * scale + sx) * 4;
-            d[pi] = d[pi+1] = d[pi+2] = v; d[pi+3] = 255;
+            const pi = (((cy+y)*scale+sy)*canvas.width + (cx+x)*scale+sx) * 4;
+            d[pi]=d[pi+1]=d[pi+2]=v; d[pi+3]=255;
           }
-        }
       }
-    }
-    cx += g.w + PAD;
+    cx += w + PAD;
   }
   ctx.putImageData(img, 0, 0);
 }
 
-// ── Full glyph pipeline ───────────────────────────────────────────────────
-// Renders all codepoints in the given ranges for the currently-selected FT face.
-// mainFtFace / fallbackFtFace are the FT face objects (for SetFont calls).
-// Returns { ranges, allGlyphs, bwData, lsbData, msbData, maxHeight, ascender, descender, kerningBytes }
-async function renderStyleGlyphs(otFont, metrics, size, codepointRanges, bwOnly, mainFtFace = null, fallbackFtFace = null) {
-  const ascender  =  metrics.ascender  >> 6;
-  const descender =  metrics.descender >> 6; // negative
+// Ã¢â€â‚¬Ã¢â€â‚¬ Device preview from MBF Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+const DEVICE_SAMPLE = 'The quick brown fox jumps over the lazy dog. Pack my box with five dozen liquor jugs. How vexingly quick daft zebras jump! It was the best of times, it was the worst of times, it was the age of wisdom, it was the age of foolishness.';
 
-  // Flatten all codepoints
-  const allCps = [];
-  for (const [s, e] of codepointRanges)
-    for (let cp = s; cp <= e; cp++) allCps.push(cp);
+function buildDevicePreviewCanvas(mbfBufs) {
+  const W = 480, MX = 24, SECTION_GAP = 20, LABEL_H = 14;
 
-  // Unhinted pass for advances (reader fonts use unhinted metrics)
-  const advMap = new Map();
-  if (!bwOnly) {
-    const advGlyphs = FT.LoadGlyphs(allCps, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP);
-    for (const [cp, g] of advGlyphs) advMap.set(cp, g.advance.x);
-  }
+  const sections = mbfBufs.map(bytes => {
+    const mbf = parseMbf(bytes);
+    const spaceIdx = mbf.cpMap.get(0x20);
+    const spaceAdv = spaceIdx !== undefined ? mbf.glyphs[spaceIdx].xadv / 4 : mbf.pxSize * 0.3;
+    const maxW = W - MX * 2;
 
-  // Hinted render pass
-  const rendered = FT.LoadGlyphs(allCps, FT_LOAD_RENDER);
+    const advOf = cp => {
+      const gi = mbf.cpMap.get(cp);
+      return gi !== undefined ? mbf.glyphs[gi].xadv / 4 : mbf.pxSize * 0.5;
+    };
 
-  // Fallback pass: for codepoints missing from the main font, try the fallback face
-  let fallbackCount = 0;
-  if (fallbackFtFace) {
-    const missingCps = allCps.filter(cp => { const g = rendered.get(cp); return !g || g.glyph_index === 0; });
-    if (missingCps.length > 0) {
-      FT.SetFont(fallbackFtFace.family_name, fallbackFtFace.style_name);
-      FT.SetPixelSize(0, size);
-      const fbRendered = FT.LoadGlyphs(missingCps, FT_LOAD_RENDER);
-      if (!bwOnly) {
-        const fbAdv = FT.LoadGlyphs(missingCps, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP);
-        for (const [cp, g] of fbAdv) if (g && g.glyph_index !== 0) advMap.set(cp, g.advance.x);
+    const lines = [];
+    let curLine = [], lineX = 0;
+    for (const tok of DEVICE_SAMPLE.split(' ')) {
+      const wW = [...tok].reduce((s, ch) => s + advOf(ch.codePointAt(0)), 0);
+      if (curLine.length && lineX + spaceAdv + wW > maxW) { lines.push(curLine); curLine = []; lineX = 0; }
+      if (curLine.length) lineX += spaceAdv;
+      let gx = lineX;
+      for (const ch of tok) {
+        const cp = ch.codePointAt(0);
+        const gi = mbf.cpMap.get(cp);
+        if (gi !== undefined) { curLine.push({ gi, x: gx + MX }); }
+        gx += advOf(cp);
       }
-      for (const [cp, g] of fbRendered) {
-        if (g && g.glyph_index !== 0) { rendered.set(cp, g); fallbackCount++; }
-      }
-      // Restore main face
-      if (mainFtFace) { FT.SetFont(mainFtFace.family_name, mainFtFace.style_name); FT.SetPixelSize(0, size); }
+      lineX += wW;
     }
-  }
+    if (curLine.length) lines.push(curLine);
+    return { mbf, bytes, lines };
+  });
 
-  const ranges     = [];
-  const allGlyphs  = [];
-  const bwChunks   = [];
-  const lsbChunks  = [];
-  const msbChunks  = [];
-  let bitmapOffset = 0;
-  let maxHeight    = 0;
+  let totalH = SECTION_GAP;
+  for (const { mbf, lines } of sections)
+    totalH += LABEL_H + 4 + lines.length * mbf.yAdvance + SECTION_GAP;
 
-  for (const [rangeStart, rangeEnd] of codepointRanges) {
-    const glyphTableStart = allGlyphs.length;
-    let hasAny = false;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = totalH;
+  canvas.style.cssText = `width:${W}px;height:${totalH}px;display:block;border:1px solid #ccc;border-radius:4px`;
 
-    for (let cp = rangeStart; cp <= rangeEnd; cp++) {
-      const g = rendered.get(cp);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, totalH);
+  const imgData = ctx.getImageData(0, 0, W, totalH);
+  const d = imgData.data;
+  const labels = [];
 
-      // Missing glyph — push empty placeholder
-      if (!g || g.glyph_index === 0) {
-        allGlyphs.push({ codepoint: cp, bitmap_width: 0, bitmap_height: 0,
-          x_offset: 0, y_offset: 0, x_advance: 0, bitmap_offset: 0 });
-        continue;
+  let curY = SECTION_GAP;
+  for (const { mbf, bytes, lines } of sections) {
+    labels.push({ text: `${mbf.pxSize}px`, y: curY + LABEL_H - 2 });
+    curY += LABEL_H + 4;
+    for (const glyphs of lines) {
+      const base = curY + mbf.baseline;
+      for (const { gi, x } of glyphs) {
+        const g = mbf.glyphs[gi];
+        if (!g || !g.bw || !g.bh) continue;
+        const dec = decodeMbfGlyph(bytes, mbf, gi);
+        if (!dec) continue;
+        const gx = x + g.xo, gy = base + g.yo;
+        for (let py = 0; py < dec.h; py++)
+          for (let px = 0; px < dec.w; px++) {
+            const dx = gx + px, dy = gy + py;
+            if (dx < 0 || dx >= W || dy < 0 || dy >= totalH) continue;
+            const v = dec.pixels[py * dec.w + px];
+            if (v >= 255) continue;
+            const i = (dy * W + dx) * 4;
+            if (v < d[i]) { d[i]=d[i+1]=d[i+2]=v; }
+          }
       }
-
-      const advX    = bwOnly ? g.advance.x : (advMap.get(cp) ?? g.advance.x);
-      const xAdv    = Math.round(advX * 4 / 64); // quarter-pixel units
-      const { bitmap: bm } = g;
-
-      if (bm.width === 0 || bm.rows === 0 || !bm.imagedata) {
-        allGlyphs.push({ codepoint: cp, bitmap_width: 0, bitmap_height: 0,
-          x_offset: 0, y_offset: 0, x_advance: xAdv, bitmap_offset: 0 });
-        hasAny = true;
-        continue;
-      }
-
-      const raw = extractPixels(g);
-      const { bw, lsb, msb } = packBitPlanes(raw, bm.width, bm.rows, bwOnly);
-
-      allGlyphs.push({
-        codepoint:     cp,
-        bitmap_width:  bm.width,
-        bitmap_height: bm.rows,
-        x_offset:      g.bitmap_left,
-        y_offset:      -g.bitmap_top,  // negative = above baseline (MBF convention)
-        x_advance:     xAdv,
-        bitmap_offset: bitmapOffset,
-      });
-
-      bitmapOffset += bw.length;
-      if (bm.rows > maxHeight) maxHeight = bm.rows;
-      bwChunks.push(bw);
-      if (!bwOnly) { lsbChunks.push(lsb); msbChunks.push(msb); }
-      hasAny = true;
+      curY += mbf.yAdvance;
     }
-
-    if (hasAny) {
-      ranges.push([rangeStart, rangeEnd - rangeStart + 1, glyphTableStart]);
-    } else {
-      // No glyphs found for this range — remove the placeholder entries we pushed
-      allGlyphs.length = glyphTableStart;
-    }
+    curY += SECTION_GAP;
   }
-
-  const bwData  = concat(bwChunks);
-  const lsbData = bwOnly ? new Uint8Array() : concat(lsbChunks);
-  const msbData = bwOnly ? new Uint8Array() : concat(msbChunks);
-
-  const kerningBytes = extractKerning(otFont, allGlyphs, size);
-
-  return { ranges, allGlyphs, bwData, lsbData, msbData, maxHeight, ascender, descender, kerningBytes, fallbackCount };
+  ctx.putImageData(imgData, 0, 0);
+  ctx.fillStyle = '#bbb';
+  ctx.font = '11px system-ui,sans-serif';
+  for (const label of labels) ctx.fillText(label.text, MX, label.y);
+  return canvas;
 }
 
-// ── Kerning extraction ────────────────────────────────────────────────────
-function extractKerning(otFont, allGlyphs, size) {
-  const scale = size / otFont.unitsPerEm;
-  const flatPairs = new Map(); // "lIdx,rIdx" → quarter-pixel kern value
-
-  // Build rendered glyph list with opentype Glyph objects
-  const entries = [];
-  for (let i = 0; i < allGlyphs.length; i++) {
-    const g = allGlyphs[i];
-    if (g.x_advance === 0 && g.bitmap_width === 0) continue;
-    try {
-      const otG = otFont.charToGlyph(String.fromCodePoint(g.codepoint));
-      if (otG && otG.index !== 0) entries.push({ idx: i, otG });
-    } catch {}
-  }
-
-  // O(n²) lookup — fast enough for typical Latin glyph sets
-  for (const left of entries) {
-    for (const right of entries) {
-      const kern = otFont.getKerningValue(left.otG, right.otG);
-      if (kern === 0) continue;
-      const pxKern = Math.round(kern * scale * 4);
-      if (pxKern !== 0) flatPairs.set(`${left.idx},${right.idx}`, pxKern);
-    }
-  }
-
-  if (flatPairs.size === 0) return new Uint8Array();
-  return compressKerning(flatPairs, allGlyphs.length);
-}
-
-// Port of Python's class-based kerning compression.
-function compressKerning(flatPairs, numGlyphs) {
-  const split = key => { const c = key.indexOf(','); return [+key.slice(0,c), +key.slice(c+1)]; };
-
-  // Left profiles: lIdx → Map(rIdx → kern)
-  const lProfiles = new Map();
-  for (const [key, val] of flatPairs) {
-    const [l, r] = split(key);
-    if (!lProfiles.has(l)) lProfiles.set(l, new Map());
-    lProfiles.get(l).set(r, val);
-  }
-
-  const lClassMap  = new Uint8Array(numGlyphs);
-  const lClassList = [new Map()];
-  const lKey2Class = new Map([['', 0]]);
-  for (const [lIdx, profile] of lProfiles) {
-    const k = [...profile].sort((a,b)=>a[0]-b[0]).map(([r,v])=>`${r}:${v}`).join('|');
-    if (!lKey2Class.has(k)) {
-      const c = Math.min(lClassList.length, 255);
-      lKey2Class.set(k, c);
-      if (c === lClassList.length) lClassList.push(profile);
-    }
-    lClassMap[lIdx] = lKey2Class.get(k);
-  }
-
-  // Right profiles: rIdx → Map(leftClass → kern)
-  const rProfiles = new Map();
-  for (const [key, val] of flatPairs) {
-    const [l, r] = split(key);
-    const lc = lClassMap[l];
-    if (lc === 255) continue;
-    if (!rProfiles.has(r)) rProfiles.set(r, new Map());
-    rProfiles.get(r).set(lc, val);
-  }
-
-  const rClassMap  = new Uint8Array(numGlyphs);
-  const rClassList = [new Map()];
-  const rKey2Class = new Map([['', 0]]);
-  for (const [rIdx, profile] of rProfiles) {
-    const k = [...profile].sort((a,b)=>a[0]-b[0]).map(([lc,v])=>`${lc}:${v}`).join('|');
-    if (!rKey2Class.has(k)) {
-      const c = Math.min(rClassList.length, 255);
-      rKey2Class.set(k, c);
-      if (c === rClassList.length) rClassList.push(profile);
-    }
-    rClassMap[rIdx] = rKey2Class.get(k);
-  }
-
-  const numL   = Math.min(256, lClassList.length);
-  const numR   = Math.min(256, rClassList.length);
-  const matrix = new Int8Array(numL * numR);
-  for (const [key, val] of flatPairs) {
-    const [l, r] = split(key);
-    const lc = lClassMap[l], rc = rClassMap[r];
-    if (lc < 256 && rc < 256)
-      matrix[lc * numR + rc] = Math.max(-128, Math.min(127, val));
-  }
-
-  const buf = new Uint8Array(2 + numGlyphs * 2 + numL * numR);
-  let o = 0;
-  buf[o++] = numL - 1;
-  buf[o++] = numR - 1;
-  for (let i = 0; i < numGlyphs; i++) buf[o++] = lClassMap[i];
-  for (let i = 0; i < numGlyphs; i++) buf[o++] = rClassMap[i];
-  for (let i = 0; i < matrix.length; i++) buf[o++] = matrix[i] & 0xFF;
-  return buf;
-}
-
-// ── Download helper ───────────────────────────────────────────────────────
-let resultBytes = null;
-let resultFilename = 'font.mfb';
+// Ã¢â€â‚¬Ã¢â€â‚¬ Download helper Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+let resultBytes = null, resultFilename = 'font.mfb';
 
 document.getElementById('btn-download').addEventListener('click', () => {
   if (!resultBytes) return;
@@ -971,315 +1312,71 @@ document.getElementById('btn-download').addEventListener('click', () => {
   URL.revokeObjectURL(url);
 });
 
-// ── Device preview ────────────────────────────────────────────────────────
-async function renderDevicePreview(sizes, reg, fallbackFtFace, bwOnly) {
-  const W = 480, MX = 24, SECTION_GAP = 20, LABEL_H = 14;
-  const SAMPLE = 'The quick brown fox jumps over the lazy dog. Pack my box with five dozen liquor jugs. How vexingly quick daft zebras jump! It was the best of times, it was the worst of times, it was the age of wisdom, it was the age of foolishness.';
-
-  // ── First pass: measure each size section height ────────────────────────
-  const sections = []; // { size, lineH, ascender, info, spaceAdv, lines }
-
-  for (const size of sizes) {
-    FT.SetFont(reg.ftFace.family_name, reg.ftFace.style_name);
-    const metrics   = FT.SetPixelSize(0, size);
-    const ascender  = metrics.ascender >> 6;
-    const descender = metrics.descender >> 6;
-    const lineH     = Math.ceil((ascender - descender) * 1.25);
-
-    const uniqueCps = [...new Set([...SAMPLE].map(c => c.codePointAt(0)))];
-    const rendered  = FT.LoadGlyphs(uniqueCps, FT_LOAD_RENDER);
-    const advGlyphs = bwOnly ? rendered : FT.LoadGlyphs(uniqueCps, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP);
-
-    if (fallbackFtFace) {
-      const missing = uniqueCps.filter(cp => { const g = rendered.get(cp); return !g || g.glyph_index === 0; });
-      if (missing.length) {
-        FT.SetFont(fallbackFtFace.family_name, fallbackFtFace.style_name);
-        FT.SetPixelSize(0, size);
-        const fbR = FT.LoadGlyphs(missing, FT_LOAD_RENDER);
-        const fbA = bwOnly ? fbR : FT.LoadGlyphs(missing, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP);
-        for (const [cp, g] of fbR) if (g?.glyph_index) rendered.set(cp, g);
-        for (const [cp, g] of fbA) if (g?.glyph_index) advGlyphs.set(cp, g);
-        FT.SetFont(reg.ftFace.family_name, reg.ftFace.style_name);
-        FT.SetPixelSize(0, size);
-      }
-    }
-
-    const info = new Map();
-    for (const cp of uniqueCps) {
-      const g = rendered.get(cp);
-      if (!g?.glyph_index) continue;
-      info.set(cp, { g, advX: Math.round((advGlyphs.get(cp) ?? g).advance.x / 64) });
-    }
-    const spaceAdv = info.get(0x20)?.advX ?? Math.round(size * 0.25);
-
-    function measureStr(str) {
-      let w = 0;
-      for (const ch of str) w += info.get(ch.codePointAt(0))?.advX ?? Math.round(size * 0.5);
-      return w;
-    }
-
-    // Word-wrap sample into lines (collect only, don't draw yet)
-    const lines = []; // each entry = array of words
-    let lineWords = [], lineX = MX;
-    for (const tok of SAMPLE.split(/(\s+)/)) {
-      if (!tok || /^\s/.test(tok)) continue;
-      const wW = measureStr(tok);
-      const needsSpace = lineWords.length > 0 ? spaceAdv : 0;
-      if (lineWords.length > 0 && lineX + needsSpace + wW > W - MX) {
-        lines.push(lineWords);
-        lineWords = [];
-        lineX = MX;
-      }
-      if (lineWords.length > 0) lineX += spaceAdv;
-      lineWords.push(tok);
-      lineX += wW;
-    }
-    if (lineWords.length) lines.push(lineWords);
-
-    sections.push({ size, lineH, ascender, info, spaceAdv, lines });
-  }
-
-  // ── Compute total canvas height ─────────────────────────────────────────
-  let totalH = SECTION_GAP;
-  for (const s of sections) totalH += LABEL_H + 4 + s.lines.length * s.lineH + SECTION_GAP;
-
-  // ── Create single canvas ────────────────────────────────────────────────
-  const canvas = document.createElement('canvas');
-  canvas.width  = W;
-  canvas.height = totalH;
-  canvas.style.cssText = `width:${W}px;height:${totalH}px;display:block;border:1px solid #ccc;border-radius:4px`;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(0, 0, W, totalH);
-  const imgData = ctx.getImageData(0, 0, W, totalH);
-  const d = imgData.data;
-
-  function putGlyph(g, gx, gy) {
-    const bm = g.bitmap;
-    if (!bm?.imagedata || bm.width === 0 || bm.rows === 0) return;
-    const raw = extractPixels(g);
-    if (!raw) return;
-    for (let y = 0; y < bm.rows; y++) {
-      for (let x = 0; x < bm.width; x++) {
-        const dx = gx + x, dy = gy + y;
-        if (dx < 0 || dx >= W || dy < 0 || dy >= totalH) continue;
-        const gamma = Math.pow(raw[y * bm.width + x] / 255, 1.6) * 255;
-        if (gamma >= 205) continue;
-        const pv = gamma < 52 ? 0 : gamma < 103 ? 64 : gamma < 154 ? 128 : 204;
-        const i = (dy * W + dx) * 4;
-        if (pv < d[i]) { d[i] = d[i+1] = d[i+2] = pv; }
-      }
-    }
-  }
-
-  // ── Second pass: draw each section ─────────────────────────────────────
-  ctx.putImageData(imgData, 0, 0); // write white bg first so fillText composites correctly
-  let curY = SECTION_GAP;
-  for (const { size, lineH, ascender, info, spaceAdv, lines } of sections) {
-    // Size label via 2D API (no need to render with FT)
-    ctx.fillStyle = '#bbb';
-    ctx.font = `11px system-ui, sans-serif`;
-    ctx.fillText(`${size}px`, MX, curY + LABEL_H - 2);
-    curY += LABEL_H + 4;
-
-    // Draw separator line
-    ctx.fillStyle = '#eee';
-    ctx.fillRect(MX, curY - 2, W - MX * 2, 1);
-
-    // Re-read image data after ctx draws
-    const imgData2 = ctx.getImageData(0, 0, W, totalH);
-    const d2 = imgData2.data;
-
-    // Draw glyphs for this section directly into d2
-    for (const words of lines) {
-      const baseline = curY + ascender;
-      let lx = MX;
-      for (let wi = 0; wi < words.length; wi++) {
-        if (wi > 0) lx += spaceAdv;
-        for (const ch of words[wi]) {
-          const gi = info.get(ch.codePointAt(0));
-          if (!gi) { lx += Math.round(size * 0.5); continue; }
-          // inline putGlyph into d2
-          const bm = gi.g.bitmap;
-          if (bm?.imagedata && bm.width > 0 && bm.rows > 0) {
-            const raw = extractPixels(gi.g);
-            if (raw) {
-              const gx = lx + gi.g.bitmap_left, gy = baseline - gi.g.bitmap_top;
-              for (let py = 0; py < bm.rows; py++) {
-                for (let px = 0; px < bm.width; px++) {
-                  const dx = gx + px, dy = gy + py;
-                  if (dx < 0 || dx >= W || dy < 0 || dy >= totalH) continue;
-                  const gamma = Math.pow(raw[py * bm.width + px] / 255, 1.6) * 255;
-                  if (gamma >= 205) continue;
-                  const pv = gamma < 52 ? 0 : gamma < 103 ? 64 : gamma < 154 ? 128 : 204;
-                  const i = (dy * W + dx) * 4;
-                  if (pv < d2[i]) { d2[i] = d2[i+1] = d2[i+2] = pv; }
-                }
-              }
-            }
-          }
-          lx += gi.advX;
-        }
-      }
-      curY += lineH;
-    }
-
-    ctx.putImageData(imgData2, 0, 0);
-    curY += SECTION_GAP;
-  }
-
-  const grid = document.getElementById('device-preview-grid');
-  grid.innerHTML = '';
-  grid.appendChild(canvas);
-
-  const el = document.getElementById('device-preview-details');
-  el.style.display = '';
-  el.open = true;
-}
-
-// ── Generate ──────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬ Generate Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 document.getElementById('btn-generate').addEventListener('click', async () => {
-  const btn      = document.getElementById('btn-generate');
-  const dlBtn    = document.getElementById('btn-download');
-  btn.disabled   = true;
+  const btn   = document.getElementById('btn-generate');
+  const dlBtn = document.getElementById('btn-download');
+  btn.disabled = true;
   dlBtn.style.display = 'none';
-  resultBytes    = null;
+  resultBytes = null;
   showProgress(true);
 
   try {
-    await ensureFT();
-
     const bwOnly   = document.getElementById('cb-bw-only').checked;
     const sizes    = [...selectedSizes].sort((a, b) => a - b);
     const ranges   = getSelectedRanges();
     const fontName = document.getElementById('input-font-name').value.trim() || 'Font';
 
-    if (sizes.length === 0) throw new Error('Select at least one size');
-    if (ranges.length === 0) throw new Error('Select at least one character range');
+    if (!fontFiles['regular']) throw new Error('Regular font file required');
+    if (!sizes.length)         throw new Error('Select at least one size');
+    if (!ranges.length)        throw new Error('Select at least one character range');
 
-    // ── Load all font files ───────────────────────────────────────────────
-    // style key maps: 'bold-italic' (UI) → 'bold_italic' (internal)
-    const styleKeys = { regular: 'regular', bold: 'bold', italic: 'italic', 'bold-italic': 'bold_italic' };
-    const loaded = {}; // internal key → { ftFace, otFont }
+    const readFile = f => f ? f.arrayBuffer().then(b => new Uint8Array(b)) : Promise.resolve(new Uint8Array(0));
 
-    for (const [uiKey, intKey] of Object.entries(styleKeys)) {
-      const file = fontFiles[uiKey];
-      if (!file) continue;
-      log(`Loading ${file.name}…`);
-      const buf   = await file.arrayBuffer();
-      const faces = FT.LoadFontFromBytes(new Uint8Array(buf));
-      if (!faces?.length) { if (uiKey === 'regular') throw new Error('Could not load regular font'); continue; }
-      loaded[intKey] = { ftFace: faces[0], otFont: opentype.parse(buf) };
-      log(`  "${faces[0].family_name}" / "${faces[0].style_name}"`);
-    }
+    log('Reading font files...');
+    setProgress(0, 'Reading font files...');
+    const [regData, boldData, italData, biData, fbData] = await Promise.all([
+      readFile(fontFiles['regular']),
+      readFile(fontFiles['bold']),
+      readFile(fontFiles['italic']),
+      readFile(fontFiles['bold-italic']),
+      readFile(fallbackFile),
+    ]);
+    log(`Regular: ${fontFiles['regular'].name} (${(regData.length/1024).toFixed(0)} KB)`);
+    if (boldData.length) log(`Bold: ${fontFiles['bold'].name}`);
+    if (italData.length) log(`Italic: ${fontFiles['italic'].name}`);
+    if (biData.length)   log(`Bold-Italic: ${fontFiles['bold-italic'].name}`);
+    if (fbData.length)   log(`Fallback: ${fallbackFile.name}`);
 
-    // ── Load fallback font (optional) ────────────────────────────────────
-    let fallbackFtFace = null;
-    if (fallbackFile) {
-      log(`Loading fallback: ${fallbackFile.name}…`);
-      const fbBuf   = await fallbackFile.arrayBuffer();
-      const fbFaces = FT.LoadFontFromBytes(new Uint8Array(fbBuf));
-      if (fbFaces?.length) {
-        fallbackFtFace = fbFaces[0];
-        log(`  Fallback: "${fallbackFtFace.family_name}" / "${fallbackFtFace.style_name}"`);
-      }
-    }
+    setProgress(3, 'Starting generation...');
+    const fntsBytes = await callFontGen(regData, boldData, italData, biData, fbData,
+                                        fontName, sizes, ranges, bwOnly);
 
-    const reg = loaded.regular;
+    const SPIFFS_MAX = 0x360000;
+    const bundleKB   = (fntsBytes.length / 1024).toFixed(1);
+    const maxKB      = (SPIFFS_MAX / 1024).toFixed(0);
+    if (fntsBytes.length > SPIFFS_MAX)
+      log(`WARNING: FNTS: ${bundleKB} KB - exceeds size limit (${maxKB} KB)`);
+    else
+      log(`FNTS bundle: ${bundleKB} KB / ${maxKB} KB max - ${((fntsBytes.length/SPIFFS_MAX)*100).toFixed(0)}% used`);
 
-    // ── Render each size ─────────────────────────────────────────────────
-    const mbfFiles = [];
-    const totalSteps = sizes.length * Object.keys(loaded).length;
-    let step = 0;
+    scheduleLivePreview();
 
-    for (const size of sizes) {
-      const styleMap = {};
-
-      for (const [intKey, { ftFace, otFont }] of Object.entries(loaded)) {
-        const label = `${ftFace.family_name} ${ftFace.style_name} ${size}px`;
-        setProgress(step / totalSteps * 100, `Rendering ${label}…`);
-        log(`Rendering ${label}…`);
-
-        FT.SetFont(ftFace.family_name, ftFace.style_name);
-        const metrics = FT.SetPixelSize(0, size);
-        styleMap[intKey] = await renderStyleGlyphs(otFont, metrics, size, ranges, bwOnly, ftFace, fallbackFtFace);
-
-        const r = styleMap[intKey];
-        const rendered = r.allGlyphs.filter(g => g.bitmap_width > 0 || g.x_advance > 0).length;
-        const fbNote = fallbackFtFace ? ` (${r.fallbackCount ?? 0} from fallback)` : '';
-        log(`  ${rendered} glyphs${fbNote}, BW ${r.bwData.length}B, kern ${r.kerningBytes.length}B`);
-        step++;
-      }
-
-      const mbfBytes = buildMBF(styleMap, size, reg.otFont, bwOnly);
-      mbfFiles.push({ size, bytes: mbfBytes });
-      log(`MBF ${size}px: ${mbfBytes.length} bytes`);
-    }
-
-    // ── Build FNTS bundle ────────────────────────────────────────────────
-    setProgress(99, 'Building FNTS bundle…');
-    const bundle = buildFNTSBundle(mbfFiles, fontName);
-    const SPIFFS_MAX = 0x360000; // spiffs partition size from default_16MB.csv
-    const bundleKB = (bundle.length / 1024).toFixed(1);
-    const maxKB    = (SPIFFS_MAX / 1024).toFixed(0);
-    if (bundle.length > SPIFFS_MAX) {
-      log(`⚠ FNTS bundle: ${bundle.length} bytes (${bundleKB} KB) — EXCEEDS spiffs limit of ${maxKB} KB! Font will not fit on device.`);
-    } else {
-      log(`FNTS bundle: ${bundle.length} bytes (${bundleKB} KB / ${maxKB} KB spiffs max — ${((bundle.length / SPIFFS_MAX) * 100).toFixed(0)}% used)`);
-    }
-
-    // ── Build preview (smallest size, regular) ───────────────────────────
-    const previewSize = sizes[0];
-    FT.SetFont(reg.ftFace.family_name, reg.ftFace.style_name);
-    FT.SetPixelSize(0, previewSize);
-    const sample = 'ABCDEFGHIJKLabcdefghijkl0123456789';
-    const previewResult = mbfFiles[0] && loaded.regular
-      ? await renderStyleGlyphs(reg.otFont, FT.SetPixelSize(0, previewSize), previewSize, [[0x0020,0x007E]], bwOnly)
-      : null;
-
-    if (previewResult) {
-      const grayGlyphs = [], bwGlyphs = [];
-      for (const ch of sample) {
-        const cp = ch.codePointAt(0);
-        const g  = previewResult.allGlyphs.find(x => x.codepoint === cp);
-        if (!g || g.bitmap_width === 0) continue;
-        const ftG = FT.LoadGlyphs([cp], FT_LOAD_RENDER).get(cp);
-        if (!ftG?.bitmap.imagedata) continue;
-        const raw = extractPixels(ftG);
-        grayGlyphs.push({ w: g.bitmap_width, h: g.bitmap_height, pixels: toGray5(raw).map(v => GRAY5_PALETTE[v]) });
-        const { bw } = packBitPlanes(raw, g.bitmap_width, g.bitmap_height, true);
-        const bwPix = new Uint8Array(g.bitmap_width * g.bitmap_height);
-        const stride = Math.ceil(g.bitmap_width / 8);
-        for (let y = 0; y < g.bitmap_height; y++)
-          for (let x = 0; x < g.bitmap_width; x++)
-            bwPix[y * g.bitmap_width + x] = (bw[y*stride+(x>>3)] & (0x80>>(x&7))) ? 255 : 0;
-        bwGlyphs.push({ w: g.bitmap_width, h: g.bitmap_height, pixels: bwPix });
-      }
-      const scale = Math.min(3, Math.max(1, Math.floor(60 / previewSize)));
-      drawPreview('canvas-gray', grayGlyphs, scale);
-      drawPreview('canvas-bw',   bwGlyphs,   scale);
-      document.getElementById('preview-details').style.display = '';
-      document.getElementById('preview-details').open = true;
-    }
-
-    // ── Done ─────────────────────────────────────────────────────────────
-    resultBytes    = bundle;
+    resultBytes    = fntsBytes;
     resultFilename = fontName + '.mfb';
     dlBtn.style.display = '';
     setProgress(100, 'Done');
-    if (bundle.length > SPIFFS_MAX) {
-      setStatus(`⚠ ${fontName}.mfb — ${bundleKB} KB — exceeds spiffs limit (${maxKB} KB)`);
-    } else {
-      setStatus(`✓ ${fontName}.mfb — ${sizes.length} size${sizes.length>1?'s':''}, ${bundleKB} KB`);
-    }
-    log(`✓ Done — click Download to save ${resultFilename}`);
+    setStatus(fntsBytes.length > SPIFFS_MAX
+      ? `WARNING: ${resultFilename} - ${bundleKB} KB - exceeds size limit`
+      : `OK: ${resultFilename} - ${sizes.length} size${sizes.length>1?'s':''}, ${bundleKB} KB`);
+    log(`Done - click Download to save ${resultFilename}`);
 
   } catch (e) {
     log('Error: ' + e.message);
     setStatus('Error: ' + e.message);
     console.error(e);
   } finally {
-    btn.disabled = false;
+    btn.disabled = !fontFiles['regular'];
     showProgress(false);
   }
 });
