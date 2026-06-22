@@ -49,6 +49,7 @@
 
 static constexpr const char* kLutRxTag = "lut_rx";
 static constexpr const char* kUpTag = "upload";
+static constexpr const char* kCmdTag = "cmd";  // also used by request_index_op and handle_serial_cmd
 static constexpr uint8_t kLutMagic[4] = {0xDE, 0xAD, 0xBE, 0xEF};
 static constexpr uint8_t kEpubMagic[4] = {'E', 'P', 'U', 'B'};
 static constexpr uint8_t kSimgMagic[4] = {'S', 'I', 'M', 'G'};
@@ -86,10 +87,39 @@ static volatile SerialCmdType g_cmd_type = SerialCmdType::None;
 // Set when a font has been uploaded to the partition and needs re-mmap.
 static volatile bool g_font_uploaded = false;
 
-// Set when an EPUB has been uploaded to /sdcard/books and the book index
-// needs to be updated. Cleared by the main loop after calling index_file().
-static volatile bool g_book_uploaded = false;
-static char g_new_book_path[256];
+// Single-slot SPSC queue for index mutations triggered by serial commands
+// (upload via 'W' magic-EPUB, delete via 'R', rename via 'N'). The receiver
+// task is the producer; the main loop is the consumer. Single slot is enough
+// because the host always waits for the "OK\n" response between operations,
+// and the main loop dequeues before processing (so the slot is free quickly).
+// If a second op arrives while the slot is still occupied, it is dropped with
+// a warning — the file on SD is unchanged, only the index entry is missed;
+// recoverable via "Rebuild Book Index" in Settings.
+//
+// Memory ordering: producer writes path_a/path_b THEN sets g_index_op (commit).
+// Consumer reads g_index_op, copies paths to locals, THEN clears g_index_op.
+// Volatile is sufficient on ESP32 (32-bit atomic reads/writes) and matches
+// the pattern already used by g_cmd_type/g_cmd_path above.
+enum class SerialIndexOp : uint8_t { None, Add, Remove, Rename };
+static volatile SerialIndexOp g_index_op = SerialIndexOp::None;
+static char g_index_path_a[256];  // Add/Remove: the path. Rename: src.
+static char g_index_path_b[256];  // Rename: dst.
+
+inline void request_index_op(SerialIndexOp op, const char* a, const char* b = nullptr) {
+  if (g_index_op != SerialIndexOp::None) {
+    ESP_LOGW(kCmdTag, "index op dropped (slot busy): op=%u path=%s", (unsigned)op, a ? a : "(null)");
+    return;  // drop
+  }
+  if (a) {
+    strncpy(g_index_path_a, a, sizeof(g_index_path_a) - 1);
+    g_index_path_a[sizeof(g_index_path_a) - 1] = '\0';
+  }
+  if (b) {
+    strncpy(g_index_path_b, b, sizeof(g_index_path_b) - 1);
+    g_index_path_b[sizeof(g_index_path_b) - 1] = '\0';
+  }
+  g_index_op = op;  // commit
+}
 
 // Set while a chunked file upload (EPUB/SDFN/SIMG/FONT/CMND-W) is in
 // progress. The main loop skips app.update() when this is true to prevent
@@ -97,6 +127,10 @@ static char g_new_book_path[256];
 // (also SPI2_HOST). We also silence esp_log during this window so no log
 // line can interleave with 0x06 ACK bytes in the shared USB serial TX buffer.
 static volatile bool g_upload_in_progress = false;
+
+// Screen name of the top/active screen, updated once per main loop iteration.
+// Used by the serial 'Q' debug command.
+static char g_top_screen_name[32] = "unknown";
 
 // Call from the main loop. Returns true (and copies into `out`) when a fresh
 // LUT has been received since the last call.
@@ -302,9 +336,10 @@ static void handle_file_upload(const char* target_dir) {
   esp_log_level_set("*", ESP_LOG_INFO);
   ESP_LOGI(kUpTag, "saved %s (%lu bytes, CRC OK)", path, (unsigned long)file_size);
   if (strcmp(target_dir, "/sdcard/books") == 0) {
-    strncpy(g_new_book_path, path, sizeof(g_new_book_path) - 1);
-    g_new_book_path[sizeof(g_new_book_path) - 1] = '\0';
-    g_book_uploaded = true;
+    // EPUB uploads go through request_index_op instead of touching BookIndex
+    // directly from this receiver task. The main loop will call index_file()
+    // which (via ensure_loaded_) merges with the existing on-disk index.
+    request_index_op(SerialIndexOp::Add, path);
   }
   serial_write("OK\n");
 }
@@ -456,7 +491,6 @@ static void handle_font_upload() {
 //   'Y'                       → clear /sdcard/fonts/
 //   'Z'                       → clear /sdcard/sleep/
 // ---------------------------------------------------------------------------
-static constexpr const char* kCmdTag = "cmd";
 
 // Read a 2-byte LE path length followed by the path bytes into g_cmd_path.
 // Sends an ERR: response and returns false on any failure.
@@ -573,6 +607,7 @@ static void handle_serial_cmd() {
             while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
               line[--len] = '\0';
             if (len == 0) continue;
+            if (line[0] == '#') continue;
             // Keep only the first 3 fields (drop last_open_order).
             int fields = 0;
             char* path_end = nullptr;
@@ -692,9 +727,13 @@ static void handle_serial_cmd() {
       struct stat rm_st;
       if (stat(g_cmd_path, &rm_st) != 0) {
         ESP_LOGI(kCmdTag, "removed: %s", g_cmd_path);
-        auto& bidx = microreader::BookIndex::instance();
-        bidx.remove_entry(g_cmd_path);
-        bidx.save("/sdcard/.microreader/book_index.dat");
+        // Schedule index update via the main loop instead of mutating BookIndex
+        // here. This avoids a data race with MainMenu::update() (which reads
+        // entries_ from the main loop) and ensures ensure_loaded_() runs in
+        // the right thread. Non-book paths (e.g. cache files) are ignored.
+        if (microreader::BookIndex::is_book_path(g_cmd_path)) {
+          request_index_op(SerialIndexOp::Remove, g_cmd_path);
+        }
         serial_write("OK\n");
       } else {
         ESP_LOGE(kCmdTag, "remove failed: %s (errno=%d)", g_cmd_path, errno);
@@ -837,6 +876,13 @@ static void handle_serial_cmd() {
       esp_log_level_set("*", ESP_LOG_INFO);
       ESP_LOGI(kCmdTag, "write: saved %s (%lu bytes, CRC OK)", g_cmd_path, (unsigned long)wfsize);
       serial_write("OK\n");
+      // If the file is a book under /sdcard/, schedule index update via the
+      // main loop. The Web Manager uploads EPUBs via this 'W' command rather
+      // than the EPUB magic, so without this hook newly uploaded books never
+      // appeared in the menu until a manual rebuild.
+      if (microreader::BookIndex::is_book_path(g_cmd_path)) {
+        request_index_op(SerialIndexOp::Add, g_cmd_path);
+      }
       break;
     }
     case 'K': {
@@ -863,6 +909,19 @@ static void handle_serial_cmd() {
         return;
       if (rename(nsrc, g_cmd_path) == 0) {
         ESP_LOGI(kCmdTag, "renamed: %s -> %s", nsrc, g_cmd_path);
+        // Update the book index based on what changed. Three cases:
+        //   src book + dst book  → Rename (preserves metadata + last_open_order)
+        //   src book + dst non   → Remove (file is no longer a book)
+        //   src non  + dst book  → Add    (file became a book, e.g. .txt → .epub)
+        const bool src_is_book = microreader::BookIndex::is_book_path(nsrc);
+        const bool dst_is_book = microreader::BookIndex::is_book_path(g_cmd_path);
+        if (src_is_book && dst_is_book) {
+          request_index_op(SerialIndexOp::Rename, nsrc, g_cmd_path);
+        } else if (src_is_book) {
+          request_index_op(SerialIndexOp::Remove, nsrc);
+        } else if (dst_is_book) {
+          request_index_op(SerialIndexOp::Add, g_cmd_path);
+        }
         serial_write("OK\n");
       } else {
         ESP_LOGE(kCmdTag, "rename failed: %s -> %s (errno=%d)", nsrc, g_cmd_path, errno);
@@ -884,6 +943,11 @@ static void handle_serial_cmd() {
       fstat(fileno(tf), &tst);
       const uint32_t tfsize = (uint32_t)tst.st_size;
       serial_write("READY\n");
+      // Silence ESP_LOG during the binary transfer to prevent log bytes from
+      // interleaving with raw data in the shared USB serial TX buffer. Without
+      // this, a refreshDisplay or index log line can land between "READY\n"
+      // and the 4-byte size header, causing the host to misparse the response.
+      esp_log_level_set("*", ESP_LOG_NONE);
       uint8_t tszb[4] = {(uint8_t)tfsize, (uint8_t)(tfsize>>8), (uint8_t)(tfsize>>16), (uint8_t)(tfsize>>24)};
       serial_write_raw(tszb, 4);
       uint32_t tcrc = 0;
@@ -896,6 +960,7 @@ static void handle_serial_cmd() {
       fclose(tf);
       uint8_t tcrb[4] = {(uint8_t)tcrc, (uint8_t)(tcrc>>8), (uint8_t)(tcrc>>16), (uint8_t)(tcrc>>24)};
       serial_write_raw(tcrb, 4);
+      esp_log_level_set("*", ESP_LOG_INFO);
       ESP_LOGI(kCmdTag, "read: sent %s (%lu bytes, CRC 0x%08lx)", g_cmd_path, (unsigned long)tfsize, (unsigned long)tcrc);
       break;
     }
@@ -903,6 +968,17 @@ static void handle_serial_cmd() {
       ESP_LOGW(kCmdTag, "unknown sub-command: 0x%02x", sub);
       serial_write("ERR:unknown_cmd\n");
       break;
+    case 'Q': {
+      // Debug: query active screen + index state.
+      char buf[128];
+      snprintf(buf, sizeof(buf), "SCREEN:%s|ENTRIES:%zu|GEN:%llu|OP:%u\n",
+               g_top_screen_name,
+               microreader::BookIndex::instance().entries().size(),
+               (unsigned long long)microreader::BookIndex::instance().generation(),
+               (unsigned)g_index_op);
+      serial_write(buf);
+      break;
+    }
   }
 }
 // ---------------------------------------------------------------------------

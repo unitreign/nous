@@ -59,9 +59,20 @@ void MainMenu::on_start() {
   } else {
     needs_scan_ = true;
   }
+  cached_generation_ = BookIndex::instance().generation();
 }
 
 void MainMenu::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& runtime) {
+  // Detect external mutations (serial upload/delete/rename) while this screen
+  // is visible. The generation counter is bumped by BookIndex on every
+  // mutation that changes the logical contents.
+  if (cached_generation_ != BookIndex::instance().generation()) {
+    cached_generation_ = BookIndex::instance().generation();
+    populate_list_();
+    draw_all_(buf, runtime.battery_percentage());
+    buf.full_refresh();
+  }
+
   if (needs_scan_) {
     needs_scan_ = false;
     scan_directory_(buf);
@@ -69,6 +80,7 @@ void MainMenu::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& run
 
     draw_all_(buf, runtime.battery_percentage());
     buf.full_refresh();
+    cached_generation_ = BookIndex::instance().generation();
   }
 
   ListMenuScreen::update(buttons, buf, runtime);

@@ -95,6 +95,19 @@
     .badge.connected { background: var(--success-bg); color: var(--success-text); }
 
     .status-bar { font-size: 0.8rem; color: var(--text-tertiary); min-height: 1.2em; margin-bottom: 14px; }
+    /* Split button */
+    .split-button { display: inline-flex; position: relative; }
+    .split-button .btn-primary { border-radius: 6px 0 0 6px; }
+    .split-button .btn-dropdown { border-radius: 0 6px 6px 0; border-left: 1px solid rgba(255,255,255,0.2); padding: 6px 5px; min-width: 18px; font-size: 0.6rem; }
+    .split-button .btn-dropdown[aria-expanded="true"] { background: #1558b0; }
+
+    /* Dropdown menu */
+    .dropdown-menu { position: absolute; top: 100%; left: 0; margin-top: 4px; background: #fff; border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 4px 10px; min-width: 100%; z-index: 50; display: none; }
+    .dropdown-menu.open { display: block; }
+    .menu-item { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 0.78rem; color: #333; cursor: pointer; user-select: none; }
+    .menu-item input { cursor: pointer; margin: 0; }
+
+    .status-bar { font-size: 0.8rem; color: #777; min-height: 1.2em; margin-bottom: 14px; }
 
     /* Path bar */
     .path-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 8px 14px; }
@@ -119,6 +132,9 @@
 
     /* File table */
     .file-browser { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 10px; overflow: hidden; margin-bottom: 16px; }
+    .file-browser { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden; margin-bottom: 16px; transition: border-color 0.15s, box-shadow 0.15s; }
+    .file-browser.drag-over { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
+    .file-browser.drag-over thead th { background: #e8f0fe; }
     table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     thead th { text-align: left; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: 10px 14px; border-bottom: 1px solid var(--border-faint); background: var(--bg-subtle); }
     tbody tr { border-bottom: 1px solid var(--border-very-faint); }
@@ -185,7 +201,15 @@
 <h1>Microreader Manager</h1>
 
 <div class="toolbar">
-  <button class="btn-primary" id="btn-connect">Connect Device</button>
+  <div class="split-button">
+    <button class="btn-primary" id="btn-connect">Connect Device</button>
+    <button class="btn-primary btn-dropdown" id="btn-connect-menu" aria-label="Connection options" aria-haspopup="true" aria-expanded="false">▾</button>
+    <div class="dropdown-menu" id="connect-menu" role="menu">
+      <label class="menu-item" title="Autoconnect when a device is detected">
+        <input type="checkbox" id="autoconnect-chk"> Autoconnect
+      </label>
+    </div>
+  </div>
   <span class="badge" id="conn-badge">Disconnected</span>
 </div>
 
@@ -193,6 +217,7 @@
 
 <div class="path-bar">
   <div class="breadcrumb" id="breadcrumb"></div>
+  <button id="btn-upload" disabled>Upload</button>
   <button id="btn-new-folder" disabled>New Folder</button>
   <button id="btn-refresh" disabled>Refresh</button>
 </div>
@@ -218,11 +243,6 @@
   <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
 </div>
 
-<div class="drop-zone disabled" id="drop-zone">
-  Drop files here to upload to current folder, or click to browse
-  <input type="file" id="file-input" multiple style="display:none">
-</div>
-
 <details>
   <summary>Log</summary>
   <div class="log-box" id="log-box"></div>
@@ -239,6 +259,8 @@
     </div>
   </div>
 </div>
+
+<input type="file" id="file-input" multiple style="display:none">
 
 <script>
 // ── Theme toggle ───────────────────────────────────────────────────────────
@@ -326,13 +348,15 @@ class SerialConn {
   }
   async readLine(timeoutMs = 5000) {
     const deadline = Date.now() + timeoutMs;
-    let s = '';
+    const bytes = [];
     while (true) {
       const left = deadline - Date.now();
       if (left <= 0) throw new Error('Timeout reading line');
       const b = await this.readByte(left);
-      if (b === 0x0A) return s;
-      if (b !== 0x0D) s += String.fromCharCode(b);
+      if (b === 0x0A) {
+        return new TextDecoder('utf-8').decode(new Uint8Array(bytes));
+      }
+      if (b !== 0x0D) bytes.push(b);
     }
   }
   async write(data) {
@@ -463,20 +487,26 @@ let currentPath = '/sdcard';
 let currentEntries = [];
 let sortCol = 'name', sortDir = 'asc';
 let busy = false;
+let autoconnect = false;
+try { autoconnect = localStorage.getItem('autoconnect') === '1'; } catch (_) {}
 
 const $ = id => document.getElementById(id);
 const btnConnect    = $('btn-connect');
+const btnMenu       = $('btn-connect-menu');
+const connectMenu   = $('connect-menu');
+const autoChk       = $('autoconnect-chk');
 const btnRefresh    = $('btn-refresh');
 const btnNewFolder  = $('btn-new-folder');
 const connBadge     = $('conn-badge');
 const statusBar     = $('status-bar');
 const breadcrumb    = $('breadcrumb');
-const dropZone      = $('drop-zone');
+const btnUpload     = $('btn-upload');
 const fileInput     = $('file-input');
 const progressWrap  = $('progress-wrap');
 const progressFill  = $('progress-fill');
 const progressLabel = $('progress-label');
 const fileTbody     = $('file-tbody');
+const fileBrowser   = document.querySelector('.file-browser');
 const logBox        = $('log-box');
 const modal         = $('modal');
 const modalTitle    = $('modal-title');
@@ -533,10 +563,11 @@ function setStatus(msg) { statusBar.textContent = msg; }
 function setBusy(b) {
   busy = b;
   btnConnect.disabled = b;
+  btnMenu.disabled = b;
   const ok = !b && !!conn;
   btnRefresh.disabled = !ok;
   btnNewFolder.disabled = !ok;
-  dropZone.classList.toggle('disabled', !ok);
+  btnUpload.disabled = !ok;
   fileTbody.querySelectorAll('.btn-del, .btn-ren').forEach(btn => btn.disabled = b);
 }
 
@@ -681,7 +712,7 @@ async function onConnect() {
       const { usbVendorId, usbProductId } = p.getInfo();
       return usbVendorId === 0x303A && usbProductId === 0x1001;
     });
-    if (granted.length === 1) {
+    if (autoconnect && granted.length === 1) {
       port = granted[0];
       log('Auto-selected previously granted port');
     } else {
@@ -790,13 +821,51 @@ async function onUpload(files) {
 
 // Events
 btnConnect.addEventListener('click', onConnect);
+
+function closeMenu() {
+  connectMenu.classList.remove('open');
+  btnMenu.setAttribute('aria-expanded', 'false');
+}
+btnMenu.addEventListener('click', e => {
+  e.stopPropagation();
+  const isOpen = connectMenu.classList.toggle('open');
+  btnMenu.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+});
+document.addEventListener('click', e => {
+  if (!connectMenu.contains(e.target) && e.target !== btnMenu) closeMenu();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeMenu();
+});
+
+autoChk.checked = autoconnect;
+autoChk.addEventListener('change', () => {
+  autoconnect = autoChk.checked;
+  try { localStorage.setItem('autoconnect', autoconnect ? '1' : '0'); } catch (_) {}
+  log(`Autoconnect ${autoconnect ? 'enabled' : 'disabled'}`);
+});
 btnRefresh.addEventListener('click', () => navigate(currentPath));
 btnNewFolder.addEventListener('click', onNewFolder);
-dropZone.addEventListener('click', () => { if (!busy && conn) fileInput.click(); });
+btnUpload.addEventListener('click', () => { if (!busy && conn) fileInput.click(); });
 fileInput.addEventListener('change', () => { if (fileInput.files.length) onUpload(fileInput.files); fileInput.value = ''; });
-dropZone.addEventListener('dragover', e => { e.preventDefault(); if (!busy && conn) dropZone.classList.add('over'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
-dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('over'); onUpload(e.dataTransfer.files); });
+let dragDepth = 0;
+fileBrowser.addEventListener('dragenter', e => {
+  e.preventDefault();
+  if (busy || !conn) return;
+  dragDepth++;
+  fileBrowser.classList.add('drag-over');
+});
+fileBrowser.addEventListener('dragover', e => { e.preventDefault(); });
+fileBrowser.addEventListener('dragleave', () => {
+  dragDepth--;
+  if (dragDepth <= 0) { dragDepth = 0; fileBrowser.classList.remove('drag-over'); }
+});
+fileBrowser.addEventListener('drop', e => {
+  e.preventDefault();
+  dragDepth = 0;
+  fileBrowser.classList.remove('drag-over');
+  onUpload(e.dataTransfer.files);
+});
 
 // Init
 renderBreadcrumb();
@@ -833,14 +902,15 @@ if ('serial' in navigator) {
       await navigate('/sdcard', { replace: true });
     } catch (e) {
       log('[auto] open failed: ' + e.message);
-      setStatus('Auto-connect failed — click Connect');
+      setStatus('Autoconnect failed — click Connect');
     }
   }
 
-  navigator.serial.addEventListener('connect', e => autoOpen(e.target));
+  navigator.serial.addEventListener('connect', e => { if (autoconnect) autoOpen(e.target); });
 
   // Also check immediately — device may already be enumerated if it didn't reboot.
   (async () => {
+    if (!autoconnect) return;
     const all = await navigator.serial.getPorts();
     const esp = all.find(p => {
       const { usbVendorId, usbProductId } = p.getInfo();
