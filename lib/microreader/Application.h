@@ -91,6 +91,17 @@ class Application {
   ReaderScreen* reader() {
     return &reader_;
   }
+  // Returns true when the Reader is the top/active screen — used by the main
+  // loop to decide whether scratch-needing index ops (Add/Rename) must be
+  // deferred to avoid corrupting display buffers the Reader is rendering to.
+  bool is_reader_active() const {
+    return screen_mgr_.top() == &reader_;
+  }
+  // Returns the name() of the top/active screen for serial diagnostics.
+  const char* top_screen_name() const {
+    IScreen* top = screen_mgr_.top();
+    return top ? top->name() : "none";
+  }
   SettingsScreen* settings() {
     return &settings_;
   }

@@ -332,6 +332,85 @@ def send_remove_file(ser: serial.Serial, path: str) -> str:
     return read_response(ser, timeout=10.0)
 
 
+def send_write_file(ser: serial.Serial, path: str, filepath: Path) -> bool:
+    """Upload a file to an arbitrary /sdcard/ path via the CMND 'W' command.
+
+    This mirrors what the Web Manager does (cmdWriteFile in docs/index.html),
+    so it exercises the same firmware code path: file write + conditional
+    index update if the path is a .epub under /sdcard/.
+    """
+    data = filepath.read_bytes()
+    name = path.encode("utf-8")
+    crc = zlib.crc32(data) & 0xFFFFFFFF
+    print(f"Writing {filepath.name} → {path} ({len(data)} bytes, CRC32=0x{crc:08x})")
+    ser.write(MAGIC + b"W" + struct.pack("<H", len(name)) + name + struct.pack("<I", len(data)))
+
+    # Wait for READY
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        resp = ser.readline().decode("utf-8", errors="replace").strip()
+        if not resp:
+            continue
+        if resp == "READY":
+            break
+        if resp.startswith("ERR:"):
+            print(f"Write failed: {resp!r}")
+            return False
+    else:
+        print("Timeout waiting for READY")
+        return False
+
+    chunk_size = 2048
+    sent = 0
+    while sent < len(data):
+        end = min(sent + chunk_size, len(data))
+        ser.write(data[sent:end])
+        sent = end
+        deadline_ack = time.time() + 30
+        got_ack = False
+        while time.time() < deadline_ack:
+            b = ser.read(1)
+            if b == b"\x06":
+                got_ack = True
+                break
+        if not got_ack:
+            print("\nTimeout waiting for ACK")
+            return False
+        pct = sent * 100 // len(data)
+        print(f"\r  {sent}/{len(data)} bytes ({pct}%)", end="", flush=True)
+    print()
+
+    ser.write(struct.pack("<I", crc))
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        resp = ser.readline().decode("utf-8", errors="replace").strip()
+        if not resp:
+            continue
+        if resp == "OK":
+            print("Write successful!")
+            return True
+        if resp.startswith("ERR:"):
+            print(f"Write failed: {resp!r}")
+            return False
+    print("Timeout waiting for result")
+    return False
+
+
+def send_rename(ser: serial.Serial, src: str, dst: str) -> str:
+    """Rename/move a file via the CMND 'N' command (same path the Web Manager uses)."""
+    src_bytes = src.encode("utf-8")
+    dst_bytes = dst.encode("utf-8")
+    ser.write(
+        MAGIC
+        + b"N"
+        + struct.pack("<H", len(src_bytes))
+        + src_bytes
+        + struct.pack("<H", len(dst_bytes))
+        + dst_bytes
+    )
+    return read_response(ser, timeout=10.0)
+
+
 def send_clear_mrb(ser: serial.Serial) -> str:
     """Send 'C' command to delete all .mrb files. Returns 'CLEARED:N' or error."""
     drain(ser)

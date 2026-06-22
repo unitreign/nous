@@ -14,9 +14,16 @@
 
 #ifdef ESP_PLATFORM
 #include <dirent.h>
+#include "esp_log.h"
+#define MR_LOGI(tag, fmt, ...) ESP_LOGI(tag, fmt, ##__VA_ARGS__)
+#define MR_LOGW(tag, fmt, ...) ESP_LOGW(tag, fmt, ##__VA_ARGS__)
+#define MR_LOGE(tag, fmt, ...) ESP_LOGE(tag, fmt, ##__VA_ARGS__)
 #else
 #include <filesystem>
 namespace fs = std::filesystem;
+#define MR_LOGI(tag, fmt, ...) (void)0
+#define MR_LOGW(tag, fmt, ...) (void)0
+#define MR_LOGE(tag, fmt, ...) (void)0
 #endif
 
 namespace microreader {
@@ -26,16 +33,34 @@ BookIndex& BookIndex::instance() {
   return instance;
 }
 
-void BookIndex::add_entry(std::string_view path, std::string_view title, std::string_view author,
+bool BookIndex::is_book_path(const char* path) {
+  if (!path) return false;
+  if (std::strncmp(path, "/sdcard/", 8) != 0) return false;
+  // Find the filename portion (after the last '/'). build_index filters on the
+  // filename length, so a bare ".epub" with no stem must be rejected.
+  const char* slash = std::strrchr(path, '/');
+  const char* name = slash ? slash + 1 : path;
+  const size_t name_len = std::strlen(name);
+  if (name_len <= 5) return false;
+  const char* ext = name + name_len - 5;
+  char ext_lower[5];
+  for (int i = 0; i < 5; ++i)
+    ext_lower[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(ext[i])));
+  return std::memcmp(ext_lower, ".epub", 5) == 0;
+}
+
+bool BookIndex::add_entry(std::string_view path, std::string_view title, std::string_view author,
                           uint32_t last_open_order) {
+  if (static_cast<int>(entries_.size()) >= MAX_BOOKS)
+    return false;
   BookIndexEntry entry;
   entry.path = pool_.add(path);
   entry.title = pool_.add(title);
   entry.author = pool_.add(author);
   entry.last_open_order = last_open_order;
   entries_.push_back(entry);
+  return true;
 }
-
 bool BookIndex::load(const std::string& index_file) {
   FILE* f = std::fopen(index_file.c_str(), "rb");
   if (!f)
@@ -101,17 +126,59 @@ bool BookIndex::save(const std::string& index_file) const {
 void BookIndex::clear_entries() {
   { std::vector<BookIndexEntry> tmp; entries_.swap(tmp); }
   pool_.reset();
+  generation_ = 0;
 }
 
-bool BookIndex::index_file(const std::string& path, DrawBuffer& buf) {
+void BookIndex::ensure_loaded_(const std::string& index_path) {
+  if (!entries_.empty()) return;
+  // entries_ is empty (e.g. MainMenu was stopped). Reload from disk so the
+  // upcoming mutation merges with the existing on-disk state instead of
+  // truncating the file. If the file doesn't exist, load() returns false and
+  // entries_ stays empty — the caller's save() will then create it fresh.
+  load(index_path);
+}
+
+bool BookIndex::index_file(const std::string& path, const std::string& index_path, DrawBuffer& buf) {
   Book book;
-  if (book.open(path.c_str(), buf.scratch_buf1(), buf.scratch_buf2(), false) != EpubError::Ok)
+  if (book.open(path.c_str(), buf.scratch_buf1(), buf.scratch_buf2(), false) != EpubError::Ok) {
+    MR_LOGW("index", "index_file: Book::open failed for '%s'", path.c_str());
     return false;
+  }
   auto meta = book.metadata();
   const std::string author = meta.author.value_or("");
+  ensure_loaded_(index_path);
   remove_entry(path);
   add_entry(path, meta.title, author);
-  return save("/sdcard/.microreader/book_index.dat");
+  MR_LOGI("index", "index_file: added '%s' (entries=%zu)", path.c_str(), entries_.size());
+  ++generation_;
+  return save(index_path);
+}
+
+bool BookIndex::remove_path(const std::string& path, const std::string& index_path) {
+  ensure_loaded_(index_path);
+  auto it = std::find_if(entries_.begin(), entries_.end(),
+                         [&](const BookIndexEntry& e) { return e.path.view(pool_) == path; });
+  if (it == entries_.end()) {
+    MR_LOGW("index", "remove_path: '%s' not in index (entries=%zu)", path.c_str(), entries_.size());
+    return true;  // not indexed — nothing to do, no save needed
+  }
+  MR_LOGI("index", "remove_path: removing '%s'", path.c_str());
+  entries_.erase(it);
+  ++generation_;
+  bool ok = save(index_path);
+  if (!ok) MR_LOGE("index", "remove_path: save FAILED for '%s'", path.c_str());
+  return ok;
+}
+
+bool BookIndex::rename_in_place(const std::string& src, const std::string& dst, const std::string& index_path) {
+  ensure_loaded_(index_path);
+  auto it = std::find_if(entries_.begin(), entries_.end(),
+                         [&](const BookIndexEntry& e) { return e.path.view(pool_) == src; });
+  if (it == entries_.end())
+    return false;  // src not indexed — caller may fall back to index_file(dst)
+  it->path = pool_.add(dst);
+  ++generation_;
+  return save(index_path);
 }
 
 void BookIndex::remove_entry(std::string_view path) {
@@ -221,6 +288,10 @@ void BookIndex::build_index(const std::string& root_dir, DrawBuffer& buf) {
   MR_LOGI("index", "Found %d epub(s), indexing...", total);
   iterate_epubs(process_path);
   MR_LOGI("index", "Indexed %d book(s)", done);
+
+  // build_index is a structural mutation — bump so observers (MainMenu) refresh
+  // even if the call doesn't go through index_file/remove_path/rename_in_place.
+  ++generation_;
 
   if (done > 0)
     buf.show_loading("Indexing...", 100);

@@ -121,6 +121,7 @@ add_executable(unit_tests
     unit/NavigationTest.cpp
     unit/HyphenationTest.cpp
     unit/BmpSleepConverterTest.cpp
+    unit/BookIndexTest.cpp
 )
 target_include_directories(unit_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/support
@@ -162,6 +163,7 @@ add_executable(microreader_tests
     integration/LinkNavigationTest.cpp
     integration/HrBackwardTest.cpp
     unit/LinksScreenTest.cpp
+    unit/BookIndexTest.cpp
 )
 target_include_directories(microreader_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/support

@@ -178,10 +178,65 @@ extern "C" void app_main(void) {
       font_mgr.on_serial_upload();
     }
 
-    // Check if a new book was uploaded via serial and update the book index.
-    if (g_book_uploaded) {
-      g_book_uploaded = false;
-      microreader::BookIndex::instance().index_file(g_new_book_path, buf);
+    // Process pending index mutation (upload via EPUB magic or 'W' command,
+    // delete via 'R', rename via 'N'). Single-slot SPSC queue: receiver task
+    // is the producer, this loop is the consumer.
+    //
+    // Deferral rules:
+    //   (A) Add/Rename ops use scratch buffers (Book::open) — defer when
+    //       Reader is the top screen (it owns those buffers for rendering).
+    //   (C) ALL ops do SD card I/O (fopen/fprintf in save/load) which shares
+    //       SPI2_HOST with the display. Defer when the EPD hardware is
+    //       mid-refresh (DMA reading from framebuffer). This prevents SPI
+    //       contention that corrupts the display during SD card writes.
+    if (g_index_op != SerialIndexOp::None) {
+      const SerialIndexOp op = g_index_op;
+      const bool needs_scratch = (op == SerialIndexOp::Add || op == SerialIndexOp::Rename);
+      const bool reader_active = app.is_reader_active();
+      const bool epd_busy = epd.is_busy();
+      const bool defer = (needs_scratch && reader_active) || epd_busy;
+
+      ESP_LOGI("main", "index_op: op=%u needs_scratch=%d reader_active=%d epd_busy=%d defer=%d",
+               (unsigned)op, (int)needs_scratch, (int)reader_active, (int)epd_busy, (int)defer);
+
+      if (defer) {
+        // Leave the slot occupied; retry next iteration. The main loop
+        // continues to run (UI updates, serial commands) between retries.
+      } else {
+        // Copy paths to locals BEFORE clearing the slot — minimizes the window
+        // in which a new op would be dropped.
+        char path_a[256];
+        char path_b[256];
+        strncpy(path_a, g_index_path_a, sizeof(path_a) - 1);
+        path_a[sizeof(path_a) - 1] = '\0';
+        strncpy(path_b, g_index_path_b, sizeof(path_b) - 1);
+        path_b[sizeof(path_b) - 1] = '\0';
+        g_index_op = SerialIndexOp::None;  // free slot before processing
+
+        constexpr const char* kDataDir = "/sdcard/.microreader";
+        const std::string index_path = std::string(kDataDir) + "/book_index.dat";
+        switch (op) {
+          case SerialIndexOp::Add:
+            if (!microreader::BookIndex::instance().index_file(path_a, index_path, buf))
+              ESP_LOGW("main", "index_file failed for %s", path_a);
+            buf.reset_after_scratch();
+            break;
+          case SerialIndexOp::Remove:
+            microreader::BookIndex::instance().remove_path(path_a, index_path);
+            break;
+          case SerialIndexOp::Rename:
+            // Fast path: in-place rename preserves metadata + last_open_order.
+            // Fallback: src wasn't indexed → index dst fresh (extracts metadata).
+            if (!microreader::BookIndex::instance().rename_in_place(path_a, path_b, index_path)) {
+              if (microreader::BookIndex::instance().index_file(path_b, index_path, buf))
+                ESP_LOGI("main", "rename_in_place missed %s, indexed %s instead", path_a, path_b);
+              buf.reset_after_scratch();
+            }
+            break;
+          default:
+            break;
+        }
+      }
     }
 
     // Check if a new grayscale LUT was uploaded via serial.
@@ -209,6 +264,11 @@ extern "C" void app_main(void) {
       switch (serial_cmd_take(&cmd_path)) {
         case SerialCmdType::Open:
           app.auto_open_book(cmd_path, buf, runtime);
+          // auto_open_book pushes the Reader and renders the page into the
+          // inactive buffer, but does not commit it. We must refresh here to
+          // show the book page on the display (the Application::start() path
+          // has its own buf.full_refresh() after auto_open_book returns).
+          buf.refresh();
           break;
         case SerialCmdType::Bench: {
           microreader::Book book;
@@ -262,6 +322,11 @@ extern "C" void app_main(void) {
       vTaskDelay(pdMS_TO_TICKS(10));
       continue;
     }
+
+    // Mirror reader-active state for the serial 'Q' debug command.
+    g_reader_active = app.is_reader_active();
+    strncpy(g_top_screen_name, app.top_screen_name(), sizeof(g_top_screen_name) - 1);
+    g_top_screen_name[sizeof(g_top_screen_name) - 1] = '\0';
 
     microreader::run_loop_iteration(app, buf, input, runtime);
   }
