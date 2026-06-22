@@ -18,6 +18,7 @@ struct BookIndexEntry {
 };
 
 static constexpr int MAX_BOOKS = 250;
+static constexpr uint32_t INDEX_FORMAT_VERSION = 2;
 
 class BookIndex {
  public:

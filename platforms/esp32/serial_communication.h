@@ -607,6 +607,7 @@ static void handle_serial_cmd() {
             while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
               line[--len] = '\0';
             if (len == 0) continue;
+            if (line[0] == '#') continue;
             // Keep only the first 3 fields (drop last_open_order).
             int fields = 0;
             char* path_end = nullptr;

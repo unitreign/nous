@@ -240,13 +240,15 @@ class SerialConn {
   }
   async readLine(timeoutMs = 5000) {
     const deadline = Date.now() + timeoutMs;
-    let s = '';
+    const bytes = [];
     while (true) {
       const left = deadline - Date.now();
       if (left <= 0) throw new Error('Timeout reading line');
       const b = await this.readByte(left);
-      if (b === 0x0A) return s;
-      if (b !== 0x0D) s += String.fromCharCode(b);
+      if (b === 0x0A) {
+        return new TextDecoder('utf-8').decode(new Uint8Array(bytes));
+      }
+      if (b !== 0x0D) bytes.push(b);
     }
   }
   async write(data) {
