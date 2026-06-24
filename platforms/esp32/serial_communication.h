@@ -1140,7 +1140,7 @@ inline void serial_start() {
   uart_vfs_dev_use_driver(0);
 #else
   usb_serial_jtag_driver_config_t cfg = {
-      .tx_buffer_size = 1024,
+      .tx_buffer_size = 2048,  // must be >= chunk size (2048) to send a full chunk in one call
       .rx_buffer_size = 4096,
   };
   usb_serial_jtag_driver_install(&cfg);
