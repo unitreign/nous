@@ -282,7 +282,16 @@ def read_dat_file(ser: serial.SerialBase) -> Optional[str]:
     if size == 0:
         ser.read(4)  # CRC
         return ""
-    data = ser.read(size)
+    data = b""
+    remaining = size
+    ser.timeout = 30
+    while remaining > 0:
+        chunk = ser.read(min(2048, remaining))
+        if not chunk:
+            return None
+        data += chunk
+        remaining -= len(chunk)
+        ser.write(b"\x06")
     ser.read(4)  # CRC
     return data.decode("utf-8", errors="replace")
 

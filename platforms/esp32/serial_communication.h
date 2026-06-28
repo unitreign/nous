@@ -962,18 +962,17 @@ static void handle_serial_cmd() {
       uint8_t tchunk[2048];
       size_t tn;
       bool terror = false;
+      bool tack_timeout = false;
+      uint8_t tack = 0;
       while ((tn = fread(tchunk, 1, sizeof(tchunk), tf)) > 0) {
         serial_write_raw(tchunk, tn);
         tcrc = esp_rom_crc32_le(tcrc, tchunk, tn);
         // Wait for the host's 0x06 ACK before sending the next chunk.
-        uint8_t tack;
         if (!serial_read_exact(&tack, 1, 30000)) {
-          ESP_LOGE(kCmdTag, "read: ACK timeout after chunk (%s)", g_cmd_path);
-          terror = true;
+          terror = tack_timeout = true;
           break;
         }
         if (tack != kAck) {
-          ESP_LOGE(kCmdTag, "read: bad ACK 0x%02x (%s)", tack, g_cmd_path);
           terror = true;
           break;
         }
@@ -981,8 +980,13 @@ static void handle_serial_cmd() {
       fclose(tf);
       g_upload_in_progress = false;
       esp_log_level_set("*", ESP_LOG_INFO);
-      if (terror)
+      if (terror) {
+        if (tack_timeout)
+          ESP_LOGE(kCmdTag, "read: ACK timeout after chunk (%s)", g_cmd_path);
+        else
+          ESP_LOGE(kCmdTag, "read: bad ACK 0x%02x (%s)", tack, g_cmd_path);
         break;
+      }
       uint8_t tcrb[4] = {(uint8_t)tcrc, (uint8_t)(tcrc>>8), (uint8_t)(tcrc>>16), (uint8_t)(tcrc>>24)};
       serial_write_raw(tcrb, 4);
       ESP_LOGI(kCmdTag, "read: sent %s (%lu bytes, CRC 0x%08lx)", g_cmd_path, (unsigned long)tfsize, (unsigned long)tcrc);
