@@ -138,7 +138,7 @@ platforms/desktop/        SDL2 emulator
 platforms/esp32/          ESP-IDF + PlatformIO firmware
 test/                     Google Test suite
 tools/                    Python scripts and dev tools
-  calibre-plugin/         Calibre device plugin (build.ps1 → microreader.zip)
+  calibre-plugin/         Calibre device plugin (build.py → microreader.zip)
 docs/                     GitHub Pages — browser-based file manager (Web Serial API)
 resources/                Fonts, sleep images
 ```
@@ -239,10 +239,10 @@ The plugin source lives in `tools/calibre-plugin/`. It bundles `pyserial` becaus
 
 ### Build
 
-```powershell
+```bash
 cd tools/calibre-plugin
-.\build.ps1   # packages __init__.py + serial/ into microreader.zip
-              # and copies it to %APPDATA%\calibre\plugins\Microreader.zip
+python build.py             # packages __init__.py + serial/ into microreader.zip
+python build.py --install   # ...and also copies it into Calibre's plugins folder
 ```
 
 ### Debug
