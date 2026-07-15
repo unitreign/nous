@@ -33,7 +33,7 @@ Replace `COM5` with your device's port. Hold BOOT while connecting if the device
 Runs the full UI in an SDL2 window — no hardware needed. Drop `.epub` files in `sd/`, `.mfb` fonts in `sd/fonts/`.
 
 ```powershell
-$env:PATH = "C:\Users\Isaac\scoop\apps\mingw\current\bin;C:\Users\Isaac\scoop\shims;$env:PATH"
+$env:PATH = "C:\Users\<username>\scoop\apps\mingw\current\bin;C:\Users\<username>\scoop\shims;$env:PATH"
 cmake -B build/desktop-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ "-DCMAKE_POLICY_VERSION_MINIMUM:STRING=3.5" platforms/desktop
 cmake --build build/desktop-debug --config Debug
 .\build\desktop-debug\microreader_desktop.exe
