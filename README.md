@@ -37,7 +37,7 @@ microreader is great at what it does. This fork adds the things I personally wan
 
 | Main Menu | Reader | Settings |
 |---|---|---|
-| <img src="images/mainmenuportrait.png" width="220" height="140"> | <img src="images/readerportrait.png" width="220" height="140"> | <img src="images/settingsportrait.png" width="220" height="140"> |
+| <img src="images/mainmenuportrait.png"> | <img src="images/readerportrait.png"> | <img src="images/settingsportrait.png"> |
 
 ---
 
