@@ -84,9 +84,19 @@ void HiddenBooksMenu::on_start() {
   scan_();
   if (paths_.empty()) {
     add_item("(empty)");
-  } else {
-    for (const auto& p : paths_)
-      add_item(path_stem(p));
+    return;
+  }
+  const bool check_mrb = app_ && app_->data_dir_ && app_->show_converted_indicator();
+  for (const auto& p : paths_) {
+    std::string label;
+    if (check_mrb) {
+      std::string s = path_stem(p);
+      std::string mrb = std::string(app_->data_dir_) + "/cache/" + s + "/book.mrb";
+      FILE* f = std::fopen(mrb.c_str(), "rb");
+      if (f) { std::fclose(f); label = "* "; }
+    }
+    label += path_stem(p);
+    add_item(label);
   }
 }
 
