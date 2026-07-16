@@ -43,6 +43,12 @@ class ChapterSelectScreen final : public ListMenuScreen {
  protected:
   void on_start() override;
   void on_select(int index) override;
+  void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const override {
+    const MenuTheme saved = theme_;
+    theme_ = MenuTheme::Minimal;
+    ListMenuScreen::draw_all_(buf, battery_pct);
+    theme_ = saved;
+  }
 
  private:
   const TableOfContents* toc_ = nullptr;

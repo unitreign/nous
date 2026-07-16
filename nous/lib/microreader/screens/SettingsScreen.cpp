@@ -55,10 +55,7 @@ static std::string get_rotate_display_label(bool rotated) {
 }
 
 static std::string get_menu_font_label(int size) {
-  if (size == 1) return "Menu Size: Medium";
-  if (size == 2) return "Menu Size: Large";
-  if (size == 3) return "Menu Size: X-Large";
-  return "Menu Size: Small";
+  return std::string("Menu Size: ") + (size == 0 ? "Small" : (size == 1 ? "Medium" : "Large"));
 }
 
 static std::string get_sleep_image_label(const std::string& path) {
@@ -93,7 +90,6 @@ static std::string get_battery_display_label(uint8_t mode) {
 static std::string get_theme_label(uint8_t theme) {
   if (theme == 0) return "Theme: Chronicle";
   if (theme == 2) return "Theme: Stele";
-  if (theme == 3) return "Theme: Codex";
   return "Theme: Minimal";
 }
 
@@ -213,7 +209,6 @@ void SettingsScreen::on_start() {
   }
 
   // --- Appearance ---
-  add_separator("APPEARANCE");
   idx_rotate_display_ = count();
   add_item(get_rotate_display_label(app_ && app_->rotate_display()));
 
@@ -254,7 +249,7 @@ void SettingsScreen::on_start() {
   idx_sleep_timeout_ = count();
   add_item(get_sleep_timeout_label(app_ ? app_->sleep_timeout_min() : 10));
 
-  add_separator("CONTROLS");
+  add_separator();
 
   // --- Controls ---
   idx_invert_side_ = count();
@@ -266,7 +261,7 @@ void SettingsScreen::on_start() {
   idx_invert_menu_ = count();
   add_item(get_menu_nav_label(app_->invert_menu_buttons()));
 
-  add_separator("SYSTEM");
+  add_separator();
 
   if (data_dir_) {
     idx_clear_cache_ = count();
@@ -329,7 +324,7 @@ std::string_view SettingsScreen::get_item_subtitle(int index) const {
 void SettingsScreen::on_select(int index) {
   if (index == idx_theme_) {
     if (app_) {
-      uint8_t v = static_cast<uint8_t>((app_->menu_theme() + 1) % 4);
+      uint8_t v = static_cast<uint8_t>((app_->menu_theme() + 1) % 3);
       app_->set_menu_theme(v);
       set_item_label(idx_theme_, get_theme_label(v));
     }
@@ -479,7 +474,7 @@ void SettingsScreen::on_select(int index) {
   }
   if (index == idx_menu_font_) {
     if (app_) {
-      int v = (app_->menu_font_size() + 1) % 4;
+      int v = (app_->menu_font_size() + 1) % 3;
       app_->set_menu_font_size(v);
       restart();  // rebuilds items with the new font size immediately
     }
@@ -689,110 +684,6 @@ void SettingsScreen::clear_cache_() {
     fs::create_directories(cache_path);
   } catch (...) {}
 #endif
-}
-
-bool SettingsScreen::is_item_focusable(int index) const {
-  if (!ListMenuScreen::is_item_focusable(index)) return false;
-  const bool is_minimal = (theme() == MenuTheme::Minimal);
-  const bool is_stele = (theme() == MenuTheme::Stele);
-  const bool is_codex = (theme() == MenuTheme::Codex);
-  // List Align: only Minimal renders with configurable alignment
-  if (index == idx_list_align_ && !is_minimal) return false;
-  // Nav Arrows: Chronicle/Stele/Codex have no bottom arrow bar
-  if (index == idx_nav_arrows_ && !is_minimal) return false;
-  // Battery Display: Stele hardcodes " · X%"; Codex hardcodes % in header
-  if (index == idx_battery_display_ && (is_stele || is_codex)) return false;
-  // Converted Mark: Stele always shows dots regardless of this toggle
-  if (index == idx_conv_indicator_ && is_stele) return false;
-  return true;
-}
-
-void SettingsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) const {
-  const int W = buf.width();
-  const int H = buf.height();
-  buf.fill(true);
-
-  if (!ui_font_.valid() || !subtitle_font_.valid()) return;
-
-  static constexpr int kLM = 14;
-  static constexpr int kRM = 14;
-  static constexpr int kRowH = 28;
-  int y = 16;
-
-  // ── Header: "Settings" left, version right ──────────────────────────────
-  if (header_font_.valid()) {
-    buf.draw_text_proportional(kLM, y + header_font_.baseline(), "Settings", header_font_, false);
-    if (!subtitle_.empty()) {
-      const BitmapFont& vfont = section_font_.valid() ? section_font_ : subtitle_font_;
-      const int vw = vfont.word_width(subtitle_.c_str(), subtitle_.size(), FontStyle::Regular);
-      const int vy = y + header_font_.y_advance() - vfont.y_advance() + vfont.baseline();
-      buf.draw_text_proportional(W - kRM - vw, vy, subtitle_.c_str(), subtitle_.size(), vfont, false);
-    }
-    y += header_font_.y_advance();
-  } else {
-    buf.draw_text_proportional(kLM, y + ui_font_.baseline(), "Settings", ui_font_, false);
-    y += ui_font_.y_advance();
-  }
-  y += 6;
-  buf.fill_rect(0, y, W, 1, false);
-  y += 1;
-
-  // ── Item list ────────────────────────────────────────────────────────────
-  const int n = count();
-  const int list_top = y;
-
-  // Only scroll if content actually overflows the available height
-  int total_content_h = 0;
-  for (int i = 0; i < n; ++i) {
-    if (is_separator(i)) {
-      total_content_h += 8;
-      if (!get_item_label(i).empty() && section_font_.valid())
-        total_content_h += section_font_.y_advance();
-      total_content_h += 4;
-    } else {
-      total_content_h += kRowH;
-    }
-  }
-  const int so = (total_content_h <= H - list_top) ? 0 : scroll_offset();
-
-  for (int i = so; i < n && y < H; ++i) {
-    if (is_separator(i)) {
-      const std::string_view hdr = get_item_label(i);
-      y += 8;
-      if (y >= H) break;
-      if (!hdr.empty()) {
-        buf.draw_text_proportional(kLM, y + section_font_.baseline(),
-                                   hdr.data(), hdr.size(), section_font_, false);
-        y += section_font_.y_advance();
-      }
-      y += 4;
-      continue;
-    }
-
-    const std::string_view label = get_item_label(i);
-    std::string_view disp_label = label;
-    std::string_view disp_value;
-    const auto pos = label.find(": ");
-    if (pos != std::string_view::npos) {
-      disp_label = label.substr(0, pos);
-      disp_value = label.substr(pos + 2);
-    }
-
-    const bool sel = (i == selected());
-    if (sel)
-      buf.fill_rect(0, y, W, kRowH, false);
-
-    const int text_y = y + (kRowH - ui_font_.y_advance()) / 2 + ui_font_.baseline();
-    buf.draw_text_proportional(kLM, text_y, disp_label.data(), disp_label.size(), ui_font_, sel);
-
-    if (!disp_value.empty()) {
-      const int vw = ui_font_.word_width(disp_value.data(), disp_value.size(), FontStyle::Regular);
-      const int val_y = y + (kRowH - ui_font_.y_advance()) / 2 + ui_font_.baseline();
-      buf.draw_text_proportional(W - kRM - vw, val_y, disp_value.data(), disp_value.size(), ui_font_, sel);
-    }
-
-    y += kRowH;
-  }
 }
 
 }  // namespace microreader

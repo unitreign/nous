@@ -61,7 +61,7 @@ std::string_view ReaderOptionsScreen::get_item_subtitle(int index) const {
 }
 
 std::string ReaderOptionsScreen::nous_header_left() const {
-  return "reading";
+  return title_ ? title_ : "reading";
 }
 
 void ReaderOptionsScreen::start(DrawBuffer& buf, IRuntime& runtime) {
@@ -195,16 +195,22 @@ void ReaderOptionsScreen::on_start() {
     }
   }
 
-  // Compute cumulative read time and look up author in one BookIndex pass.
+  subtitle_ = chapter_title_;
+  if (subtitle_.length() > 42) {
+    subtitle_ = subtitle_.substr(0, 39) + "...";
+  }
+
+  char pct_str[48];
+  snprintf(pct_str, sizeof(pct_str), "Chapter: %d%%  |  Book: %d%%", chapter_progress_pct_, book_progress_pct_);
+  subtitle2_ = pct_str;
   subtitle3_ = "< 1m read";
-  std::string_view author_sv;
   if (app_ && app_->reader()) {
+    // Cumulative: stored previous sessions + current session
     uint64_t ms = app_->reader()->reading_ms_total();
     const std::string cur_path = app_->reader()->get_path();
     for (const auto& e : BookIndex::instance().entries()) {
       if (e.path.view(BookIndex::instance().pool()) == cur_path) {
         ms += e.read_time_ms;
-        author_sv = e.author.view(BookIndex::instance().pool());
         break;
       }
     }
@@ -222,13 +228,6 @@ void ReaderOptionsScreen::on_start() {
     }
   }
 
-  // Book-details card (unified across all themes): author, book%, read time.
-  subtitle_ = std::string(author_sv);
-  char pct_buf[16];
-  snprintf(pct_buf, sizeof(pct_buf), "Book %d%%", book_progress_pct_);
-  subtitle2_ = pct_buf;
-  // subtitle3_ stays as the read time string
-
   clear_items();
   idx_justify_ = idx_padding_h_ = idx_padding_v_ = idx_line_spacing_ = idx_progress_ = idx_progress_scope_ =
       idx_chapters_ = idx_pub_fonts_ = idx_rotate_display_ = idx_links_ = idx_stats_ = -1;
@@ -236,25 +235,26 @@ void ReaderOptionsScreen::on_start() {
   char tmp[40];
 
   bool has_toc = toc_ && !toc_->entries.empty();
-  const bool has_nav = has_toc || !page_links_.empty();
-
-  if (has_nav) {
-    add_separator("NAVIGATE");
-    if (app_ && has_toc) {
-      idx_chapters_ = count();
-      add_item("Chapters");
-    }
-    if (!page_links_.empty()) {
-      idx_links_ = count();
-      char link_label[40];
-      snprintf(link_label, sizeof(link_label), "Links (%d)", static_cast<int>(page_links_.size()));
-      add_item(link_label);
-    }
+  // "Chapters" goes at the top so it's easy to reach.
+  if (app_ && has_toc) {
+    idx_chapters_ = count();
+    add_item("Chapters");
   }
 
-  if (settings_) {
-    add_separator("SETTINGS");
+  // "Links" on this page — shown only when there are hyperlinks.
+  if (!page_links_.empty()) {
+    idx_links_ = count();
+    char link_label[40];
+    snprintf(link_label, sizeof(link_label), "Links (%d)", static_cast<int>(page_links_.size()));
+    add_item(link_label);
   }
+
+  idx_stats_ = count();
+  add_item("Statistics");
+
+  // Separator between chapter navigation and text layout settings.
+  if (settings_ && app_ && has_toc)
+    add_separator();
 
   if (settings_) {
     idx_font_size_ = count();
@@ -341,130 +341,6 @@ void ReaderOptionsScreen::refresh_items_(int restore_selection) {
   prev_selected_ = restore_selection;
   prev_idx_links_ = idx_links_;
   on_start();  // on_start() applies shift correction and calls set_selected().
-}
-
-void ReaderOptionsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) const {
-  const int W = buf.width();
-  buf.fill(true);
-
-  if (!ui_font_.valid() || !subtitle_font_.valid()) return;
-
-  static constexpr int kLM = 14, kRM = 14;
-  int y = 16;
-
-  // ── Book title ──────────────────────────────────────────────────────────
-  if (title_ && header_font_.valid()) {
-    buf.draw_text_proportional(kLM, y + header_font_.baseline(), title_, header_font_, false);
-    y += header_font_.y_advance();
-    if (title2_) {
-      buf.draw_text_proportional(kLM, y + header_font_.baseline(), title2_, header_font_, false);
-      y += header_font_.y_advance();
-    }
-  } else if (title_) {
-    buf.draw_text_proportional(kLM, y + ui_font_.baseline(), title_, ui_font_, false);
-    y += ui_font_.y_advance();
-  }
-  y += 4;
-
-  // ── Author ──────────────────────────────────────────────────────────────
-  if (!subtitle_.empty()) {
-    buf.draw_text_proportional(kLM, y + ui_font_.baseline(),
-                               subtitle_.c_str(), subtitle_.size(), ui_font_, false);
-    y += ui_font_.y_advance() + 3;
-  }
-
-  // ── Chapter name ────────────────────────────────────────────────────────
-  if (!chapter_title_.empty()) {
-    static const char kEll[] = "...";
-    const int max_cw = W - kLM - kRM;
-    const int ell_w = ui_font_.word_width(kEll, 3, FontStyle::Regular);
-    const char* cp = chapter_title_.c_str();
-    const size_t clen = chapter_title_.size();
-    if (ui_font_.word_width(cp, clen, FontStyle::Regular) > max_cw) {
-      const int budget = max_cw - ell_w;
-      size_t fit = 0;
-      const char* p = cp;
-      while (*p) {
-        const uint8_t b = static_cast<uint8_t>(*p);
-        const size_t cb = b < 0x80 ? 1u : b < 0xE0 ? 2u : b < 0xF0 ? 3u : 4u;
-        if (ui_font_.word_width(cp, fit + cb, FontStyle::Regular) > budget) break;
-        fit += cb; p += cb;
-      }
-      subtitle_buf_.assign(cp, fit);
-      subtitle_buf_ += kEll;
-      buf.draw_text_proportional(kLM, y + ui_font_.baseline(),
-                                 subtitle_buf_.c_str(), subtitle_buf_.size(), ui_font_, false);
-    } else {
-      buf.draw_text_proportional(kLM, y + ui_font_.baseline(), cp, clen, ui_font_, false);
-    }
-    y += ui_font_.y_advance() + 3;
-  }
-
-  // ── Stats: "Book X% · Chapter Y%" left, read time right ────────────────
-  {
-    char stats_l[48];
-    snprintf(stats_l, sizeof(stats_l), "Book %d%%  \xc2\xb7  Chapter %d%%",
-             book_progress_pct_, chapter_progress_pct_);
-    buf.draw_text_proportional(kLM, y + ui_font_.baseline(),
-                               stats_l, std::strlen(stats_l), ui_font_, false);
-    if (!subtitle3_.empty()) {
-      const int rw = ui_font_.word_width(subtitle3_.c_str(), subtitle3_.size(), FontStyle::Regular);
-      buf.draw_text_proportional(W - kRM - rw, y + ui_font_.baseline(),
-                                 subtitle3_.c_str(), subtitle3_.size(), ui_font_, false);
-    }
-    y += ui_font_.y_advance() + 10;
-  }
-
-  buf.fill_rect(0, y, W, 1, false);
-  y += 1;
-
-  // ── Item list ────────────────────────────────────────────────────────────
-  const int n = count();
-  static constexpr int kRowH = 28;
-
-  for (int i = 0; i < n; ++i) {
-    const bool sel = (i == selected());
-
-    if (is_separator(i)) {
-      const std::string_view hdr = get_item_label(i);
-      y += 8;
-      if (!hdr.empty()) {
-        buf.draw_text_proportional(kLM, y + section_font_.baseline(),
-                                   hdr.data(), hdr.size(), section_font_, false);
-        y += section_font_.y_advance();
-      }
-      y += 4;
-      continue;
-    }
-
-    const std::string_view label = get_item_label(i);
-    std::string_view display_label = label;
-    std::string_view display_value;
-    const auto pos = label.find(": ");
-    if (pos != std::string_view::npos) {
-      display_label = label.substr(0, pos);
-      display_value = label.substr(pos + 2);
-    }
-
-    const bool is_nav = (i == idx_chapters_ || i == idx_links_);
-
-    if (sel)
-      buf.fill_rect(0, y, W, kRowH, false);
-
-    const int text_y = y + (kRowH - ui_font_.y_advance()) / 2 + ui_font_.baseline();
-    buf.draw_text_proportional(kLM, text_y, display_label.data(), display_label.size(), ui_font_, sel);
-
-    if (is_nav) {
-      static const char kArrow[] = ">";
-      const int aw = ui_font_.word_width(kArrow, 1, FontStyle::Regular);
-      buf.draw_text_proportional(W - kRM - aw, text_y, kArrow, 1, ui_font_, sel);
-    } else if (!display_value.empty()) {
-      const int vw = ui_font_.word_width(display_value.data(), display_value.size(), FontStyle::Regular);
-      buf.draw_text_proportional(W - kRM - vw, text_y, display_value.data(), display_value.size(), ui_font_, sel);
-    }
-
-    y += kRowH;
-  }
 }
 
 void ReaderOptionsScreen::on_select(int index) {

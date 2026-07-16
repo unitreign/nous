@@ -142,6 +142,11 @@ class Application {
   uint8_t list_align() const { return list_align_; }
   void set_list_align(uint8_t v) { list_align_ = v <= 2 ? v : 0; save_settings_(); }
 
+  uint8_t menu_theme() const { return menu_theme_; }
+  void set_menu_theme(uint8_t v);
+
+  void update_book_read_time(const std::string& path, uint64_t ms);
+
   uint8_t sleep_timeout_min() const { return sleep_timeout_min_; }
   void set_sleep_timeout_min(uint8_t v) { sleep_timeout_min_ = v; save_settings_(); }
 
@@ -270,7 +275,7 @@ class Application {
   bool invert_side_buttons_ = false;
   bool rotate_display_ = false;
 
-  int menu_font_size_ = 0;
+  int menu_font_size_ = 2;  // Large default
   uint16_t open_counter_ = 0;  // monotonically increasing; incremented each time a book is opened
 
   std::string custom_font_path_;
@@ -280,11 +285,12 @@ class Application {
 
   ScreenManager screen_mgr_;
 
-  bool show_nav_arrows_ = true;
+  bool show_nav_arrows_ = false;
   bool show_converted_indicator_ = false;
   uint8_t battery_display_ = 0;  // 0=icon, 1=number, 2=both
   uint8_t list_align_ = 0;       // 0=center, 1=left, 2=right
   uint8_t sleep_timeout_min_ = 10;  // 0=off, else minutes until auto-sleep
+  uint8_t menu_theme_ = 3;       // 3=Codex default
 
   MainMenu menu_;
   ReaderScreen reader_;

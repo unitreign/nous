@@ -1,7 +1,6 @@
 #include "MainMenu.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cstdio>
 #include <cstring>
 
@@ -165,13 +164,6 @@ bool MainMenu::is_separator(int index) const {
   return false;
 }
 
-bool MainMenu::is_item_converted(int index) const {
-  if (is_separator(index)) return false;
-  const int real = entries_index_for(index);
-  if (real < 0 || real >= static_cast<int>(entries_.size())) return false;
-  return entries_[real].mrb_exists;
-}
-
 std::string_view MainMenu::get_item_label(int index) const {
   if (is_separator(index)) {
     for (const auto& s : separators_)
@@ -193,22 +185,19 @@ std::string_view MainMenu::get_item_label(int index) const {
 
   if (list_format_ == BookListFormat::TitleOnly) {
     if (!star) return title_sv;
-    if (stele) { label_buf_ = "\xc2\xb7 " + std::string(title_sv) + " \xc2\xb7"; return label_buf_; }
     label_buf_ = chronicle ? std::string(title_sv) + " \xc2\xb7"
-                           : "* " + std::string(title_sv);
+               : stele     ? "\xc2\xb7 " + std::string(title_sv)
+               :              "* " + std::string(title_sv);
     return label_buf_;
   } else if (list_format_ == BookListFormat::Filename) {
     if (!star) return fname_sv;
-    if (stele) { label_buf_ = "\xc2\xb7 " + std::string(fname_sv) + " \xc2\xb7"; return label_buf_; }
     label_buf_ = chronicle ? std::string(fname_sv) + " \xc2\xb7"
-                           : "* " + std::string(fname_sv);
+               : stele     ? "\xc2\xb7 " + std::string(fname_sv)
+               :              "* " + std::string(fname_sv);
     return label_buf_;
   } else {
     label_buf_ = std::string(title_sv) + " - " + std::string(e.author_ref.view(pool));
-    if (star) {
-      if (stele) label_buf_ = "\xc2\xb7 " + label_buf_ + " \xc2\xb7";
-      else if (!chronicle) label_buf_ = "* " + label_buf_;
-    }
+    if (star && !chronicle && !stele) label_buf_ = "* " + label_buf_;
     return std::string_view(label_buf_);
   }
 }
@@ -274,9 +263,7 @@ void MainMenu::populate_list_() {
   separators_.clear();
 
   const StringPool& bpool = BookIndex::instance().pool();
-  const bool is_stele = (ListMenuScreen::theme() == ListMenuScreen::MenuTheme::Stele);
-  const bool check_mrb = app_ && app_->data_dir_ &&
-      (app_->show_converted_indicator() || is_stele);
+  const bool check_mrb = app_ && app_->data_dir_ && app_->show_converted_indicator();
   for (const auto& idx : BookIndex::instance().entries()) {
     BookEntry e;
     e.path = idx.path.to_string(bpool);
@@ -334,144 +321,6 @@ void MainMenu::populate_list_() {
       }
     }
     initial_selection_.clear();
-  }
-}
-
-void MainMenu::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) const {
-  if (ListMenuScreen::theme() != ListMenuScreen::MenuTheme::Codex) {
-    ListMenuScreen::draw_all_(buf, battery_pct);
-    return;
-  }
-  if (!ui_font_.valid() || !subtitle_font_.valid()) return;
-
-  const int W = buf.width();
-  const int H = buf.height();
-  buf.fill(true);
-
-  static constexpr int kPad     = 12;
-  static constexpr int kLPad    = 8;   // left margin for number column
-  static constexpr int kNumW    = 32;  // width of number column
-  static constexpr int kNumGap  = 14;  // gap between number column and title
-  static constexpr int kItemPadT = 7;
-  static constexpr int kItemPadB = 5;
-  static constexpr int kSubGap   = 2;
-  const int slot_h = kItemPadT + ui_font_.y_advance() + kSubGap + section_font_.y_advance() + kItemPadB + 1;
-
-  // ── Header ────────────────────────────────────────────────────────────────
-  int y = 14;
-  const int hf_adv = header_font_.valid() ? header_font_.y_advance() : ui_font_.y_advance();
-
-  // "NOUS" left
-  if (header_font_.valid())
-    buf.draw_text_proportional(kPad, y + header_font_.baseline(), "NOUS", header_font_, false);
-  else
-    buf.draw_text_proportional(kPad, y + ui_font_.baseline(), "NOUS", ui_font_, false);
-
-  // Battery top-right (section_font_ for larger %)
-  if (battery_pct) {
-    char pbuf[8];
-    std::snprintf(pbuf, sizeof(pbuf), "%u%%", static_cast<unsigned>(*battery_pct));
-    const int pw = section_font_.word_width(pbuf, std::strlen(pbuf), FontStyle::Regular);
-    const int bat_text_y = y + section_font_.baseline();
-    buf.draw_text_proportional(W - kPad - pw, bat_text_y, pbuf, section_font_, false);
-    static constexpr int kBarW = 44;
-    static constexpr int kBarH = 3;
-    const int bar_x = W - kPad - kBarW;
-    const int bar_y = y + section_font_.y_advance() + 2;
-    buf.fill_rect(bar_x, bar_y, kBarW, kBarH, false);
-    buf.fill_rect(bar_x + 1, bar_y + 1, kBarW - 2, kBarH - 2, true);
-    const int fill_w = static_cast<int>(*battery_pct) * (kBarW - 2) / 100;
-    if (fill_w > 0)
-      buf.fill_rect(bar_x + 1, bar_y + 1, fill_w, kBarH - 2, false);
-  }
-
-  y += hf_adv + 4;
-
-  // "X books" — section_font_ for slightly larger text
-  const int n = static_cast<int>(entries_.size());
-  char nbuf[24];
-  std::snprintf(nbuf, sizeof(nbuf), n == 1 ? "1 book" : "%d books", n);
-  buf.draw_text_proportional(kPad, y + section_font_.baseline(), nbuf, section_font_, false);
-  y += section_font_.y_advance() + 8;
-
-  // Rule
-  buf.fill_rect(0, y, W, 1, false);
-  const int list_top = y + 4;
-
-  // ── Find recent/library split boundary ────────────────────────────────────
-  int sep_vi = -1;
-  for (const auto& s : separators_)
-    if (s.second.empty())
-      sep_vi = s.first;
-
-  // Pre-count library items scrolled past for correct numbering
-  int library_num = 0;
-  const int so = scroll_offset();
-  for (int vi = (sep_vi >= 0 ? sep_vi + 1 : 0); vi < so; ++vi)
-    if (!is_separator(vi))
-      ++library_num;
-
-  // ── Item list ─────────────────────────────────────────────────────────────
-  const StringPool& pool = BookIndex::instance().pool();
-  int item_y = list_top;
-
-  for (int vi = so; vi < count() && item_y < H; ++vi) {
-    if (is_separator(vi)) continue;
-
-    const bool is_recent = (sep_vi >= 0 && vi < sep_vi);
-    if (!is_recent) ++library_num;
-
-    const int real = entries_index_for(vi);
-    if (real < 0 || real >= static_cast<int>(entries_.size())) continue;
-    const BookEntry& e = entries_[real];
-
-    // Display number
-    char num_s[4];
-    if (is_recent)
-      std::strcpy(num_s, "00");
-    else
-      std::snprintf(num_s, sizeof(num_s), "%02d", library_num);
-
-    // Title ALL CAPS
-    std::string title_str(e.title_ref.view(pool));
-    for (char& c : title_str)
-      c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-
-    // Subtitle: author [· time] [· not converted]
-    std::string sub(e.author_ref.view(pool));
-    if (e.read_time_ms >= 60000) {
-      const uint64_t total_min = e.read_time_ms / 60000;
-      const unsigned hours = static_cast<unsigned>(total_min / 60);
-      const unsigned mins  = static_cast<unsigned>(total_min % 60);
-      char tbuf[20];
-      if (hours > 0)
-        std::snprintf(tbuf, sizeof(tbuf), " \xc2\xb7 %uh %um", hours, mins);
-      else
-        std::snprintf(tbuf, sizeof(tbuf), " \xc2\xb7 %um", mins);
-      sub += tbuf;
-    }
-    if (app_ && app_->show_converted_indicator() && !e.mrb_exists)
-      sub += " \xc2\xb7 not converted";
-
-    const bool sel = (vi == selected());
-    if (sel)
-      buf.fill_rect(0, item_y, W, slot_h - 1, false);
-
-    const int title_x = kLPad + kNumW + kNumGap;
-    const int title_y = item_y + kItemPadT + ui_font_.baseline();
-    const int sub_y   = item_y + kItemPadT + ui_font_.y_advance() + kSubGap + section_font_.baseline();
-
-    // Number right-aligned in column, using ui_font_ to match title size
-    const int nw = ui_font_.word_width(num_s, std::strlen(num_s), FontStyle::Regular);
-    buf.draw_text_proportional(kLPad + kNumW - nw, title_y, num_s, ui_font_, sel);
-
-    buf.draw_text_proportional(title_x, title_y, title_str.c_str(), title_str.size(), ui_font_, sel);
-
-    if (!sub.empty())
-      buf.draw_text_proportional(title_x, sub_y, sub.c_str(), sub.size(), section_font_, sel);
-
-    buf.fill_rect(0, item_y + slot_h - 1, W, 1, false);
-    item_y += slot_h;
   }
 }
 

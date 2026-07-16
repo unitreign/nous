@@ -43,7 +43,7 @@ class ListMenuScreen : public IScreen {
   }
 
   // Global visual theme — affects all ListMenuScreen instances (static).
-  enum class MenuTheme : uint8_t { Chronicle = 0, Minimal = 1, Stele = 2, Codex = 3 };
+  enum class MenuTheme : uint8_t { Chronicle = 0, Minimal = 1, Stele = 2 };
   static void set_theme(MenuTheme t) { theme_ = t; }
   static MenuTheme theme() { return theme_; }
 
@@ -106,8 +106,9 @@ class ListMenuScreen : public IScreen {
     { std::vector<bool> tmp; separators_.swap(tmp); }
     { std::vector<int> tmp; indents_.swap(tmp); }
   }
-  int selected() const { return selected_; }
-  int scroll_offset() const { return scroll_offset_; }
+  int selected() const {
+    return selected_;
+  }
   void set_selected(int index) {
     selected_ = index;
     on_start_set_selection_ = true;
@@ -115,12 +116,6 @@ class ListMenuScreen : public IScreen {
   virtual bool is_separator(int index) const {
     return index >= 0 && index < static_cast<int>(separators_.size()) && separators_[index];
   }
-  // Returns true if the cursor may land on this item. Default: not a separator.
-  // Override to additionally exclude theme-irrelevant items.
-  virtual bool is_item_focusable(int index) const { return !is_separator(index); }
-  // Returns true if this item represents a converted book (Stele divider width).
-  // Default: false. Override in MainMenu.
-  virtual bool is_item_converted(int index) const { return false; }
   virtual int count() const {
     return static_cast<int>(labels_.size());
   }
@@ -161,8 +156,7 @@ class ListMenuScreen : public IScreen {
  protected:
   BitmapFont ui_font_;
   BitmapFont header_font_;
-  BitmapFont subtitle_font_;   // always small; used for item subtitles and tight labels
-  BitmapFont section_font_;    // one step below ui_font_; use for APPEARANCE/NAVIGATE etc.
+  BitmapFont subtitle_font_;  // Nous theme: always small font for subtitle lines
   static int font_size_idx_;  // 0=Normal, 1=Large, 2=XLarge
   static MenuTheme theme_;
 
@@ -176,7 +170,7 @@ class ListMenuScreen : public IScreen {
       start(*buf_, *runtime_);
   }
 
-  virtual void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const;
+  void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const;
   void ensure_visible_();
   void center_on_selected_();
 

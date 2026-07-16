@@ -79,10 +79,7 @@ class MainMenu final : public ListMenuScreen {
   std::string_view get_item_right(int index) const override;
   std::string nous_header_left() const override;
   bool is_separator(int index) const override;
-  bool is_item_converted(int index) const override;
   int count() const override;
-
-  void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const override;
 
   void start(DrawBuffer& buf, IRuntime& runtime) override {
     buf_ = &buf;

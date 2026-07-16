@@ -131,8 +131,6 @@ class ReaderOptionsScreen final : public ListMenuScreen {
   void set_page_links(const std::vector<PageLink>& links, const std::vector<std::string>& spine_files,
                       const MrbReader& mrb);
 
-  void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const override;
-
   void stop() override {
     toc_ = nullptr;
   }

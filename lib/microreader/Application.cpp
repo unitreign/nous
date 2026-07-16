@@ -7,6 +7,7 @@
 #include "HeapLog.h"
 #include "content/BookIndex.h"
 #include "content/BmpSleepConverter.h"
+#include "screens/ListMenuScreen.h"
 
 #ifdef ESP_PLATFORM
 #include <dirent.h>
@@ -62,8 +63,9 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   // before the menu's on_start() (directory scan + selection restore) runs.
   load_settings_();
 
-  // Apply persisted menu font size to all list screens.
+  // Apply persisted menu font size and theme to all list screens.
   ListMenuScreen::set_font_size(menu_font_size_);
+  ListMenuScreen::set_theme(static_cast<ListMenuScreen::MenuTheme>(menu_theme_));
 
   // Apply persisted display rotation.
   buf.set_rotation(rotate_display_ ? Rotation::Deg0 : Rotation::Deg90);
@@ -191,11 +193,8 @@ void Application::do_sleep_(DrawBuffer& buf) {
     }
   } catch (...) {}
 #endif
-  if (images.empty()) {
+  if (images.empty())
     images.push_back("embedded:0");
-    images.push_back("embedded:1");
-    images.push_back("embedded:2");
-  }
 
   // Pick current image, then advance index for next sleep.
   int idx = sleep_image_idx_ % static_cast<int>(images.size());
@@ -383,9 +382,23 @@ void microreader::Application::save_settings_() {
   std::fprintf(f, "battery_display=%u\n", static_cast<unsigned>(battery_display_));
   std::fprintf(f, "list_align=%u\n", static_cast<unsigned>(list_align_));
   std::fprintf(f, "sleep_timeout_min=%u\n", static_cast<unsigned>(sleep_timeout_min_));
+  std::fprintf(f, "menu_theme=%u\n", static_cast<unsigned>(menu_theme_));
 
   std::fclose(f);
 }
+
+void microreader::Application::set_menu_theme(uint8_t v) {
+  menu_theme_ = v % 4u;
+  ListMenuScreen::set_theme(static_cast<ListMenuScreen::MenuTheme>(menu_theme_));
+  save_settings_();
+}
+
+void microreader::Application::update_book_read_time(const std::string& path, uint64_t ms) {
+  if (!data_dir_) return;
+  const std::string index_path = std::string(data_dir_) + "/book_index.dat";
+  BookIndex::instance().update_read_time(path, ms, index_path);
+}
+
 void microreader::Application::record_book_opened(const std::string& path) {
   BookIndex::instance().set_last_opened(path, ++open_counter_);
   if (data_dir_) {
@@ -459,7 +472,7 @@ void microreader::Application::load_settings_() {
     else if (std::sscanf(line, "rotate_display=%u", &uval) == 1)
       rotate_display_ = (uval != 0);
     else if (std::sscanf(line, "menu_font_size=%u", &uval) == 1)
-      menu_font_size_ = static_cast<int>(uval > 2 ? 2 : uval);
+      menu_font_size_ = static_cast<int>(uval > 3 ? 3 : uval);
     else if (std::sscanf(line, "custom_font=%511[^\n]", sval) == 1)
       custom_font_path_ = sval;
     else if (std::sscanf(line, "inst_font=%511[^\n]", sval) == 1)
@@ -478,6 +491,8 @@ void microreader::Application::load_settings_() {
       list_align_ = static_cast<uint8_t>(uval <= 2 ? uval : 0);
     else if (std::sscanf(line, "sleep_timeout_min=%u", &uval) == 1)
       sleep_timeout_min_ = static_cast<uint8_t>(uval <= 60 ? uval : 10);
+    else if (std::sscanf(line, "menu_theme=%u", &uval) == 1)
+      menu_theme_ = static_cast<uint8_t>(uval <= 3 ? uval : 0);
   }
   std::fclose(f);
 

@@ -491,7 +491,7 @@ class DrawBuffer {
     Mgr2Source_ src;
 
 #ifdef ESP_PLATFORM
-    const char* name = (idx == 1) ? "sleep_1.mgr" : (idx == 2) ? "sleep_2.mgr" : "sleep_0.mgr";
+    const char* name = "sleep_0.mgr";
     size_t size = 0;
     esp_partition_mmap_handle_t mmap_h = 0;
     const uint8_t* data = static_cast<const uint8_t*>(asset_blob::g_assets.map(name, size, mmap_h));

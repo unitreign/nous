@@ -33,8 +33,6 @@ class SettingsScreen final : public ListMenuScreen {
   }
 
   std::string_view get_item_subtitle(int index) const override;
-  void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const override;
-  bool is_item_focusable(int index) const override;
 
  protected:
   void on_start() override;

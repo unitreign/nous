@@ -38,21 +38,12 @@ void ListMenuScreen::start(DrawBuffer& buf, IRuntime& runtime) {
     ui_font_.init(kFontData_ui_medium_mbf, kFontData_ui_medium_mbf_size);
   else if (font_size_idx_ == 2)
     ui_font_.init(kFontData_ui_large_mbf, kFontData_ui_large_mbf_size);
-  else if (font_size_idx_ == 3)
-    ui_font_.init(kFontData_ui_header_mbf, kFontData_ui_header_mbf_size);
   else
     ui_font_.init(kFontData_ui_small_mbf, kFontData_ui_small_mbf_size);
   if (!header_font_.valid())
     header_font_.init(kFontData_ui_header_mbf, kFontData_ui_header_mbf_size);
   subtitle_font_ = BitmapFont{};
   subtitle_font_.init(kFontData_ui_small_mbf, kFontData_ui_small_mbf_size);
-  section_font_ = BitmapFont{};
-  if (font_size_idx_ >= 3)
-    section_font_.init(kFontData_ui_large_mbf, kFontData_ui_large_mbf_size);
-  else if (font_size_idx_ >= 2)
-    section_font_.init(kFontData_ui_medium_mbf, kFontData_ui_medium_mbf_size);
-  else
-    section_font_.init(kFontData_ui_small_mbf, kFontData_ui_small_mbf_size);
   if (app_)
     list_align_ = app_->list_align();
   const int prev_selected = selected_;
@@ -71,7 +62,7 @@ void ListMenuScreen::start(DrawBuffer& buf, IRuntime& runtime) {
     center_on_selected_();
   else
     ensure_visible_();
-  while (selected_ < count() && !is_item_focusable(selected_))
+  while (selected_ < count() && is_separator(selected_))
     ++selected_;
   draw_all_(buf, runtime.battery_percentage());
 }
@@ -99,7 +90,7 @@ void ListMenuScreen::ensure_visible_() {
     return;
   const int header_h = compute_header_h_();
   int line_h, available_h, visible;
-  if (theme_ == MenuTheme::Chronicle || theme_ == MenuTheme::Stele || theme_ == MenuTheme::Codex) {
+  if (theme_ == MenuTheme::Chronicle || theme_ == MenuTheme::Stele) {
     available_h = buf_->height() - header_h;
     visible = nous_visible_from_(scroll_offset_, available_h);
     line_h = nous_slot_h_();  // used for kPad logic below (close enough)
@@ -129,7 +120,7 @@ void ListMenuScreen::center_on_selected_() {
     return;
   const int header_h = compute_header_h_();
   int available_h, visible;
-  if (theme_ == MenuTheme::Chronicle || theme_ == MenuTheme::Stele || theme_ == MenuTheme::Codex) {
+  if (theme_ == MenuTheme::Chronicle || theme_ == MenuTheme::Stele) {
     available_h = buf_->height() - header_h;
     visible = nous_visible_from_(0, available_h);  // approximate
   } else {
@@ -163,35 +154,30 @@ void ListMenuScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_p
 //    Used by ensure_visible_() and center_on_selected_() before the draw pass.
 // ─────────────────────────────────────────────────────────────────────────────
 int ListMenuScreen::compute_header_h_() const {
-  // Book-details card: unified across all themes when subtitle_ (author) is set.
-  if (!subtitle_.empty() && ui_font_.valid()) {
-    static constexpr int kBarPadY = 8;
-    int h = kBarPadY + ui_font_.y_advance() + kBarPadY + 1;  // N O U S bar + 1px rule
-    if (header_font_.valid() && subtitle_font_.valid()) {
-      static constexpr int kCardPadT = 10, kCardPadB = 10, kTitleGap = 4, kLineGap = 6;
-      h += kCardPadT;
-      if (title_)  h += header_font_.y_advance() + kTitleGap;
-      if (title2_) h += header_font_.y_advance() + kTitleGap;
-      h += subtitle_font_.y_advance() + kLineGap;   // author
-      h += subtitle_font_.y_advance() + kCardPadB;  // stats row
-      h += 1;  // bottom rule
-    }
-    return h;
-  }
   if (theme_ == MenuTheme::Chronicle) {
     if (!ui_font_.valid()) return 0;
     static constexpr int kBarPadY = 6;
     static constexpr int kSubPadY = 4;
     int h = kBarPadY + ui_font_.y_advance() + kBarPadY + 2;  // status bar + 2px sep
+    // Subheader row (book count, screen title, etc.)
     const std::string subhdr = nous_header_left();
     if (!subhdr.empty() && subtitle_font_.valid())
       h += kSubPadY + subtitle_font_.y_advance() + kSubPadY + 1;
+    // Subtitle rows (used by ReaderOptionsScreen)
+    const bool has_subs = !subtitle_.empty() || !subtitle2_.empty() || !subtitle3_.empty();
+    if (has_subs) {
+      h += 5;
+      if (!subtitle_.empty())  h += ui_font_.y_advance() + 4;
+      if (!subtitle2_.empty()) h += ui_font_.y_advance() + 4;
+      if (!subtitle3_.empty() && subtitle_font_.valid()) h += subtitle_font_.y_advance() + 4;
+      h += 4 + 1;
+    }
     return h;
   }
   if (theme_ == MenuTheme::Stele) {
     if (!ui_font_.valid()) return 0;
     static constexpr int kBarPadY = 8;
-    return kBarPadY + ui_font_.y_advance() + kBarPadY + 1;
+    return kBarPadY + ui_font_.y_advance() + kBarPadY + 1;  // top bar + 1px rule
   }
   int subtitle_h = 0;
   if (ui_font_.valid()) {
@@ -212,56 +198,6 @@ int ListMenuScreen::compute_header_h_() const {
 //    Returns header_h = pixels from y=0 to where list items begin.
 // ─────────────────────────────────────────────────────────────────────────────
 int ListMenuScreen::draw_header_(DrawBuffer& buf, int W, int H, std::optional<uint8_t> battery_pct) const {
-  // Book-details card: unified across all themes when subtitle_ (author) is set.
-  if (!subtitle_.empty() && ui_font_.valid()) {
-    static constexpr int kBarPadY = 8;
-    const int bar_h = kBarPadY + ui_font_.y_advance() + kBarPadY;
-    const int text_y = kBarPadY + ui_font_.baseline();
-    const char kBrand[] = "N O U S";
-    const int bw = ui_font_.word_width(kBrand, 7, FontStyle::Regular);
-    buf.draw_text_proportional((W - bw) / 2, text_y, kBrand, 7, ui_font_, false);
-    buf.fill_rect(0, bar_h, W, 1, false);
-    int y = bar_h + 1;
-    if (header_font_.valid() && subtitle_font_.valid()) {
-      static constexpr int kCardPadT = 10, kCardPadB = 10, kTitleGap = 4, kLineGap = 6;
-      static constexpr int kLM = 14, kRM = 14;
-      y += kCardPadT;
-      if (title_) {
-        const size_t tlen = std::strlen(title_);
-        const int tw = header_font_.word_width(title_, tlen, FontStyle::Regular);
-        buf.draw_text_proportional((W - tw) / 2, y + header_font_.baseline(), title_, tlen, header_font_, false);
-        y += header_font_.y_advance() + kTitleGap;
-      }
-      if (title2_) {
-        const size_t tlen = std::strlen(title2_);
-        const int tw = header_font_.word_width(title2_, tlen, FontStyle::Regular);
-        buf.draw_text_proportional((W - tw) / 2, y + header_font_.baseline(), title2_, tlen, header_font_, false);
-        y += header_font_.y_advance() + kTitleGap;
-      }
-      // Author centered
-      {
-        const int sw = subtitle_font_.word_width(subtitle_.c_str(), subtitle_.size(), FontStyle::Regular);
-        buf.draw_text_proportional((W - sw) / 2, y + subtitle_font_.baseline(),
-                                   subtitle_.c_str(), subtitle_.size(), subtitle_font_, false);
-        y += subtitle_font_.y_advance() + kLineGap;
-      }
-      // Stats: read time left (subtitle3_), book progress right (subtitle2_)
-      {
-        const int stats_y = y + subtitle_font_.baseline();
-        if (!subtitle3_.empty())
-          buf.draw_text_proportional(kLM, stats_y, subtitle3_.c_str(), subtitle3_.size(), subtitle_font_, false);
-        if (!subtitle2_.empty()) {
-          const int rw = subtitle_font_.word_width(subtitle2_.c_str(), subtitle2_.size(), FontStyle::Regular);
-          buf.draw_text_proportional(W - kRM - rw, stats_y,
-                                     subtitle2_.c_str(), subtitle2_.size(), subtitle_font_, false);
-        }
-        y += subtitle_font_.y_advance() + kCardPadB;
-      }
-      buf.fill_rect(0, y, W, 1, false);
-      y += 1;
-    }
-    return y;
-  }
   if (theme_ == MenuTheme::Chronicle) {
     if (!ui_font_.valid()) return 0;
     static constexpr int kBarPadY = 6;
@@ -350,6 +286,7 @@ int ListMenuScreen::draw_header_(DrawBuffer& buf, int W, int H, std::optional<ui
     static constexpr int kBarPadY = 8;
     const int bar_h = kBarPadY + ui_font_.y_advance() + kBarPadY;
     const int text_y = kBarPadY + ui_font_.baseline();
+    // "N O U S" letter-spaced, centered
     const char kBrand[] = "N O U S";
     const int bw = ui_font_.word_width(kBrand, 7, FontStyle::Regular);
     buf.draw_text_proportional((W - bw) / 2, text_y, kBrand, 7, ui_font_, false);
@@ -395,8 +332,8 @@ int ListMenuScreen::draw_header_(DrawBuffer& buf, int W, int H, std::optional<ui
 //    Returns bottom_h = pixels reserved at the bottom (list must stay above).
 // ─────────────────────────────────────────────────────────────────────────────
 int ListMenuScreen::draw_bottom_(DrawBuffer& buf, int W, int H, std::optional<uint8_t> battery_pct) const {
-  if (theme_ == MenuTheme::Chronicle && subtitle_.empty()) return 0;
-  if (theme_ == MenuTheme::Stele || !subtitle_.empty()) {
+  if (theme_ == MenuTheme::Chronicle) return 0;
+  if (theme_ == MenuTheme::Stele) {
     if (!subtitle_font_.valid()) return 0;
     static constexpr int kBarPadY = 6;
     const int bottom_h = kBarPadY + subtitle_font_.y_advance() + kBarPadY + 1;
@@ -478,7 +415,7 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
   }
 
   // ── Chronicle theme ───────────────────────────────────────────────────────
-  if (theme_ == MenuTheme::Chronicle && subtitle_font_.valid() && subtitle_.empty()) {
+  if (theme_ == MenuTheme::Chronicle && subtitle_font_.valid()) {
     static constexpr int kPadT = 5, kGap = 3, kPadB = 6;
     static constexpr int kLM = 14, kRM = 12;
     static constexpr int kSepH = 8;
@@ -600,11 +537,11 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
     return;
   }
 
-  // ── Stele theme (also used for book-details mode in any theme) ───────────
-  if ((theme_ == MenuTheme::Stele || !subtitle_.empty()) && subtitle_font_.valid()) {
+  // ── Stele theme ───────────────────────────────────────────────────────────
+  if (theme_ == MenuTheme::Stele && subtitle_font_.valid()) {
     static constexpr int kPadT = 6, kGap = 2, kPadB = 6;
-    static constexpr int kSepH = 12;
-    static constexpr int kDivW = 80;
+    static constexpr int kSepH = 4;
+    static constexpr int kDivW = 40;
     const int title_h = ui_font_.y_advance();
     const int sub_h = subtitle_font_.y_advance();
     const int slot_h = kPadT + title_h + kGap + sub_h + kPadB + 1;
@@ -628,7 +565,6 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
       const bool sel = (i == selected_);
 
       if (is_separator(i)) {
-        buf.fill_rect(0, y + kSepH / 2, W, 1, false);
         y += kSepH;
         continue;
       }
@@ -701,6 +637,7 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
         }
       }
 
+      // Short centered divider
       buf.fill_rect((W - kDivW) / 2, y + slot_h - 1, kDivW, 1, false);
       y += slot_h;
     }
@@ -913,14 +850,14 @@ void ListMenuScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntim
   // Helper lambdas for selection movement (skip separators).
   auto move_up = [&]() {
     int next = selected_ > 0 ? selected_ - 1 : n - 1;
-    while (next != selected_ && !is_item_focusable(next))
+    while (next != selected_ && is_separator(next))
       next = next > 0 ? next - 1 : n - 1;
     selected_ = next;
     ensure_visible_();
   };
   auto move_down = [&]() {
     int next = selected_ < n - 1 ? selected_ + 1 : 0;
-    while (next != selected_ && !is_item_focusable(next))
+    while (next != selected_ && is_separator(next))
       next = next < n - 1 ? next + 1 : 0;
     selected_ = next;
     ensure_visible_();
