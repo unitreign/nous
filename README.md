@@ -1,47 +1,43 @@
 # Nous
 
-A focused EPUB reader firmware for the Xteink X4 e-ink device — built for people who just want to read.
+Nous is my personal fork of [microreader](https://github.com/CidVonHighwind/microreader/) by [CidVonHighwind](https://github.com/CidVonHighwind) — an open-source EPUB reader firmware for the Xteink X4 e-ink device.
 
-Nous is a personal fork of [microreader](https://github.com/CidVonHighwind/microreader/) by [CidVonHighwind](https://github.com/CidVonHighwind), extended with quality-of-life features that felt missing. The core philosophy stays the same: no Wi-Fi, no sync, no bloat. Only books.
+microreader is great at what it does. This fork adds the things I personally wanted on top of it, without changing what makes it good.
 
 > **v1.0.1** · Based on microreader 2.0-dev · GPL v2
 
 ---
 
-## Features
-
-Everything from microreader, plus:
+## What Nous adds
 
 | Feature | Description |
 |---|---|
-| **Convert All** | Batch-convert every un-converted EPUB in one go from Settings — with per-book progress so you know where it's at |
-| **Converted Indicator** | Optional `*` prefix on book titles that are already converted and ready for instant open |
-| **Reading Stats** | See how many times you've opened a book and how long you've spent reading it — accessible from Reader Options |
-| **Battery Display** | Show battery as an icon, a percentage, or both |
-| **List Alignment** | Set book list and menu alignment to left, center, or right — saved across reboots |
-| **Hide Nav Arrows** | Clean up the UI by hiding the button hint glyphs |
-| **Hidden Books** | Place EPUBs in a `.hidden/` folder at the SD card root — they won't appear in the book list, recents, or auto-reopen on boot. Long-press Back (~3s) on the book list to access them |
-| **Auto-Sleep** | Settings → Auto Sleep. Cycles through 1 / 3 / 5 / 10 / 20 / 30 min / Off. Default: 10 min |
+| **Convert All** | Batch-convert your whole library from Settings — shows per-book progress as it goes |
+| **Converted Indicator** | Optional `*` prefix on book titles that are already converted and ready to open instantly |
+| **Reading Stats** | Per-book open count and total reading time, viewable from Reader Options. Updates live while you're reading |
+| **Battery Display** | Icon, percentage, or both — your call |
+| **List Alignment** | Left, center, or right alignment for the book list and menus |
+| **Hide Nav Arrows** | Toggle the button hint glyphs off if you don't need them |
+| **Hidden Books** | Drop EPUBs into a `.hidden/` folder on the SD card and they won't show up anywhere — not in the list, not in recents, won't reopen on boot. Long-press Back (~3s) on the book list to access them |
+| **Auto-Sleep** | Settings → Auto Sleep. Options: 1 / 3 / 5 / 10 / 20 / 30 min / Off. Defaults to 10 min |
 
-**Features**
+**Screenshots**
 
-| Alignment | Convert All | Stats |
+| Main Menu | Converter | Stats |
 |---|---|---|
-| ![Alignment](images/allign.png) | ![Convert All](images/convertall.png) | ![Stats](images/stats.png) |
+| ![Main Menu](images/mainmenu.png) | ![Converter](images/converter.png) | ![Stats](images/stats.png) |
 
-| Auto Sleep | Hidden Books | Reading Options |
+| Auto Sleep | Hidden Books | Sleep & Align |
 |---|---|---|
-| ![Auto Sleep](images/autosleep.png) | ![Hidden Books](images/hidden.png) | ![Reading Options](images/reading%20options.png) |
+| ![Auto Sleep](images/autosleep.png) | ![Hidden Books](images/hidden.png) | ![Sleep Align](images/sleepalign.png) |
 
-**UI**
-
-| Main Menu | Reader | Chapters |
+| Reader | Main Menu (Portrait) | Reader (Portrait) |
 |---|---|---|
-| ![Main Menu](images/main%20menu.png) | ![Reader](images/reader.png) | ![Chapters](images/chapters.png) |
+| ![Reader](images/reader.png) | ![Main Menu Portrait](images/mainmenuportrait.png) | ![Reader Portrait](images/readerportrait.png) |
 
-| Reader (Landscape) | Settings |
-|---|---|
-| ![Reader Landscape](images/reader%20rotated.png) | ![Settings](images/settings.png) |
+| Settings |
+|---|
+| ![Settings](images/settingsportrait.png) |
 
 ---
 
@@ -50,17 +46,17 @@ Everything from microreader, plus:
 > [!WARNING]
 > **Requires an unlocked Xteink X4.** Do not flash on a locked device.
 
-Grab the latest `.bin` from the [Releases](../../releases) page.
+Download the latest `.bin` from the [Releases](../../releases) page.
 
-Flash with the [Crosspoint flash tool](https://crosspointreader.com/#flash-tools) (browser-based, nothing to install), or via esptool:
+Flash using the [Crosspoint flash tool](https://crosspointreader.com/#flash-tools) (browser-based, nothing to install), or with esptool:
 
 ```powershell
 python -m esptool --chip esp32c3 --port COM5 --baud 921600 write_flash 0x0 nous.bin
 ```
 
-Replace `COM5` with your actual port. Hold BOOT while connecting if the device doesn't enter flash mode on its own.
+Replace `COM5` with your actual port. Hold BOOT while connecting if the device doesn't enter flash mode automatically.
 
-**Before flashing anything**, back up your current firmware:
+Before you flash anything, back up your existing firmware:
 
 ```powershell
 python -m esptool --chip esp32c3 --port COM5 read_flash 0x0 0x1000000 firmware_backup.bin
@@ -70,7 +66,7 @@ python -m esptool --chip esp32c3 --port COM5 read_flash 0x0 0x1000000 firmware_b
 
 ## Hidden Books
 
-Place EPUBs in a `.hidden/` folder at the root of your SD card:
+Create a `.hidden/` folder at the root of your SD card and put EPUBs in there:
 
 ```
 SD card root/
@@ -78,7 +74,16 @@ SD card root/
     └── mybook.epub
 ```
 
-From the book list, long-press the Back button (~3 seconds) and release to open the hidden shelf. Hidden books don't appear in recents and won't reopen automatically on boot.
+They won't show in the book list, won't appear in recents, and the device won't reopen them on boot. To get to them, long-press Back (~3 seconds) from the book list.
+
+---
+
+## Changelog
+
+### v1.0.1
+- **Hidden Books** — `.hidden/` folder at SD card root; long-press Back on the book list to access
+- **Auto-Sleep Timeout** — Settings → Auto Sleep; cycles through 1 / 3 / 5 / 10 / 20 / 30 min / Off; default 10 min
+- **Fix** — Reading time in Stats now updates live while reading, not only after you close the book
 
 ---
 
@@ -86,17 +91,17 @@ From the book list, long-press the Back button (~3 seconds) and release to open 
 
 ### ESP32 Firmware
 
-Requires [PlatformIO](https://platformio.org/). Open in VS Code and click **Build**, or:
+Requires [PlatformIO](https://platformio.org/). Open in VS Code and hit Build, or from the terminal:
 
 ```powershell
 pio run
 ```
 
-Output: `.pio\build\esp32c3\firmware.bin`
+Output goes to `.pio\build\esp32c3\firmware.bin`.
 
 ### Desktop Emulator
 
-Runs the full UI in an SDL2 window — no device needed. Drop `.epub` files in `sd/`.
+Runs the full UI in an SDL2 window, no device needed. Drop `.epub` files into `sd/` and it treats that as the SD card.
 
 Requires CMake, Ninja, MinGW, and SDL2.
 
@@ -110,11 +115,9 @@ cmake --build build/desktop-debug --config Debug
 
 ## Managing Content
 
-Books (`.epub`) go anywhere on the SD card — scanned recursively from the root. Fonts (`.mfb`) go in `fonts/`. Sleep images go in `.sleep/`.
+EPUBs go anywhere on the SD card — the device scans recursively from the root. Fonts (`.mfb`) go in `fonts/`. Sleep images go in `.sleep/`.
 
-Copy directly to the SD card, or transfer over USB using the [microreader browser manager](https://cidvonhighwind.github.io/microreader/) (Chrome/Edge/Firefox, Web Serial API) — it works with Nous too.
-
-The [Calibre plugin](tools/calibre-plugin/) from the original microreader also works unchanged.
+You can copy files directly to the SD card or transfer over USB. The [microreader browser manager](https://cidvonhighwind.github.io/microreader/) works with Nous, as does the Calibre plugin from the original project.
 
 ---
 
@@ -127,7 +130,7 @@ python -m esptool --chip esp32c3 --port COM5 read_flash 0x0 0x1000000 firmware_b
 # Restore
 python -m esptool --chip esp32c3 --port COM5 write_flash 0x0 firmware_backup.bin
 
-# Switch boot partition if device boots old firmware after flash
+# If the device boots old firmware after flashing
 python tools/switch_partition.py app0 --port COM5 --flash
 ```
 
@@ -150,10 +153,10 @@ tools/               Python scripts and dev tools
 
 ## Credits
 
-Nous is built on [microreader](https://github.com/CidVonHighwind/microreader/) by [CidVonHighwind](https://github.com/CidVonHighwind). The foundation, the architecture, the MRB conversion system, the rendering engine — all his work. This fork exists because of how well the original was built.
+Everything that makes this work — the architecture, the MRB conversion system, the rendering engine, the whole foundation — is [CidVonHighwind's](https://github.com/CidVonHighwind) work. I built on top of it because it was worth building on.
 
 ## License
 
 GPL v2 — see [LICENSE](LICENSE).
 
-This project is a fork of microreader and inherits its GPL v2 license. All additions and modifications are released under the same terms.
+Fork of [microreader](https://github.com/CidVonHighwind/microreader/), inheriting its GPL v2 license. All additions in this fork are under the same terms.
