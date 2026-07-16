@@ -63,6 +63,34 @@ void MainMenu::on_start() {
 }
 
 void MainMenu::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& runtime) {
+  // Long-press back (~3s) → hidden books; short press → Settings (on_back()).
+  // While held we suppress Button0 from the forwarded state so ListMenuScreen
+  // doesn't fire on_back() mid-hold. On release we decide which action to take.
+  const bool back_down = buttons.is_down(Button::Button0);
+  ButtonState fwd = buttons;
+  if (back_down) {
+    if (back_hold_frames_ <= kHiddenHoldFrames)
+      back_hold_frames_++;
+    // Strip Button0 from the copy so ListMenuScreen never sees the press.
+    fwd.pressed_latch &= ~(1u << static_cast<uint8_t>(Button::Button0));
+    uint8_t nc = 0;
+    for (uint8_t i = 0; i < fwd.press_history_count; ++i)
+      if (static_cast<Button>(fwd.press_history[i]) != Button::Button0)
+        fwd.press_history[nc++] = fwd.press_history[i];
+    fwd.press_history_count = nc;
+    back_was_down_ = true;
+  } else if (back_was_down_) {
+    back_was_down_ = false;
+    const int held = back_hold_frames_;
+    back_hold_frames_ = 0;
+    if (held >= kHiddenHoldFrames) {
+      if (app_) app_->push_screen(ScreenId::HiddenBooks);
+    } else {
+      on_back();
+    }
+    return;
+  }
+
   // Detect external mutations (serial upload/delete/rename) while this screen
   // is visible. The generation counter is bumped by BookIndex on every
   // mutation that changes the logical contents.
@@ -83,7 +111,7 @@ void MainMenu::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& run
     cached_generation_ = BookIndex::instance().generation();
   }
 
-  ListMenuScreen::update(buttons, buf, runtime);
+  ListMenuScreen::update(fwd, buf, runtime);
 }
 
 void MainMenu::on_select(int index) {

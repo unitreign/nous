@@ -90,6 +90,13 @@ static std::string get_battery_display_label(uint8_t mode) {
   return "Battery: Icon";
 }
 
+static std::string get_sleep_timeout_label(uint8_t min) {
+  if (min == 0) return "Auto Sleep: Off";
+  char buf[32];
+  std::snprintf(buf, sizeof(buf), "Auto Sleep: %d min", static_cast<int>(min));
+  return buf;
+}
+
 static std::string get_list_align_label(uint8_t align) {
   if (align == 1) return "List Align: Left";
   if (align == 2) return "List Align: Right";
@@ -244,6 +251,9 @@ void SettingsScreen::on_start() {
   idx_list_align_ = count();
   add_item(get_list_align_label(app_ ? app_->list_align() : 0));
 
+  idx_sleep_timeout_ = count();
+  add_item(get_sleep_timeout_label(app_ ? app_->sleep_timeout_min() : 10));
+
   add_separator();
 
   // --- Controls ---
@@ -338,6 +348,22 @@ void SettingsScreen::on_select(int index) {
       uint8_t v = static_cast<uint8_t>((app_->list_align() + 1) % 3);
       app_->set_list_align(v);
       set_item_label(idx_list_align_, get_list_align_label(v));
+    }
+    return;
+  }
+  if (index == idx_sleep_timeout_) {
+    if (app_) {
+      static constexpr uint8_t kTimeouts[] = {1, 3, 5, 10, 20, 30, 0};
+      uint8_t cur = app_->sleep_timeout_min();
+      uint8_t next = kTimeouts[0];
+      for (size_t i = 0; i < sizeof(kTimeouts); ++i) {
+        if (kTimeouts[i] == cur) {
+          next = kTimeouts[(i + 1) % sizeof(kTimeouts)];
+          break;
+        }
+      }
+      app_->set_sleep_timeout_min(next);
+      set_item_label(idx_sleep_timeout_, get_sleep_timeout_label(next));
     }
     return;
   }

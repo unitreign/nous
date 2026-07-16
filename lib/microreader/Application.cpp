@@ -47,6 +47,7 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   links_screen_.set_app(this);
   convert_all_.set_app(this);
   stats_.set_app(this);
+  hidden_books_.set_app(this);
 
 #ifdef MICROREADER_ENABLE_DEMOS
   bouncing_ball_.set_app(this);
@@ -68,6 +69,10 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   buf.set_rotation(rotate_display_ ? Rotation::Deg0 : Rotation::Deg90);
 
   screen_mgr_.push(&menu_, buf, runtime);
+
+  // Don't auto-open books from the hidden folder — they're meant to stay private.
+  if (!pending_book_path_.empty() && pending_book_path_.find("/.hidden/") != std::string::npos)
+    pending_book_path_.clear();
 
   // Auto-open last book if one was active at shutdown — but only if the font
   // is valid. cache_only=true tells the reader not to convert if the MRB is
@@ -236,10 +241,13 @@ void Application::update(const ButtonState& buttons, uint32_t dt_ms, DrawBuffer&
     inactivity_ms_ = 0;
   } else {
     inactivity_ms_ += dt_ms;
-    if (inactivity_ms_ >= kSleepTimeoutMs) {
-      MR_LOGI("app", "auto-sleep after %u ms idle", inactivity_ms_);
-      do_sleep_(buf);
-      return;
+    if (sleep_timeout_min_ > 0) {
+      const uint32_t timeout_ms = static_cast<uint32_t>(sleep_timeout_min_) * 60u * 1000u;
+      if (inactivity_ms_ >= timeout_ms) {
+        MR_LOGI("app", "auto-sleep after %u ms idle", inactivity_ms_);
+        do_sleep_(buf);
+        return;
+      }
     }
   }
 
@@ -293,6 +301,8 @@ IScreen* microreader::Application::screen_for_(ScreenId id) {
       return &convert_all_;
     case ScreenId::Stats:
       return &stats_;
+    case ScreenId::HiddenBooks:
+      return &hidden_books_;
 
 #ifdef MICROREADER_ENABLE_DEMOS
     case ScreenId::BouncingBall:
@@ -330,7 +340,7 @@ void microreader::Application::save_settings_() {
     std::fprintf(f, "screen=menu\n");
   }
 
-  if (reader_active && reader->has_path())
+  if (reader_active && reader->has_path() && reader->get_path().find("/.hidden/") == std::string::npos)
     std::fprintf(f, "book_path=%s\n", reader->get_path().c_str());
 
   // Last book-list selection: prefer the currently highlighted entry so
@@ -372,6 +382,7 @@ void microreader::Application::save_settings_() {
   std::fprintf(f, "show_conv_ind=%u\n", show_converted_indicator_ ? 1u : 0u);
   std::fprintf(f, "battery_display=%u\n", static_cast<unsigned>(battery_display_));
   std::fprintf(f, "list_align=%u\n", static_cast<unsigned>(list_align_));
+  std::fprintf(f, "sleep_timeout_min=%u\n", static_cast<unsigned>(sleep_timeout_min_));
 
   std::fclose(f);
 }
@@ -465,6 +476,8 @@ void microreader::Application::load_settings_() {
       battery_display_ = static_cast<uint8_t>(uval <= 2 ? uval : 0);
     else if (std::sscanf(line, "list_align=%u", &uval) == 1)
       list_align_ = static_cast<uint8_t>(uval <= 2 ? uval : 0);
+    else if (std::sscanf(line, "sleep_timeout_min=%u", &uval) == 1)
+      sleep_timeout_min_ = static_cast<uint8_t>(uval <= 60 ? uval : 10);
   }
   std::fclose(f);
 

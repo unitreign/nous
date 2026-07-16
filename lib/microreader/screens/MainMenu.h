@@ -129,6 +129,12 @@ class MainMenu final : public ListMenuScreen {
 
   void scan_directory_(DrawBuffer& buf);
   void populate_list_();
+
+  // Back-button long-press state for hidden books gesture.
+  // Frames held; on release, short=Settings, long=HiddenBooks.
+  static constexpr int kHiddenHoldFrames = 15;  // ~3s at typical e-ink frame rate
+  int back_hold_frames_ = 0;
+  bool back_was_down_ = false;
 };
 
 }  // namespace microreader

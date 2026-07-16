@@ -63,6 +63,7 @@ class SettingsScreen final : public ListMenuScreen {
   int idx_conv_indicator_ = -1;
   int idx_battery_display_ = -1;
   int idx_list_align_ = -1;
+  int idx_sleep_timeout_ = -1;
   int idx_convert_all_ = -1;
   DrawBuffer* buf_ = nullptr;
   std::vector<std::string> sd_fonts_;

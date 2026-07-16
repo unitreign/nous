@@ -10,6 +10,7 @@
 #include "display/DrawBuffer.h"
 #include "screens/ChapterSelectScreen.h"
 #include "screens/ConvertAllScreen.h"
+#include "screens/HiddenBooksMenu.h"
 #include "screens/IScreen.h"
 #include "screens/LinksScreen.h"
 #include "screens/MainMenu.h"
@@ -33,6 +34,7 @@ enum class ScreenId : uint8_t {
   Links,
   ConvertAll,
   Stats,
+  HiddenBooks,
   BouncingBall,
   GrayscaleDemo,
 };
@@ -139,6 +141,9 @@ class Application {
 
   uint8_t list_align() const { return list_align_; }
   void set_list_align(uint8_t v) { list_align_ = v <= 2 ? v : 0; save_settings_(); }
+
+  uint8_t sleep_timeout_min() const { return sleep_timeout_min_; }
+  void set_sleep_timeout_min(uint8_t v) { sleep_timeout_min_ = v; save_settings_(); }
 
   bool invert_menu_buttons() const {
     return invert_menu_buttons_;
@@ -258,7 +263,6 @@ class Application {
   bool started_ = false;
   bool running_ = true;
 
-  static constexpr uint32_t kSleepTimeoutMs = 10u * 60u * 1000u;  // 10 minutes
   uint32_t inactivity_ms_ = 0;
 
   bool invert_menu_buttons_ = false;
@@ -280,6 +284,7 @@ class Application {
   bool show_converted_indicator_ = false;
   uint8_t battery_display_ = 0;  // 0=icon, 1=number, 2=both
   uint8_t list_align_ = 0;       // 0=center, 1=left, 2=right
+  uint8_t sleep_timeout_min_ = 10;  // 0=off, else minutes until auto-sleep
 
   MainMenu menu_;
   ReaderScreen reader_;
@@ -289,6 +294,7 @@ class Application {
   LinksScreen links_screen_;
   ConvertAllScreen convert_all_;
   StatsScreen stats_;
+  HiddenBooksMenu hidden_books_;
 
 #ifdef MICROREADER_ENABLE_DEMOS
   BouncingBallDemo bouncing_ball_;
