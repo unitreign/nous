@@ -1,12 +1,12 @@
-#pragma once
+﻿#pragma once
 
 #include <cstring>
 
 #include "asset_blob.h"
 #include "esp_log.h"
 #include "font_partition.h"
-#include "microreader/Application.h"
-#include "microreader/FontManager.h"
+#include "nous/Application.h"
+#include "nous/FontManager.h"
 
 // ESP32 font manager: extends the core FontManager with spiffs partition
 // provisioning.  Declare as `static FontManager font_mgr(app)` in app_main
@@ -81,7 +81,7 @@ class FontManager : public microreader::FontManager {
         app_.set_reader_font(font_set());
         return;
       }
-      // Font is marked installed but invalid — clear the record and fall through to re-provision.
+      // Font is marked installed but invalid â€” clear the record and fall through to re-provision.
       ESP_LOGW("font", "installed font invalid, re-provisioning");
       app_.set_installed_font_path("");
     }
@@ -186,7 +186,7 @@ class FontManager : public microreader::FontManager {
       return;
     }
 
-    // FNTS v1: [FNTS:4][num:1][version:1][res:2][name:32][num×size:4][data...]
+    // FNTS v1: [FNTS:4][num:1][version:1][res:2][name:32][numÃ—size:4][data...]
     uint8_t num = d[4];
     if (num > microreader::kMaxFontSizes)
       num = microreader::kMaxFontSizes;

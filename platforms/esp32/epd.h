@@ -11,7 +11,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "microreader/display/DrawBuffer.h"
+#include "nous/display/DrawBuffer.h"
 
 // ---- Pin assignments ----
 #define EPD_SCLK GPIO_NUM_8

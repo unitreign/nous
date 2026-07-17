@@ -1,15 +1,15 @@
-#pragma once
+﻿#pragma once
 
 #include <SDL.h>
 
 #include <stdexcept>
 #include <string>
 
-#include "microreader/Input.h"
-#include "microreader/Runtime.h"
-#include "microreader/display/DrawBuffer.h"
+#include "nous/Input.h"
+#include "nous/Runtime.h"
+#include "nous/display/DrawBuffer.h"
 
-// Window scale factor: each display pixel becomes kScale×kScale screen pixels.
+// Window scale factor: each display pixel becomes kScaleÃ—kScale screen pixels.
 static constexpr int kDisplayScale = 1;
 
 class DesktopRuntime final : public microreader::IRuntime {
@@ -57,7 +57,7 @@ class DesktopRuntime final : public microreader::IRuntime {
   }
 
   // Resize the window and update the logical render size to match the rotation.
-  // 0°/180° → 800×480 window; 90°/270° → 480×800 window.
+  // 0Â°/180Â° â†’ 800Ã—480 window; 90Â°/270Â° â†’ 480Ã—800 window.
   void apply_rotation(microreader::Rotation rotation) {
     const bool sideways = rotation == microreader::Rotation::Deg90;
     const int win_w =
@@ -164,7 +164,7 @@ class DesktopRuntime final : public microreader::IRuntime {
       }
     }
 
-    // (auto-repeat removed — screens handle hold-down acceleration themselves)
+    // (auto-repeat removed â€” screens handle hold-down acceleration themselves)
   }
 
   uint32_t frame_time_ms() const override {

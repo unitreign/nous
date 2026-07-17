@@ -1,11 +1,11 @@
-#pragma once
+﻿#pragma once
 
 #include <SDL.h>
 
 #include <cstring>
 #include <vector>
 
-#include "microreader/display/DrawBuffer.h"
+#include "nous/display/DrawBuffer.h"
 #include "runtime.h"
 
 // Desktop e-ink emulator. Renders the pixel buffer to an SDL window.
@@ -104,7 +104,7 @@ class DesktopEmulatorDisplay final : public microreader::IDisplay {
   }
 
   // One-pass sleep image grayscale (kLutFactoryQuality encoding).
-  // state = (red_bit << 1) | bw_bit  →  0=black, 1=dark gray, 2=light gray, 3=white.
+  // state = (red_bit << 1) | bw_bit  â†’  0=black, 1=dark gray, 2=light gray, 3=white.
   void grayscale_refresh_1pass(bool /*turnOffScreen*/ = false) override {
     if (gray_bw_.empty() || gray_red_.empty())
       return;

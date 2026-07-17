@@ -2,7 +2,7 @@ FILE(GLOB app_sources
     ${CMAKE_CURRENT_LIST_DIR}/*.c
     ${CMAKE_CURRENT_LIST_DIR}/*.cpp)
 
-set(LIB ${CMAKE_CURRENT_LIST_DIR}/../../lib/microreader)
+set(LIB ${CMAKE_CURRENT_LIST_DIR}/../../lib/nous)
 
 set(lib_sources
     ${LIB}/Application.cpp

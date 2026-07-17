@@ -1,8 +1,8 @@
-#pragma once
+﻿#pragma once
 
 #include <SDL.h>
 
-#include "microreader/Input.h"
+#include "nous/Input.h"
 #include "runtime.h"
 
 // Desktop input: reads SDL keyboard state and maps keys to microreader buttons.

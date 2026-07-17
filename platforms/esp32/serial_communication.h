@@ -1,14 +1,14 @@
-#pragma once
+﻿#pragma once
 
 // Receives frames over USB Serial/JTAG and dispatches them.
 //
 // Frame types (matched by magic prefix):
-//   0xDEADBEEF  LUT frame     → applied to the EPD
-//   "EPUB"      file upload   → /sdcard/books/
-//   "SIMG"      file upload   → /sdcard/sleep/
-//   "SDFN"      file upload   → /sdcard/fonts/
-//   "FONT"      font upload   → raw spiffs partition
-//   "CMND"      command frame → see handle_serial_cmd()
+//   0xDEADBEEF  LUT frame     â†’ applied to the EPD
+//   "EPUB"      file upload   â†’ /sdcard/books/
+//   "SIMG"      file upload   â†’ /sdcard/sleep/
+//   "SDFN"      file upload   â†’ /sdcard/fonts/
+//   "FONT"      font upload   â†’ raw spiffs partition
+//   "CMND"      command frame â†’ see handle_serial_cmd()
 //
 // File upload format (EPUB/SIMG/SDFN):
 //   [4B] magic
@@ -17,7 +17,7 @@
 //   [4B LE] payload size
 //   [data]  in 2 KB chunks; each chunk ACKed with 0x06
 //   [4B LE] CRC-32 of full payload
-//   Response: "READY\n" → 0x06 per chunk → "OK\n" or "ERR:...\n"
+//   Response: "READY\n" â†’ 0x06 per chunk â†’ "OK\n" or "ERR:...\n"
 //
 // Call serial_start() once from app_main.
 // Poll serial_lut_take(buf) each loop for LUT data.
@@ -32,7 +32,7 @@
 #include <queue>
 #include <string>
 
-#include "microreader/content/BookIndex.h"
+#include "nous/content/BookIndex.h"
 
 #ifdef QEMU_BUILD
 #include "driver/uart.h"
@@ -93,7 +93,7 @@ static volatile bool g_font_uploaded = false;
 // because the host always waits for the "OK\n" response between operations,
 // and the main loop dequeues before processing (so the slot is free quickly).
 // If a second op arrives while the slot is still occupied, it is dropped with
-// a warning — the file on SD is unchanged, only the index entry is missed;
+// a warning â€” the file on SD is unchanged, only the index entry is missed;
 // recoverable via "Rebuild Book Index" in Settings.
 //
 // Memory ordering: producer writes path_a/path_b THEN sets g_index_op (commit).
@@ -360,7 +360,7 @@ static void handle_sdfnt_upload() {
 }
 
 // ---------------------------------------------------------------------------
-// Handle a FONT upload — write directly to the spiffs partition (raw flash).
+// Handle a FONT upload â€” write directly to the spiffs partition (raw flash).
 // Protocol:
 //   [4B] "FONT" magic (already consumed)
 //   [4B] file_size (LE)
@@ -386,7 +386,7 @@ static void handle_font_upload() {
     return;
   }
 
-  ESP_LOGI(kUpTag, "receiving font (%lu bytes) → spiffs partition", (unsigned long)file_size);
+  ESP_LOGI(kUpTag, "receiving font (%lu bytes) â†’ spiffs partition", (unsigned long)file_size);
 
   // Erase needed sectors BEFORE signaling READY, so the host doesn't
   // start sending while we're busy erasing.
@@ -467,29 +467,29 @@ static void handle_font_upload() {
 // Handle a serial command (after "CMND" magic has been matched).
 //
 // Sub-commands (1 byte after magic):
-//   'A' + 2B path_len + path  → dir listing: "DIR:<p>\n" + "d|name\n" /
+//   'A' + 2B path_len + path  â†’ dir listing: "DIR:<p>\n" + "d|name\n" /
 //                                "f|name|size|mtime\n" lines + "END\n"
-//   'B' + 1B mask             → inject button press(es)
-//   'C'                       → clear .mrb cache in /sdcard/.microreader/cache/
-//   'D' + 2B path_len + path  → image-decode benchmark
-//   'F'                       → invalidate font partition
-//   'G'                       → flash erase+write benchmark
-//   'I' + 2B path_len + path  → image-size benchmark
-//   'K' + 2B path_len + path  → mkdir
-//   'L'                       → list books in /sdcard/books/ ("BOOKS:\n" … "END\n")
+//   'B' + 1B mask             â†’ inject button press(es)
+//   'C'                       â†’ clear .mrb cache in /sdcard/.microreader/cache/
+//   'D' + 2B path_len + path  â†’ image-decode benchmark
+//   'F'                       â†’ invalidate font partition
+//   'G'                       â†’ flash erase+write benchmark
+//   'I' + 2B path_len + path  â†’ image-size benchmark
+//   'K' + 2B path_len + path  â†’ mkdir
+//   'L'                       â†’ list books in /sdcard/books/ ("BOOKS:\n" â€¦ "END\n")
 //   'N' + 2B src_len + src
-//       + 2B dst_len + dst    → rename / move
-//   'O' + 2B path_len + path  → open book
-//   'P'                       → render-page benchmark (current page)
-//   'R' + 2B path_len + path  → recursive delete
-//   'S'                       → heap status ("STATUS:free=N,largest=M\n")
-//   'T' + 2B path_len + path  → read file: "READY\n" + 4B size + [2KB chunks, 0x06 ACK each] + 4B CRC32
+//       + 2B dst_len + dst    â†’ rename / move
+//   'O' + 2B path_len + path  â†’ open book
+//   'P'                       â†’ render-page benchmark (current page)
+//   'R' + 2B path_len + path  â†’ recursive delete
+//   'S'                       â†’ heap status ("STATUS:free=N,largest=M\n")
+//   'T' + 2B path_len + path  â†’ read file: "READY\n" + 4B size + [2KB chunks, 0x06 ACK each] + 4B CRC32
 //   'W' + 2B path_len + path
 //       + 4B size + data
-//       + 4B CRC32            → write file (chunked + 0x06 ACKs)
-//   'X' + 2B path_len + path  → EPUB conversion benchmark
-//   'Y'                       → clear /sdcard/fonts/
-//   'Z'                       → clear /sdcard/sleep/
+//       + 4B CRC32            â†’ write file (chunked + 0x06 ACKs)
+//   'X' + 2B path_len + path  â†’ EPUB conversion benchmark
+//   'Y'                       â†’ clear /sdcard/fonts/
+//   'Z'                       â†’ clear /sdcard/sleep/
 // ---------------------------------------------------------------------------
 
 // Read a 2-byte LE path length followed by the path bytes into g_cmd_path.
@@ -519,7 +519,7 @@ static bool read_cmd_path(const char* log_label) {
 static void remove_recursive(const char* path) {
   DIR* d = opendir(path);
   if (!d) {
-    // Not a directory (or doesn't exist) — try plain remove.
+    // Not a directory (or doesn't exist) â€” try plain remove.
     remove(path);
     return;
   }
@@ -597,7 +597,7 @@ static void handle_serial_cmd() {
           serial_write(lbuf);
         }
       } else {
-        // Index not yet loaded — fall back to the on-disk file.
+        // Index not yet loaded â€” fall back to the on-disk file.
         // File format: path|title|author|last_open_order; emit size/mtime from stat.
         FILE* fidx = fopen("/sdcard/.microreader/book_index.dat", "r");
         if (fidx) {
@@ -763,7 +763,7 @@ static void handle_serial_cmd() {
       break;
     }
     case 'G': {
-      // Flash erase+write benchmark — no path argument.
+      // Flash erase+write benchmark â€” no path argument.
       g_cmd_type = SerialCmdType::FlashBench;
       serial_write("OK\n");
       break;
@@ -910,9 +910,9 @@ static void handle_serial_cmd() {
       if (rename(nsrc, g_cmd_path) == 0) {
         ESP_LOGI(kCmdTag, "renamed: %s -> %s", nsrc, g_cmd_path);
         // Update the book index based on what changed. Three cases:
-        //   src book + dst book  → Rename (preserves metadata + last_open_order)
-        //   src book + dst non   → Remove (file is no longer a book)
-        //   src non  + dst book  → Add    (file became a book, e.g. .txt → .epub)
+        //   src book + dst book  â†’ Rename (preserves metadata + last_open_order)
+        //   src book + dst non   â†’ Remove (file is no longer a book)
+        //   src non  + dst book  â†’ Add    (file became a book, e.g. .txt â†’ .epub)
         const bool src_is_book = microreader::BookIndex::is_book_path(nsrc);
         const bool dst_is_book = microreader::BookIndex::is_book_path(g_cmd_path);
         if (src_is_book && dst_is_book) {
@@ -951,7 +951,7 @@ static void handle_serial_cmd() {
       const uint32_t tfsize = (uint32_t)tst.st_size;
       serial_write("READY\n");
       // Silence ESP_LOG and pause UI updates for the duration of the binary
-      // transfer — same as upload handlers. Any log byte interleaved with chunk
+      // transfer â€” same as upload handlers. Any log byte interleaved with chunk
       // data will be read by the host as a misaligned data byte, corrupting the
       // file and causing a CRC mismatch.
       g_upload_in_progress = true;

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <cstdint>
 #include <cstdlib>
@@ -7,22 +7,22 @@
 #include "esp_adc/adc_oneshot.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
-#include "microreader/Input.h"
+#include "nous/Input.h"
 
-// Defined in serial_communication.h — serial command button injection.
+// Defined in serial_communication.h â€” serial command button injection.
 extern volatile uint8_t g_serial_buttons;
 
 // ---- Button hardware configuration ----
 //
 // ADC1 channel 1 (GPIO1): 4 buttons via resistor ladder
-//   index 0 → Button0 (Back),    threshold ≈ 3470
-//   index 1 → Button1 (Confirm), threshold ≈ 2655
-//   index 2 → Button2 (Left),    threshold ≈ 1470
-//   index 3 → Button3 (Right),   threshold ≈ 3
+//   index 0 â†’ Button0 (Back),    threshold â‰ˆ 3470
+//   index 1 â†’ Button1 (Confirm), threshold â‰ˆ 2655
+//   index 2 â†’ Button2 (Left),    threshold â‰ˆ 1470
+//   index 3 â†’ Button3 (Right),   threshold â‰ˆ 3
 //
 // ADC1 channel 2 (GPIO2): 2 buttons via resistor ladder
-//   index 0 → Up   (Vol+), threshold ≈ 2205
-//   index 1 → Down (Vol-), threshold ≈ 3
+//   index 0 â†’ Up   (Vol+), threshold â‰ˆ 2205
+//   index 1 â†’ Down (Vol-), threshold â‰ˆ 3
 //
 // GPIO 3: Power button, digital active-LOW with internal pull-up
 //
@@ -41,7 +41,7 @@ class Esp32InputSource final : public microreader::IInputSource {
     cfg.intr_type = GPIO_INTR_DISABLE;
     gpio_config(&cfg);
 
-    // Initialise ADC1 in oneshot mode, 12 dB attenuation (full 0–3.3 V range)
+    // Initialise ADC1 in oneshot mode, 12 dB attenuation (full 0â€“3.3 V range)
 #ifndef QEMU_BUILD
     adc_oneshot_unit_init_cfg_t unit_cfg{};
     unit_cfg.unit_id = ADC_UNIT_1;
@@ -120,29 +120,29 @@ class Esp32InputSource final : public microreader::IInputSource {
 
  private:
   static constexpr gpio_num_t kPowerPin = GPIO_NUM_3;
-  static constexpr int kAdcTol = 400;     // ±tolerance for threshold match
+  static constexpr int kAdcTol = 400;     // Â±tolerance for threshold match
   static constexpr int kAdcNoBtn = 3800;  // ADC value when no key pressed
   static constexpr uint8_t kNumButtons = 7;
   static constexpr uint32_t kDebounceMs = 5;
-  static constexpr uint64_t kSampleIntervalUs = 5000;  // 5 ms
+  static constexpr uint64_t kSampleIntervalUs = 10000;  // 10 ms (100 Hz)
 
-  static constexpr int kThresh1[4] = {3470, 2655, 1470, 3};  // Button0–3
+  static constexpr int kThresh1[4] = {3470, 2655, 1470, 3};  // Button0â€“3
   static constexpr int kThresh2[2] = {2205, 3};              // Up, Down
 
   adc_oneshot_unit_handle_t adc_handle_ = nullptr;
   esp_timer_handle_t sample_timer_ = nullptr;
   portMUX_TYPE lock_ = portMUX_INITIALIZER_UNLOCKED;
 
-  // Debounce state — only modified by the timer callback
+  // Debounce state â€” only modified by the timer callback
   uint8_t debounced_ = 0;
   uint8_t prev_debounced_ = 0;
   bool last_raw_[kNumButtons] = {};
   uint32_t debounce_time_[kNumButtons] = {};
 
-  // (auto-repeat removed — screens handle hold-down acceleration themselves)
+  // (auto-repeat removed â€” screens handle hold-down acceleration themselves)
 
-  // Ordered press queue — shared between timer callback (write) and poll_buttons (read+clear).
-  // Ring buffer; entries are button indices (0–6). Full entries are silently dropped.
+  // Ordered press queue â€” shared between timer callback (write) and poll_buttons (read+clear).
+  // Ring buffer; entries are button indices (0â€“6). Full entries are silently dropped.
   static constexpr uint8_t kQueueSize = 32;
   uint8_t press_queue_[kQueueSize] = {};
   uint8_t pq_head_ = 0;  // next read position
@@ -201,7 +201,7 @@ class Esp32InputSource final : public microreader::IInputSource {
   uint8_t read_raw() const {
     uint8_t state = 0;
 
-    // ADC1_CH1 (GPIO1) → Button0..Button3 (bits 0–3)
+    // ADC1_CH1 (GPIO1) â†’ Button0..Button3 (bits 0â€“3)
     int adc1 = 0;
     adc_oneshot_read(adc_handle_, ADC_CHANNEL_1, &adc1);
     if (adc1 <= kAdcNoBtn) {
@@ -213,7 +213,7 @@ class Esp32InputSource final : public microreader::IInputSource {
       }
     }
 
-    // ADC1_CH2 (GPIO2) → Up (bit 4), Down (bit 5)
+    // ADC1_CH2 (GPIO2) â†’ Up (bit 4), Down (bit 5)
     int adc2 = 0;
     adc_oneshot_read(adc_handle_, ADC_CHANNEL_2, &adc2);
     if (adc2 <= kAdcNoBtn) {
@@ -225,7 +225,7 @@ class Esp32InputSource final : public microreader::IInputSource {
       }
     }
 
-    // GPIO3, active LOW → Power (bit 6)
+    // GPIO3, active LOW â†’ Power (bit 6)
     if (gpio_get_level(kPowerPin) == 0)
       state |= static_cast<uint8_t>(1u << 6);
 

@@ -1,4 +1,4 @@
-#include <cstdio>
+﻿#include <cstdio>
 
 #include "asset_blob.h"
 #include "driver/gpio.h"
@@ -12,13 +12,13 @@
 #include "esp_timer.h"
 #include "font_manager.h"
 #include "input.h"
-#include "microreader/Application.h"
-#include "microreader/HeapLog.h"
-#include "microreader/Loop.h"
-#include "microreader/content/Book.h"
-#include "microreader/content/BookIndex.h"
-#include "microreader/content/mrb/MrbConverter.h"
-#include "microreader/display/DrawBuffer.h"
+#include "nous/Application.h"
+#include "nous/HeapLog.h"
+#include "nous/Loop.h"
+#include "nous/content/Book.h"
+#include "nous/content/BookIndex.h"
+#include "nous/content/mrb/MrbConverter.h"
+#include "nous/display/DrawBuffer.h"
 #include "runtime.h"
 #include "sdcard.h"
 #include "serial_communication.h"
@@ -49,9 +49,9 @@ static void verify_wakeup_press() {
     return;
 
   // Only require a hold check on a clean power-on (battery, no USB).
-  // Crashes, panics, watchdog resets, SW resets — all boot immediately.
+  // Crashes, panics, watchdog resets, SW resets â€” all boot immediately.
   if (esp_reset_reason() != ESP_RST_POWERON) {
-    ESP_LOGI("pwr", "Non-poweron reset (%d) — booting immediately", (int)esp_reset_reason());
+    ESP_LOGI("pwr", "Non-poweron reset (%d) â€” booting immediately", (int)esp_reset_reason());
     return;
   }
 
@@ -63,7 +63,7 @@ static void verify_wakeup_press() {
   cfg.intr_type = GPIO_INTR_DISABLE;
   gpio_config(&cfg);
 
-  // Wait up to 2× the threshold; if the button isn't held long enough, sleep.
+  // Wait up to 2Ã— the threshold; if the button isn't held long enough, sleep.
   const uint32_t deadline_ms = kPowerWakeupMs * 2;
   uint32_t held_ms = 0;
   for (uint32_t elapsed = 0; elapsed < deadline_ms; elapsed += 10) {
@@ -71,14 +71,14 @@ static void verify_wakeup_press() {
     if (gpio_get_level(kPowerPin) == 0) {
       held_ms += 10;
       if (held_ms >= kPowerWakeupMs)
-        return;  // confirmed long press — boot normally
+        return;  // confirmed long press â€” boot normally
     } else {
       held_ms = 0;  // button released, reset counter
     }
   }
 
-  // Short press — go back to sleep; wake again on power button press.
-  ESP_LOGI("pwr", "Short press on wakeup (held %lu ms) — returning to sleep", (unsigned long)held_ms);
+  // Short press â€” go back to sleep; wake again on power button press.
+  ESP_LOGI("pwr", "Short press on wakeup (held %lu ms) â€” returning to sleep", (unsigned long)held_ms);
   esp_sleep_enable_gpio_wakeup_on_hp_periph_powerdown(1ULL << kPowerPin, ESP_GPIO_WAKEUP_GPIO_LOW);
   esp_deep_sleep_start();
 #endif
@@ -183,7 +183,7 @@ extern "C" void app_main(void) {
     // is the producer, this loop is the consumer.
     //
     // Deferral rules:
-    //   (A) Add/Rename ops use scratch buffers (Book::open) — defer when
+    //   (A) Add/Rename ops use scratch buffers (Book::open) â€” defer when
     //       Reader is the top screen (it owns those buffers for rendering).
     //   (C) ALL ops do SD card I/O (fopen/fprintf in save/load) which shares
     //       SPI2_HOST with the display. Defer when the EPD hardware is
@@ -203,7 +203,7 @@ extern "C" void app_main(void) {
         // Leave the slot occupied; retry next iteration. The main loop
         // continues to run (UI updates, serial commands) between retries.
       } else {
-        // Copy paths to locals BEFORE clearing the slot — minimizes the window
+        // Copy paths to locals BEFORE clearing the slot â€” minimizes the window
         // in which a new op would be dropped.
         char path_a[256];
         char path_b[256];
@@ -226,7 +226,7 @@ extern "C" void app_main(void) {
             break;
           case SerialIndexOp::Rename:
             // Fast path: in-place rename preserves metadata + last_open_order.
-            // Fallback: src wasn't indexed → index dst fresh (extracts metadata).
+            // Fallback: src wasn't indexed â†’ index dst fresh (extracts metadata).
             if (!microreader::BookIndex::instance().rename_in_place(path_a, path_b, index_path)) {
               if (microreader::BookIndex::instance().index_file(path_b, index_path, buf))
                 ESP_LOGI("main", "rename_in_place missed %s, indexed %s instead", path_a, path_b);

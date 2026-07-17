@@ -1,4 +1,4 @@
-#include <cstdio>
+﻿#include <cstdio>
 #include <filesystem>
 #include <iostream>
 #include <vector>
@@ -6,11 +6,11 @@
 #include "desktop_config.h"
 #include "display.h"
 #include "input.h"
-#include "microreader/Application.h"
-#include "microreader/FontManager.h"
-#include "microreader/Loop.h"
-#include "microreader/content/BitmapFont.h"
-#include "microreader/display/DrawBuffer.h"
+#include "nous/Application.h"
+#include "nous/FontManager.h"
+#include "nous/Loop.h"
+#include "nous/content/BitmapFont.h"
+#include "nous/display/DrawBuffer.h"
 #include "runtime.h"
 
 // Load a file into a byte vector. Returns empty on failure.
