@@ -31,7 +31,7 @@ Four visual themes, switchable from Settings:
 | Theme | Style |
 |---|---|
 | **Chronicle** | Clean header bar with battery and button hints at the bottom |
-| **Minimal** | Bare list with no decoration — just items |
+| **Minimal** | Bare list with no decoration — just items (Microreader's looks) |
 | **Stele** | Two-line rows with title and author, read time in subtitle |
 | **Codex** | Numbered catalog — ALL CAPS titles, author and read time below, 00 for recents |
 
