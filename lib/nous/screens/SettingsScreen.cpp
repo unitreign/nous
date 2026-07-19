@@ -356,13 +356,78 @@ std::string_view SettingsScreen::get_item_subtitle(int index) const {
   return subtitle_buf_;
 }
 
+static constexpr int kThemeCount = 5;
+static const char* kThemeNames[kThemeCount] = {
+  "Chronicle", "Minimal", "Stele", "Codex", "Lyra"
+};
+
+void SettingsScreen::apply_theme_picker_(int idx) {
+  if (!app_) return;
+  const uint8_t old_v = app_->menu_theme();
+  const uint8_t v = static_cast<uint8_t>(idx);
+  app_->set_menu_theme(v);
+  set_item_label(idx_theme_, get_theme_label(v));
+  if (v == static_cast<uint8_t>(ListMenuScreen::MenuTheme::Lyra))
+    app_->replace_screen(ScreenId::Lyra);
+  else if (old_v == static_cast<uint8_t>(ListMenuScreen::MenuTheme::Lyra))
+    app_->replace_screen(ScreenId::MainMenu);
+  else
+    app_->pop_screen();  // back to main menu / book list
+}
+
+void SettingsScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& runtime) {
+  buf_ = &buf;
+  if (toast_frames_ > 0) {
+    --toast_frames_;
+    if (toast_frames_ == 0 && toast_idx_ >= 0) {
+      set_item_label(toast_idx_, toast_original_label_);
+      toast_idx_ = -1;
+      toast_original_label_.clear();
+      request_redraw();
+    }
+  }
+
+  if (theme_picker_open_) {
+    const bool inv = app_ && app_->invert_menu_buttons();
+    const Button btn_up   = inv ? Button::Button2 : Button::Button3;
+    const Button btn_down = inv ? Button::Button3 : Button::Button2;
+    bool redraw = false;
+    Button btn;
+    ButtonState consumed;  // empty — prevents list from processing any input
+    while (buttons.next_press(btn)) {
+      if (btn == btn_up) {
+        theme_picker_sel_ = (theme_picker_sel_ - 1 + kThemeCount) % kThemeCount;
+        redraw = true;
+      } else if (btn == btn_down || btn == Button::Down) {
+        theme_picker_sel_ = (theme_picker_sel_ + 1) % kThemeCount;
+        redraw = true;
+      } else if (btn == Button::Up) {
+        theme_picker_sel_ = (theme_picker_sel_ - 1 + kThemeCount) % kThemeCount;
+        redraw = true;
+      } else if (btn == Button::Button1) {  // select — confirm
+        theme_picker_open_ = false;
+        apply_theme_picker_(theme_picker_sel_);
+        return;
+      } else if (btn == Button::Button0) {  // back — cancel
+        theme_picker_open_ = false;
+        redraw = true;
+      }
+    }
+    if (redraw) {
+      draw_all_(buf, runtime.battery_percentage());
+      buf.refresh();
+    }
+    return;  // swallow all input while picker is open
+  }
+
+  ListMenuScreen::update(buttons, buf, runtime);
+}
+
 void SettingsScreen::on_select(int index) {
   if (index == idx_theme_) {
-    if (app_) {
-      uint8_t v = static_cast<uint8_t>((app_->menu_theme() + 1) % 5);
-      app_->set_menu_theme(v);
-      set_item_label(idx_theme_, get_theme_label(v));
-    }
+    theme_picker_sel_ = app_ ? static_cast<int>(app_->menu_theme()) : 0;
+    theme_picker_open_ = true;
+    request_redraw();
     return;
   }
   if (index == idx_nav_arrows_) {
@@ -839,6 +904,47 @@ void SettingsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_p
     }
 
     y += kRowH;
+  }
+
+  // ── Theme picker overlay ──────────────────────────────────────────────────
+  if (theme_picker_open_ && ui_font_.valid()) {
+    static constexpr int kPickerPadH = 20;  // horizontal inset from screen edges
+    static constexpr int kRowPad     = 8;   // vertical padding inside each row
+    static constexpr int kTitlePad   = 8;
+    const int row_h   = kRowPad + ui_font_.y_advance() + kRowPad;
+    const int title_h = kTitlePad + ui_font_.y_advance() + kTitlePad;
+    const int popup_h = 1 + title_h + 1 + kThemeCount * row_h + 1;
+    const int popup_x = kPickerPadH;
+    const int popup_w = W - 2 * kPickerPadH;
+    const int popup_y = (H - popup_h) / 2;
+
+    // Background (white fill + border)
+    buf.fill_rect(popup_x, popup_y, popup_w, popup_h, true);
+    buf.fill_rect(popup_x, popup_y, popup_w, 1, false);                       // top
+    buf.fill_rect(popup_x, popup_y + popup_h - 1, popup_w, 1, false);        // bottom
+    buf.fill_rect(popup_x, popup_y, 1, popup_h, false);                      // left
+    buf.fill_rect(popup_x + popup_w - 1, popup_y, 1, popup_h, false);        // right
+
+    // Title row
+    int py = popup_y + 1;
+    const int title_text_x = popup_x + 1 + 10;
+    buf.draw_text_proportional(title_text_x, py + kTitlePad + ui_font_.baseline(),
+                               "Select Theme", ui_font_, false);
+    py += title_h;
+    buf.fill_rect(popup_x + 1, py, popup_w - 2, 1, false);
+    py += 1;
+
+    // Theme rows
+    for (int i = 0; i < kThemeCount; ++i) {
+      const bool sel = (i == theme_picker_sel_);
+      if (sel)
+        buf.fill_rect(popup_x + 1, py, popup_w - 2, row_h, false);
+      buf.draw_text_proportional(title_text_x, py + kRowPad + ui_font_.baseline(),
+                                 kThemeNames[i], ui_font_, sel);
+      py += row_h;
+    }
+    // Bottom border line (redraw over any row highlight that hit it)
+    buf.fill_rect(popup_x, popup_y + popup_h - 1, popup_w, 1, false);
   }
 }
 

@@ -19,6 +19,8 @@ set(lib_sources
     ${LIB}/screens/ConvertAllScreen.cpp
     ${LIB}/screens/StatsScreen.cpp
     ${LIB}/screens/HiddenBooksMenu.cpp
+    ${LIB}/screens/LyraScreen.cpp
+    ${LIB}/screens/RecentBooksScreen.cpp
     ${LIB}/content/ZipReader.cpp
     ${LIB}/content/XmlReader.cpp
     ${LIB}/content/CssParser.cpp

@@ -15,6 +15,7 @@
 #include "screens/LinksScreen.h"
 #include "screens/LyraScreen.h"
 #include "screens/MainMenu.h"
+#include "screens/RecentBooksScreen.h"
 #include "screens/ReaderOptionsScreen.h"
 #include "screens/ReaderScreen.h"
 #include "screens/SettingsScreen.h"
@@ -37,6 +38,7 @@ enum class ScreenId : uint8_t {
   Stats,
   HiddenBooks,
   Lyra,
+  RecentBooks,
   BouncingBall,
   GrayscaleDemo,
 };
@@ -147,6 +149,9 @@ class Application {
   }
   LyraScreen* lyra_screen() {
     return &lyra_;
+  }
+  RecentBooksScreen* recent_books_screen() {
+    return &recent_books_;
   }
   ConvertAllScreen* convert_all_screen() {
     return &convert_all_;
@@ -331,6 +336,7 @@ class Application {
   uint8_t menu_theme_ = 3;       // 3=Codex default
 
   LyraScreen lyra_;
+  RecentBooksScreen recent_books_;
   MainMenu menu_;
   ReaderScreen reader_;
   SettingsScreen settings_;

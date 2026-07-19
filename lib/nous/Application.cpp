@@ -42,6 +42,7 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
     reader_.set_fonts(reader_font_);
 
   lyra_.set_app(this);
+  recent_books_.set_app(this);
   menu_.set_app(this);
   reader_.set_app(this);
   settings_.set_app(this);
@@ -312,6 +313,8 @@ IScreen* microreader::Application::screen_for_(ScreenId id) {
       return &hidden_books_;
     case ScreenId::Lyra:
       return &lyra_;
+    case ScreenId::RecentBooks:
+      return &recent_books_;
 
 #ifdef MICROREADER_ENABLE_DEMOS
     case ScreenId::BouncingBall:

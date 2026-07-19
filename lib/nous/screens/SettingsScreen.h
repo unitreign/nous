@@ -18,19 +18,7 @@ class SettingsScreen final : public ListMenuScreen {
     return "Settings";
   }
 
-  void update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& runtime) override {
-    buf_ = &buf;
-    if (toast_frames_ > 0) {
-      --toast_frames_;
-      if (toast_frames_ == 0 && toast_idx_ >= 0) {
-        set_item_label(toast_idx_, toast_original_label_);
-        toast_idx_ = -1;
-        toast_original_label_.clear();
-        request_redraw();
-      }
-    }
-    ListMenuScreen::update(buttons, buf, runtime);
-  }
+  void update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& runtime) override;
 
   std::string_view get_item_subtitle(int index) const override;
   void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const override;
@@ -85,6 +73,10 @@ class SettingsScreen final : public ListMenuScreen {
   std::string toast_original_label_;
   int toast_frames_ = 0;
 
+  bool theme_picker_open_ = false;
+  int  theme_picker_sel_  = 0;
+
+  void apply_theme_picker_(int theme_idx);
   void clear_cache_();
 #ifdef ESP_PLATFORM
   void switch_ota_partition_();

@@ -53,7 +53,7 @@ void LyraScreen::on_select(int index) {
   } else if (index == idx_all_books_) {
     app_->push_screen(ScreenId::MainMenu);
   } else if (index == idx_recent_books_) {
-    app_->push_screen(ScreenId::MainMenu);
+    app_->push_screen(ScreenId::RecentBooks);
   } else if (index == idx_settings_) {
     app_->push_screen(ScreenId::Settings);
   }
@@ -91,10 +91,11 @@ void LyraScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) 
   buf.fill(true);
 
   static constexpr int kPad      = 12;
-  static constexpr int kCardPadV = 10;
-  static constexpr int kSubGap   = 3;
-  static constexpr int kNavPadV  = 8;
-  static constexpr int kBotPad   = 5;
+  static constexpr int kCardPadV = 20;
+  static constexpr int kSubGap   = 4;
+  static constexpr int kNavPadV  = 14;
+  static constexpr int kBotPad    = 5;
+  static constexpr int kBotMargin = 10;  // lift tooltip above screen edge
 
   const int ui_adv = ui_font_.y_advance();
   const int hf_adv = header_font_.valid() ? header_font_.y_advance() : ui_adv;
@@ -119,7 +120,7 @@ void LyraScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) 
   y += 1;
 
   // ── Bottom tooltip height (pre-compute so nav items don't overflow into it)
-  const int bot_area_h = 1 + kBotPad + sf_adv + kBotPad;
+  const int bot_area_h = 1 + kBotPad + sf_adv + kBotPad + kBotMargin;
   const int bot_rule_y = H - bot_area_h;
 
   // ── Recent book card ─────────────────────────────────────────────────────
@@ -161,10 +162,12 @@ void LyraScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) 
   }
 
   // ── Bottom tooltip ────────────────────────────────────────────────────────
+  // Order: Back | Select | [Down, Up] or [Up, Down] depending on invert setting.
   buf.fill_rect(0, bot_rule_y, W, 1, false);
   if (section_font_.valid()) {
     const BitmapFont& sf = section_font_;
-    const char* labels[] = {"Up", "Down", "Select", "Back"};
+    const bool inv = app_ && app_->invert_menu_buttons();
+    const char* labels[] = {"Back", "Select", inv ? "Up" : "Down", inv ? "Down" : "Up"};
     static constexpr int kN = 4;
     int ws[kN];
     int total_w = 0;
