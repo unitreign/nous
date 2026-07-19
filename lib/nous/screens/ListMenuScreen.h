@@ -43,7 +43,7 @@ class ListMenuScreen : public IScreen {
   }
 
   // Global visual theme — affects all ListMenuScreen instances (static).
-  enum class MenuTheme : uint8_t { Chronicle = 0, Minimal = 1, Stele = 2, Codex = 3 };
+  enum class MenuTheme : uint8_t { Chronicle = 0, Minimal = 1, Stele = 2, Codex = 3, Lyra = 4 };
   static void set_theme(MenuTheme t) { theme_ = t; }
   static MenuTheme theme() { return theme_; }
 

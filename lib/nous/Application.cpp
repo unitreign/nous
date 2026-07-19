@@ -41,6 +41,7 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   if (reader_font_)
     reader_.set_fonts(reader_font_);
 
+  lyra_.set_app(this);
   menu_.set_app(this);
   reader_.set_app(this);
   settings_.set_app(this);
@@ -74,7 +75,10 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   // Apply persisted image toggle.
   images_enabled = show_reader_images_;
 
-  screen_mgr_.push(&menu_, buf, runtime);
+  if (menu_theme_ == static_cast<uint8_t>(ListMenuScreen::MenuTheme::Lyra))
+    screen_mgr_.push(&lyra_, buf, runtime);
+  else
+    screen_mgr_.push(&menu_, buf, runtime);
 
   // Don't auto-open books from the hidden folder — they're meant to stay private.
   if (!pending_book_path_.empty() && pending_book_path_.find("/.hidden/") != std::string::npos)
@@ -306,6 +310,8 @@ IScreen* microreader::Application::screen_for_(ScreenId id) {
       return &stats_;
     case ScreenId::HiddenBooks:
       return &hidden_books_;
+    case ScreenId::Lyra:
+      return &lyra_;
 
 #ifdef MICROREADER_ENABLE_DEMOS
     case ScreenId::BouncingBall:
@@ -395,7 +401,7 @@ void microreader::Application::save_settings_() {
 }
 
 void microreader::Application::set_menu_theme(uint8_t v) {
-  menu_theme_ = v % 4u;
+  menu_theme_ = v % 5u;
   ListMenuScreen::set_theme(static_cast<ListMenuScreen::MenuTheme>(menu_theme_));
   save_settings_();
 }
@@ -511,7 +517,7 @@ void microreader::Application::load_settings_() {
     else if (std::sscanf(line, "sleep_timeout_min=%u", &uval) == 1)
       sleep_timeout_min_ = static_cast<uint8_t>(uval <= 60 ? uval : 10);
     else if (std::sscanf(line, "menu_theme=%u", &uval) == 1)
-      menu_theme_ = static_cast<uint8_t>(uval <= 3 ? uval : 0);
+      menu_theme_ = static_cast<uint8_t>(uval <= 4 ? uval : 0);
   }
   std::fclose(f);
 

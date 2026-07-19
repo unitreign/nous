@@ -137,7 +137,10 @@ void MainMenu::stop() {
 }
 
 void MainMenu::on_back() {
-  app_->push_screen(ScreenId::Settings);
+  if (ListMenuScreen::theme() == ListMenuScreen::MenuTheme::Lyra)
+    app_->pop_screen();
+  else
+    app_->push_screen(ScreenId::Settings);
 }
 
 void MainMenu::scan_directory_(DrawBuffer& buf) {

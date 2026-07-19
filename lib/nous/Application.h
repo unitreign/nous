@@ -13,6 +13,7 @@
 #include "screens/HiddenBooksMenu.h"
 #include "screens/IScreen.h"
 #include "screens/LinksScreen.h"
+#include "screens/LyraScreen.h"
 #include "screens/MainMenu.h"
 #include "screens/ReaderOptionsScreen.h"
 #include "screens/ReaderScreen.h"
@@ -35,6 +36,7 @@ enum class ScreenId : uint8_t {
   ConvertAll,
   Stats,
   HiddenBooks,
+  Lyra,
   BouncingBall,
   GrayscaleDemo,
 };
@@ -142,6 +144,9 @@ class Application {
   }
   MainMenu* main_menu() {
     return &menu_;
+  }
+  LyraScreen* lyra_screen() {
+    return &lyra_;
   }
   ConvertAllScreen* convert_all_screen() {
     return &convert_all_;
@@ -325,6 +330,7 @@ class Application {
   uint8_t sleep_timeout_min_ = 10;  // 0=off, else minutes until auto-sleep
   uint8_t menu_theme_ = 3;       // 3=Codex default
 
+  LyraScreen lyra_;
   MainMenu menu_;
   ReaderScreen reader_;
   SettingsScreen settings_;

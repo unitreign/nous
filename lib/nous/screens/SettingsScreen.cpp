@@ -102,6 +102,7 @@ static std::string get_theme_label(uint8_t theme) {
   if (theme == 0) return "Theme: Chronicle";
   if (theme == 2) return "Theme: Stele";
   if (theme == 3) return "Theme: Codex";
+  if (theme == 4) return "Theme: Lyra";
   return "Theme: Minimal";
 }
 
@@ -358,7 +359,7 @@ std::string_view SettingsScreen::get_item_subtitle(int index) const {
 void SettingsScreen::on_select(int index) {
   if (index == idx_theme_) {
     if (app_) {
-      uint8_t v = static_cast<uint8_t>((app_->menu_theme() + 1) % 4);
+      uint8_t v = static_cast<uint8_t>((app_->menu_theme() + 1) % 5);
       app_->set_menu_theme(v);
       set_item_label(idx_theme_, get_theme_label(v));
     }
@@ -739,14 +740,15 @@ void SettingsScreen::clear_cache_() {
 bool SettingsScreen::is_item_focusable(int index) const {
   if (!ListMenuScreen::is_item_focusable(index)) return false;
   const bool is_minimal = (theme() == MenuTheme::Minimal);
-  const bool is_stele = (theme() == MenuTheme::Stele);
-  const bool is_codex = (theme() == MenuTheme::Codex);
-  // List Align: only Minimal renders with configurable alignment
-  if (index == idx_list_align_ && !is_minimal) return false;
-  // Nav Arrows: Chronicle/Stele/Codex have no bottom arrow bar
+  const bool is_stele   = (theme() == MenuTheme::Stele);
+  const bool is_codex   = (theme() == MenuTheme::Codex);
+  const bool is_lyra    = (theme() == MenuTheme::Lyra);
+  // List Align: only Minimal (and Lyra's child screens use Minimal fallback)
+  if (index == idx_list_align_ && !is_minimal && !is_lyra) return false;
+  // Nav Arrows: only Minimal has the bottom arrow bar; Lyra has its own tooltip
   if (index == idx_nav_arrows_ && !is_minimal) return false;
-  // Battery Display: Stele hardcodes " · X%"; Codex hardcodes % in header
-  if (index == idx_battery_display_ && (is_stele || is_codex)) return false;
+  // Battery Display: Stele/Codex/Lyra hardcode battery in their own headers
+  if (index == idx_battery_display_ && (is_stele || is_codex || is_lyra)) return false;
   // Converted Mark: Stele always shows dots regardless of this toggle
   if (index == idx_conv_indicator_ && is_stele) return false;
   return true;
