@@ -2,7 +2,10 @@
 
 Nous is my personal fork of [microreader](https://github.com/CidVonHighwind/microreader/) by [CidVonHighwind](https://github.com/CidVonHighwind) — an open-source EPUB reader firmware for the Xteink X4 e-ink device (ESP32-C3, 800×480).
 
-> **v2.0.0** · Fork of microreader 2.0-dev · GPL v2
+
+[📋 Roadmap](https://kan.bn/as1ejm5nnww5/nous) • [☕ Donate](https://ko-fi.com/U7U41U5JQ)
+
+---
 
 ---
 
