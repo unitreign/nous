@@ -128,6 +128,7 @@ Button3 = up / prev page
   - **Desktop**: Loads individual `.mbf` files from `resources/fonts/` (`font-0.mbf` up to `font-3.mbf`).
   - **Generation**: `python tools/generate_font.py "resources/fonts/Bookerly.ttf" -o resources/fonts/font-normal.mbf --with-styles --bold "resources/fonts/Bookerly Bold.ttf" --italic "resources/fonts/Bookerly Italic.ttf" --bold-italic "resources/fonts/Bookerly Bold Italic.ttf" --bundle --bundle-sizes 20 24 28 32 --font-name Bookerly` generates 4 sizes + bundle.
 - **Input**: `ButtonState` carries `current` + `pressed_latch`. Auto-repeat at hardware layer (5ms sample on ESP32). Screens use `is_pressed()`.
+- **Sleep wallpapers**: An empty `sleep_image_path_` selects the user-facing **Auto Rotate** mode. `Application::do_sleep_()` advances and persists `sleep_image_idx_` so each sleep uses the next SD-card image; an individual image path pins that wallpaper. Sleep images are rendered without a text overlay.
 - **Loop**: `run_loop()` polls input → app.update() → queue.tick() → wait_next_frame().
 - **Logging** (`HeapLog.h`): `MR_LOGI(tag, fmt, ...)` maps to `ESP_LOGI` on device and `printf("[tag] fmt\n")` on desktop. `HEAP_LOG(tag)` logs free heap + largest block (ESP32-only, no-op on desktop). No `ILogger` abstraction — use these macros directly.
 

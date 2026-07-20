@@ -66,6 +66,8 @@ static std::string get_menu_font_label(int size) {
 }
 
 static std::string get_sleep_image_label(const std::string& path) {
+  if (path.empty())
+    return "Sleep Image: Auto Rotate";
   std::string label = "Sleep Image: ";
   if (path.rfind("embedded:", 0) == 0) {
     label += "nous";
@@ -179,8 +181,10 @@ void SettingsScreen::on_start() {
     }
   }
 
-  // Sleep image list: "nous" (embedded:0) is always first; SD images follow.
+  // An empty path enables the existing round-robin sleep-image mode.
+  // The embedded "nous" image and custom SD images remain available to pin.
   sleep_images_.clear();
+  sleep_images_.push_back("");  // Auto Rotate
   sleep_images_.push_back("embedded:0");  // nous — always present
   sleep_image_sel_idx_ = 0;
 #ifdef ESP_PLATFORM

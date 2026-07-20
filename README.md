@@ -64,7 +64,7 @@ Four visual themes, switchable from Settings:
 | **Nav Arrows** | Toggle the button hint glyphs in the bottom bar on or off |
 | **Display Rotation** | Portrait or Landscape |
 | **Auto-Sleep** | Configurable inactivity timeout — 1 / 3 / 5 / 10 / 20 / 30 min, or Off |
-| **Sleep Image** | Custom sleep screen from SD card (`.mgr` or `.bmp` in `/.sleep/`) with auto-cycle support |
+| **Sleep Image** | Custom sleep screen from SD card (`.mgr` or `.bmp` in `/.sleep/`), with a selectable Auto Rotate mode |
 | **Button Remapping** | Invert menu navigation direction, bottom paging direction, and side button paging direction independently |
 
 ### Fonts
