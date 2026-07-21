@@ -393,11 +393,11 @@ void MainMenu::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) co
   int y = 14;
   const int hf_adv = header_font_.valid() ? header_font_.y_advance() : ui_font_.y_advance();
 
-  // "NOUS" left
-  if (header_font_.valid())
-    buf.draw_text_proportional(kPad, y + header_font_.baseline(), "NOUS", header_font_, false);
-  else
-    buf.draw_text_proportional(kPad, y + ui_font_.baseline(), "NOUS", ui_font_, false);
+  // "nous" brand
+  {
+    const BitmapFont& brand_f = brand_font_.valid() ? brand_font_ : ui_font_;
+    buf.draw_text_proportional(kPad, y + brand_f.baseline(), "nous", brand_f, false);
+  }
 
   // Battery top-right (section_font_ for larger %)
   if (battery_pct) {

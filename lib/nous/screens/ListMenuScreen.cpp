@@ -7,6 +7,7 @@
 #include "../HeapLog.h"
 
 #include "../Application.h"
+#include "../display/brand_font_nous.h"
 #include "../display/ui_font_header.h"
 #include "../display/ui_font_large.h"
 #include "../display/ui_font_medium.h"
@@ -16,6 +17,17 @@ namespace microreader {
 
 int ListMenuScreen::font_size_idx_ = 0;
 ListMenuScreen::MenuTheme ListMenuScreen::theme_ = ListMenuScreen::MenuTheme::Chronicle;
+
+void ListMenuScreen::apply_ui_font(BitmapFont& out) {
+  if (font_size_idx_ == 1)
+    out.init(kFontData_ui_medium_mbf, kFontData_ui_medium_mbf_size);
+  else if (font_size_idx_ == 2)
+    out.init(kFontData_ui_large_mbf, kFontData_ui_large_mbf_size);
+  else if (font_size_idx_ == 3)
+    out.init(kFontData_ui_header_mbf, kFontData_ui_header_mbf_size);
+  else
+    out.init(kFontData_ui_small_mbf, kFontData_ui_small_mbf_size);
+}
 
 static constexpr int kHeaderY = 15;         // top padding before the title text
 static constexpr int kHeaderBottomGap = 4;  // gap between last header line and first list item
@@ -44,6 +56,17 @@ void ListMenuScreen::start(DrawBuffer& buf, IRuntime& runtime) {
     ui_font_.init(kFontData_ui_small_mbf, kFontData_ui_small_mbf_size);
   if (!header_font_.valid())
     header_font_.init(kFontData_ui_header_mbf, kFontData_ui_header_mbf_size);
+  brand_font_ = BitmapFont{};
+  if (font_size_idx_ == 1)
+    brand_font_.init(kFontData_brand_nous_medium_mbf, kFontData_brand_nous_medium_mbf_size);
+  else if (font_size_idx_ == 2)
+    brand_font_.init(kFontData_brand_nous_large_mbf, kFontData_brand_nous_large_mbf_size);
+  else if (font_size_idx_ == 3)
+    brand_font_.init(kFontData_brand_nous_header_mbf, kFontData_brand_nous_header_mbf_size);
+  else
+    brand_font_.init(kFontData_brand_nous_small_mbf, kFontData_brand_nous_small_mbf_size);
+  brand_header_font_ = BitmapFont{};
+  brand_header_font_.init(kFontData_brand_nous_header_mbf, kFontData_brand_nous_header_mbf_size);
   subtitle_font_ = BitmapFont{};
   subtitle_font_.init(kFontData_ui_small_mbf, kFontData_ui_small_mbf_size);
   section_font_ = BitmapFont{};
@@ -260,8 +283,9 @@ int ListMenuScreen::draw_header_(DrawBuffer& buf, int W, int H, std::optional<ui
     const int bar_h = kBarPadY + ui_font_.y_advance() + kBarPadY;
     const int text_y = kBarPadY + ui_font_.baseline();
 
-    // Status bar left: "NOUS" brand (hardcoded)
-    buf.draw_text_proportional(14, text_y, "NOUS", 4, ui_font_, false);
+    // Status bar left: "nous" brand
+    const BitmapFont& brand_f = brand_font_.valid() ? brand_font_ : ui_font_;
+    buf.draw_text_proportional(14, text_y, "nous", 4, brand_f, false);
 
     // Status bar right: battery indicator
     if (battery_pct.has_value() && app_) {
@@ -433,7 +457,6 @@ int ListMenuScreen::draw_bottom_(DrawBuffer& buf, int W, int H, std::optional<ui
       if (bat_mode == 2 && ui_font_.valid()) {
         char num_buf[8];
         const int nlen = std::snprintf(num_buf, sizeof(num_buf), "%d%%", bat_pct);
-        const int nw = ui_font_.word_width(num_buf, static_cast<size_t>(nlen), FontStyle::Regular);
         const int nx = kBarX + kBarW + 4;
         const int ny = H - kHintCenterY - (ui_font_.y_advance() + 1) / 2 + ui_font_.baseline();
         buf.draw_text_proportional(nx, ny, num_buf, static_cast<size_t>(nlen), ui_font_, false);

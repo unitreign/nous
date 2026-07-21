@@ -62,22 +62,14 @@ void ConvertAllScreen::scan_jobs_() {
 void ConvertAllScreen::start(DrawBuffer& buf, IRuntime& runtime) {
   buf_ = &buf;
   current_idx_ = 0;
+  cover_idx_ = 0;
   converted_count_ = 0;
   failed_count_ = 0;
   cancel_requested_ = false;
   phase_ = Phase::Converting;
+  ListMenuScreen::apply_ui_font(ui_font_);
 
   scan_jobs_();
-
-  int pending = static_cast<int>(std::count_if(jobs_.begin(), jobs_.end(),
-      [](const BookJob& j) { return !j.skipped; }));
-
-  if (pending == 0) {
-    phase_ = Phase::Done;
-    draw_done_(buf);
-    buf.full_refresh();
-    return;
-  }
 
   buf.fill(true);
   buf.full_refresh();
@@ -104,14 +96,38 @@ void ConvertAllScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRunt
 
   if (phase_ == Phase::Done) return;
 
-  // Advance to next un-converted job.
+  if (phase_ == Phase::Covers) {
+    if (cancel_requested_ || cover_idx_ >= static_cast<int>(jobs_.size())) {
+      phase_ = Phase::Done;
+      draw_done_(buf);
+      buf.full_refresh();
+      return;
+    }
+    const BookJob& job = jobs_[cover_idx_];
+    const int total = static_cast<int>(jobs_.size());
+    char msg[96];
+    const std::string& title = job.title.empty() ? job.path : job.title;
+    std::snprintf(msg, sizeof(msg), "Covers %d / %d: %.55s", cover_idx_ + 1, total, title.c_str());
+    buf.sync_bw_ram();
+    buf.show_loading(msg, cover_idx_ * 100 / total);
+    if (app_) app_->ensure_cover_bin(job.path);
+    buf.reset_after_scratch(true);
+    ++cover_idx_;
+    if (cover_idx_ >= total) {
+      phase_ = Phase::Done;
+      draw_done_(buf);
+      buf.full_refresh();
+    }
+    return;
+  }
+
+  // Phase::Converting — advance to next un-converted job.
   while (current_idx_ < static_cast<int>(jobs_.size()) && jobs_[current_idx_].done)
     ++current_idx_;
 
   if (cancel_requested_ || current_idx_ >= static_cast<int>(jobs_.size())) {
-    phase_ = Phase::Done;
-    draw_done_(buf);
-    buf.full_refresh();
+    // Conversions done (or cancelled); move on to cover extraction.
+    phase_ = Phase::Covers;
     return;
   }
 
@@ -130,8 +146,9 @@ void ConvertAllScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRunt
 
   buf.sync_bw_ram();
   {
-    char msg[48];
-    std::snprintf(msg, sizeof(msg), "Book %d / %d", job_num, total_pending);
+    char msg[96];
+    const std::string& title = job.title.empty() ? job.path : job.title;
+    std::snprintf(msg, sizeof(msg), "%d / %d: %.60s", job_num, total_pending, title.c_str());
     buf.show_loading(msg, 0);
   }
 
@@ -139,12 +156,13 @@ void ConvertAllScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRunt
   auto err = book.open(job.path.c_str(), buf.scratch_buf1(), buf.scratch_buf2());
   bool ok = false;
   if (err == EpubError::Ok && book.chapter_count() > 0) {
+    const std::string& title = job.title.empty() ? job.path : job.title;
     ok = convert_epub_to_mrb_streaming(
         book, job.mrb_path.c_str(), buf.scratch_buf1(), buf.scratch_buf2(),
-        [&buf, job_num, total_pending](int done, int total) {
+        [&buf, job_num, total_pending, &title](int done, int total) {
           int pct = total > 0 ? done * 100 / total : 0;
-          char msg[48];
-          std::snprintf(msg, sizeof(msg), "Book %d / %d", job_num, total_pending);
+          char msg[96];
+          std::snprintf(msg, sizeof(msg), "%d / %d: %.60s", job_num, total_pending, title.c_str());
           buf.show_loading(msg, pct);
         });
   }
@@ -162,47 +180,82 @@ void ConvertAllScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRunt
   }
 
   ++current_idx_;
-
-  bool all_done = std::all_of(jobs_.begin(), jobs_.end(), [](const BookJob& j) { return j.done; });
-  if (all_done) {
-    phase_ = Phase::Done;
-    draw_done_(buf);
-    buf.full_refresh();
-  }
 }
 
 void ConvertAllScreen::draw_done_(DrawBuffer& buf) const {
   buf.fill(true);
   const int W = buf.width();
   const int H = buf.height();
-  const int cx = W / 2;
+  const bool have_font = ui_font_.valid();
+  const int fa = have_font ? ui_font_.y_advance() : 16;
+  const int bl = have_font ? static_cast<int>(ui_font_.baseline()) : 12;
+  constexpr int kPad = 8;
+  constexpr int kLM = 14;
 
-  buf.draw_text_centered(cx, H / 4, "Convert All", false);
+  auto draw_centered = [&](int y, const char* text) {
+    if (!text || !*text) return;
+    const size_t len = std::strlen(text);
+    if (have_font) {
+      const int tw = static_cast<int>(ui_font_.word_width(text, len, FontStyle::Regular));
+      buf.draw_text_proportional((W - tw) / 2, y + bl, text, len, ui_font_, false);
+    } else {
+      buf.draw_text_centered(W / 2, y, text, true);
+    }
+  };
+  auto draw_left = [&](int y, const char* text) {
+    if (!text || !*text) return;
+    const size_t len = std::strlen(text);
+    if (have_font)
+      buf.draw_text_proportional(kLM, y + bl, text, len, ui_font_, false);
+    else
+      buf.draw_text_centered(W / 2, y, text, true);
+  };
 
-  char line[48];
-  if (cancel_requested_)
-    std::snprintf(line, sizeof(line), "Stopped. %d converted.", converted_count_);
-  else if (converted_count_ == 0 && failed_count_ == 0)
-    std::snprintf(line, sizeof(line), "All books already converted.");
-  else
-    std::snprintf(line, sizeof(line), "Done. %d converted.", converted_count_);
-  buf.draw_text_centered(cx, H / 2 - 10, line, false);
-
-  if (failed_count_ > 0) {
-    char fail[32];
-    std::snprintf(fail, sizeof(fail), "%d failed.", failed_count_);
-    buf.draw_text_centered(cx, H / 2 + 10, fail, false);
-  }
+  // Title
+  const char* heading = cancel_requested_ ? "Stopped" : "Done";
+  int y = kPad;
+  draw_centered(y, heading);
+  y += fa + kPad;
+  buf.fill_rect(kLM, y, W - kLM * 2, 1, false);
+  y += kPad;
 
   int skipped = static_cast<int>(std::count_if(jobs_.begin(), jobs_.end(),
-      [](const BookJob& j) { return j.skipped; }));
-  if (skipped > 0) {
-    char skip[48];
-    std::snprintf(skip, sizeof(skip), "%d already converted.", skipped);
-    buf.draw_text_centered(cx, H * 3 / 4, skip, false);
+      [](const BookJob& j) { return j.skipped && !j.failed; }));
+
+  if (!cancel_requested_ && converted_count_ == 0 && failed_count_ == 0) {
+    draw_centered(H / 2 - fa / 2, "All books up to date.");
+  } else {
+    char line[64];
+    std::snprintf(line, sizeof(line), "Converted:    %d", converted_count_);
+    draw_left(y, line);
+    y += fa + 4;
+
+    std::snprintf(line, sizeof(line), "Already done: %d", skipped);
+    draw_left(y, line);
+    y += fa + 4;
+
+    std::snprintf(line, sizeof(line), "Failed:       %d", failed_count_);
+    draw_left(y, line);
+    y += fa + 8;
+
+    if (failed_count_ > 0) {
+      buf.fill_rect(kLM, y, W - kLM * 2, 1, false);
+      y += kPad;
+      int shown = 0;
+      for (const auto& job : jobs_) {
+        if (!job.failed) continue;
+        if (shown >= 5) { draw_left(y, "..."); break; }
+        const std::string& t = job.title.empty() ? job.path : job.title;
+        char entry[80];
+        std::snprintf(entry, sizeof(entry), "%.70s", t.c_str());
+        draw_left(y, entry);
+        y += fa + 2;
+        ++shown;
+      }
+    }
   }
 
-  buf.draw_text_centered(cx, H - 30, "Back to return", false);
+  draw_centered(H - fa - kPad, "Back to return");
 }
 
 }  // namespace microreader

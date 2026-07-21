@@ -43,6 +43,13 @@ static void blit_cover(DrawBuffer& buf, int dst_x, int dst_y,
 
 
 void LyraScreen::on_start() {
+  // Lyra is portrait-only; clamp landscape rotations to portrait and persist it.
+  const Rotation rot = current_rotation_();
+  if (rot == Rotation::Deg0 || rot == Rotation::Deg180) {
+    set_buf_rotation_(Rotation::Deg90);
+    if (app_) app_->set_rotate_display(0);  // 0 = Portrait (Deg90)
+  }
+
   if (app_ && app_->data_dir_) {
     const std::string idx_path = std::string(app_->data_dir_) + "/book_index.dat";
     BookIndex::instance().load(idx_path);
@@ -216,10 +223,10 @@ void LyraScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) 
 
   // ── Header ───────────────────────────────────────────────────────────────
   int y = 10;
-  if (header_font_.valid())
-    buf.draw_text_proportional(kPad, y + header_font_.baseline(), "NOUS", header_font_, false);
-  else
-    buf.draw_text_proportional(kPad, y + ui_font_.baseline(), "NOUS", ui_font_, false);
+  {
+    const BitmapFont& brand_f = brand_font_.valid() ? brand_font_ : ui_font_;
+    buf.draw_text_proportional(kPad, y + brand_f.baseline(), "nous", brand_f, false);
+  }
 
   if (battery_pct) {
     char pbuf[8];
@@ -308,23 +315,39 @@ void LyraScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) 
     y += nav_row_h;
   }
 
-  // ── Bottom tooltip ────────────────────────────────────────────────────────
-  buf.fill_rect(0, bot_rule_y, W, 1, false);
+  // ── Bottom button boxes ───────────────────────────────────────────────────
   if (section_font_.valid()) {
     const BitmapFont& sf = section_font_;
     const bool inv = app_ && app_->invert_menu_buttons();
-    const char* labels[] = {"Back", "Select", inv ? "Up" : "Down", inv ? "Down" : "Up"};
-    static constexpr int kN = 4;
-    // Per-button nudges (pixels): +right, -left.
-    static constexpr int kNudge[kN] = {3, 10, -20, -5};
-    int ws[kN];
-    for (int i = 0; i < kN; ++i)
-      ws[i] = sf.word_width(labels[i], std::strlen(labels[i]), FontStyle::Regular);
-    const int slot_w = W / kN;
-    const int ty = bot_rule_y + 1 + kBotPad + sf.baseline();
-    for (int i = 0; i < kN; ++i) {
-      const int cx = slot_w * i + slot_w / 2 - ws[i] / 2 + kNudge[i];
-      buf.draw_text_proportional(cx, ty, labels[i], sf, false);
+
+    // Physical layout: 53px margin · 176px per pair · 22px gap · 176px · 53px
+    static constexpr int kBoxLX = 53;
+    static constexpr int kBoxW  = 176;
+    static constexpr int kBoxRX = kBoxLX + kBoxW + 22;  // 251
+    static constexpr int kLDiv  = kBoxLX + kBoxW / 2;   // 141
+    static constexpr int kRDiv  = kBoxRX + kBoxW / 2;   // 339
+
+    const int box_h  = kBotPad + sf.y_advance() + kBotPad;
+    const int box_y  = bot_rule_y;
+    const int text_y = box_y + kBotPad + sf.baseline();
+
+    auto draw_box = [&](int bx) {
+      buf.fill_rect(bx,            box_y,             kBoxW, 1,     false);
+      buf.fill_rect(bx,            box_y + box_h - 1, kBoxW, 1,     false);
+      buf.fill_rect(bx,            box_y,             1,     box_h, false);
+      buf.fill_rect(bx + kBoxW - 1, box_y,            1,     box_h, false);
+    };
+    draw_box(kBoxLX);
+    buf.fill_rect(kLDiv, box_y, 1, box_h, false);
+    draw_box(kBoxRX);
+    buf.fill_rect(kRDiv, box_y, 1, box_h, false);
+
+    const char* labels[4] = {"Back", "Select", inv ? "Up" : "Down", inv ? "Down" : "Up"};
+    const int centers[4]  = {kBoxLX + kBoxW / 4, kBoxLX + 3 * kBoxW / 4,
+                              kBoxRX + kBoxW / 4, kBoxRX + 3 * kBoxW / 4};
+    for (int i = 0; i < 4; ++i) {
+      const int tw = static_cast<int>(sf.word_width(labels[i], std::strlen(labels[i]), FontStyle::Regular));
+      buf.draw_text_proportional(centers[i] - tw / 2, text_y, labels[i], std::strlen(labels[i]), sf, false);
     }
   }
 }

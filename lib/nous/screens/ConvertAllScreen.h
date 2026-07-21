@@ -3,8 +3,10 @@
 #include <string>
 #include <vector>
 
+#include "../content/BitmapFont.h"
 #include "../display/DrawBuffer.h"
 #include "IScreen.h"
+#include "ListMenuScreen.h"
 
 namespace microreader {
 
@@ -24,8 +26,9 @@ class ConvertAllScreen final : public IScreen {
 
  private:
   DrawBuffer* buf_ = nullptr;
+  BitmapFont ui_font_;
 
-  enum class Phase { Converting, Done };
+  enum class Phase { Converting, Covers, Done };
   Phase phase_ = Phase::Converting;
 
   struct BookJob {
@@ -39,6 +42,7 @@ class ConvertAllScreen final : public IScreen {
 
   std::vector<BookJob> jobs_;
   int current_idx_ = 0;
+  int cover_idx_ = 0;
   int converted_count_ = 0;
   int failed_count_ = 0;
   bool cancel_requested_ = false;

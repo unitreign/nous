@@ -7,6 +7,7 @@
 #include <ctime>
 
 #include "HeapLog.h"
+#include "version.h"
 #include "content/Book.h"
 #include "content/BookIndex.h"
 #include "content/BmpSleepConverter.h"
@@ -57,6 +58,7 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   convert_all_.set_app(this);
   stats_.set_app(this);
   hidden_books_.set_app(this);
+  whats_new_.set_app(this);
 
 #ifdef MICROREADER_ENABLE_DEMOS
   bouncing_ball_.set_app(this);
@@ -112,6 +114,13 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   }
   pending_screen_.clear();
 
+  // Show What's New on first boot after a version update.
+  if (show_whats_new_on_update_ && last_seen_version_ != MICROREADER_VERSION) {
+    last_seen_version_ = MICROREADER_VERSION;
+    save_settings_();
+    screen_mgr_.push(&whats_new_, buf, runtime);
+  }
+
   buf.full_refresh();
 }
 
@@ -124,7 +133,7 @@ void Application::auto_open_book(const char* epub_path, DrawBuffer& buf, IRuntim
 }
 
 // Convert/cache a BMP sleep image and display it. Returns true if shown.
-static bool show_bmp_sleep(const char* bmp_path, const char* data_dir, DrawBuffer& buf) {
+static bool show_bmp_sleep(const char* bmp_path, const char* data_dir, DrawBuffer& buf, bool show_text = true) {
   if (!data_dir) return false;
   const char* slash = std::strrchr(bmp_path, '/');
   const char* back  = std::strrchr(bmp_path, '\\');
@@ -151,7 +160,7 @@ static bool show_bmp_sleep(const char* bmp_path, const char* data_dir, DrawBuffe
     cached = convert_bmp_to_mgr2(bmp_path, cache_path);
     MR_LOGI("sleep", "BMP convert result: %d cache=%s", (int)cached, cache_path);
   }
-  return cached && buf.show_sleep_image(cache_path);
+  return cached && buf.show_sleep_image(cache_path, show_text);
 }
 
 void Application::do_sleep_(DrawBuffer& buf) {
@@ -166,14 +175,14 @@ void Application::do_sleep_(DrawBuffer& buf) {
     buf.set_rotation(Rotation::Deg90);
     bool shown = false;
     if (sleep_image_path_.rfind("embedded:", 0) == 0) {
-      shown = buf.show_sleep_image_embedded(std::atoi(sleep_image_path_.c_str() + 9));
+      shown = buf.show_sleep_image_embedded(std::atoi(sleep_image_path_.c_str() + 9), show_sleep_text_);
     } else if (sleep_image_path_.rfind("bmp:", 0) == 0) {
-      shown = show_bmp_sleep(sleep_image_path_.c_str() + 4, data_dir_, buf);
+      shown = show_bmp_sleep(sleep_image_path_.c_str() + 4, data_dir_, buf, show_sleep_text_);
     } else {
-      shown = buf.show_sleep_image(sleep_image_path_.c_str());
+      shown = buf.show_sleep_image(sleep_image_path_.c_str(), show_sleep_text_);
     }
     MR_LOGI("sleep", "show result: %d", (int)shown);
-    if (!shown && !buf.show_sleep_image_embedded(0))
+    if (!shown && !buf.show_sleep_image_embedded(0, show_sleep_text_))
       buf.deep_sleep();
     running_ = false;
     return;
@@ -227,15 +236,15 @@ void Application::do_sleep_(DrawBuffer& buf) {
   const std::string& path = images[idx];
   bool sleep_shown = false;
   if (path.rfind("embedded:", 0) == 0) {
-    sleep_shown = buf.show_sleep_image_embedded(std::atoi(path.c_str() + 9));
+    sleep_shown = buf.show_sleep_image_embedded(std::atoi(path.c_str() + 9), show_sleep_text_);
   } else if (path.rfind("bmp:", 0) == 0) {
-    sleep_shown = show_bmp_sleep(path.c_str() + 4, data_dir_, buf);
+    sleep_shown = show_bmp_sleep(path.c_str() + 4, data_dir_, buf, show_sleep_text_);
   } else {
-    sleep_shown = buf.show_sleep_image(path.c_str());
+    sleep_shown = buf.show_sleep_image(path.c_str(), show_sleep_text_);
   }
 
   MR_LOGI("sleep", "show result: %d", (int)sleep_shown);
-  if (!sleep_shown && !buf.show_sleep_image_embedded(0))
+  if (!sleep_shown && !buf.show_sleep_image_embedded(0, show_sleep_text_))
     buf.deep_sleep();
 
   running_ = false;
@@ -324,6 +333,8 @@ IScreen* microreader::Application::screen_for_(ScreenId id) {
       return &lyra_ext_;
     case ScreenId::RecentBooks:
       return &recent_books_;
+    case ScreenId::WhatsNew:
+      return &whats_new_;
 
 #ifdef MICROREADER_ENABLE_DEMOS
     case ScreenId::BouncingBall:
@@ -408,6 +419,10 @@ void microreader::Application::save_settings_() {
   std::fprintf(f, "list_align=%u\n", static_cast<unsigned>(list_align_));
   std::fprintf(f, "sleep_timeout_min=%u\n", static_cast<unsigned>(sleep_timeout_min_));
   std::fprintf(f, "menu_theme=%u\n", static_cast<unsigned>(menu_theme_));
+  std::fprintf(f, "sleep_text=%u\n", show_sleep_text_ ? 1u : 0u);
+  std::fprintf(f, "show_whats_new=%u\n", show_whats_new_on_update_ ? 1u : 0u);
+  if (!last_seen_version_.empty())
+    std::fprintf(f, "last_version=%s\n", last_seen_version_.c_str());
 
   std::fclose(f);
 }
@@ -578,8 +593,19 @@ void microreader::Application::load_settings_() {
       sleep_timeout_min_ = static_cast<uint8_t>(uval <= 60 ? uval : 10);
     else if (std::sscanf(line, "menu_theme=%u", &uval) == 1)
       menu_theme_ = static_cast<uint8_t>(uval <= 5 ? uval : 0);
+    else if (std::sscanf(line, "sleep_text=%u", &uval) == 1)
+      show_sleep_text_ = (uval != 0);
+    else if (std::sscanf(line, "show_whats_new=%u", &uval) == 1)
+      show_whats_new_on_update_ = (uval != 0);
+    else if (std::sscanf(line, "last_version=%511[^\n]", sval) == 1)
+      last_seen_version_ = sval;
   }
   std::fclose(f);
+
+  // These toggles have been removed from Settings UI — always enforce.
+  show_nav_arrows_ = true;
+  show_converted_indicator_ = true;
+  list_align_ = 0;
 
   MR_LOGI("app", "Loaded settings: align=%u ph=%u pv=%u ls=%u prog=%u sel=%s", static_cast<unsigned>(rs.align_override),
           rs.padding_h_idx, rs.padding_v_idx, static_cast<unsigned>(rs.spacing_override),

@@ -26,6 +26,12 @@
 
 namespace microreader {
 
+static constexpr const char* kTabNames[4] = {"Look", "Reader", "Control", "System"};
+
+// ---------------------------------------------------------------------------
+// Label helpers
+// ---------------------------------------------------------------------------
+
 static std::string get_menu_nav_label(bool inverted) {
   return std::string("Menu Nav: ") + (inverted ? "Right=Down" : "Right=Up");
 }
@@ -82,16 +88,12 @@ static std::string get_sleep_image_label(const std::string& path) {
   return label;
 }
 
-static std::string get_nav_arrows_label(bool shown) {
-  return std::string("Nav Arrows: ") + (shown ? "Show" : "Hide");
+static std::string get_sleep_text_label(bool shown) {
+  return std::string("Sleep Text: ") + (shown ? "Show" : "Hide");
 }
 
 static std::string get_reader_images_label(bool enabled) {
   return std::string("Book Images: ") + (enabled ? "On" : "Off");
-}
-
-static std::string get_conv_indicator_label(bool shown) {
-  return std::string("Converted Mark: ") + (shown ? "On" : "Off");
 }
 
 static std::string get_battery_display_label(uint8_t mode) {
@@ -104,8 +106,8 @@ static std::string get_theme_label(uint8_t theme) {
   if (theme == 0) return "Theme: Chronicle";
   if (theme == 2) return "Theme: Stele";
   if (theme == 3) return "Theme: Codex";
-  if (theme == 4) return "Theme: Lyra on Budget";
-  if (theme == 5) return "Theme: Lyra Extended on Budget";
+  if (theme == 4) return "Theme: Lyra Like";
+  if (theme == 5) return "Theme: Lyra Extended Like";
   return "Theme: Minimal";
 }
 
@@ -116,16 +118,16 @@ static std::string get_sleep_timeout_label(uint8_t min) {
   return buf;
 }
 
-static std::string get_list_align_label(uint8_t align) {
-  if (align == 1) return "List Align: Left";
-  if (align == 2) return "List Align: Right";
-  return "List Align: Center";
+static std::string get_show_whats_new_label(bool on) {
+  return std::string("Show on Update: ") + (on ? "On" : "Off");
 }
 
 static std::string get_font_label(const std::string& font_path) {
   std::string label = "Font: ";
-  if (font_path == "Bookerly" || font_path == "Alegreya") {
+  if (font_path == "Literata") {
     label += font_path;
+  } else if (font_path.empty()) {
+    label += "Literata";
   } else {
     const char* p = font_path.c_str();
     const char* slash = nullptr;
@@ -137,25 +139,100 @@ static std::string get_font_label(const std::string& font_path) {
   return label;
 }
 
+// ---------------------------------------------------------------------------
+// ensure_visible_ override — clamps scroll to never go below tab_start_
+// ---------------------------------------------------------------------------
+
+void SettingsScreen::ensure_visible_() {
+  if (scroll_offset() < tab_start_[active_tab_])
+    set_scroll_offset_(tab_start_[active_tab_]);
+  ListMenuScreen::ensure_visible_();
+  if (scroll_offset() < tab_start_[active_tab_])
+    set_scroll_offset_(tab_start_[active_tab_]);
+  // kPad in the base class can over-scroll short tabs. If the selected item is
+  // already reachable from tab_start_, reset to tab_start_.
+  const int H = current_height_();
+  if (H > 0 && scroll_offset() > tab_start_[active_tab_]) {
+    if (selected() - tab_start_[active_tab_] < get_visible_count_(H, tab_start_[active_tab_]))
+      set_scroll_offset_(tab_start_[active_tab_]);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tab bar drawing
+// ---------------------------------------------------------------------------
+
+int SettingsScreen::tab_bar_height_() const {
+  return ui_font_.valid() ? ui_font_.y_advance() + 10 : 24;
+}
+
+void SettingsScreen::draw_tab_bar_(DrawBuffer& buf, int y, int W) const {
+  const int tab_h = tab_bar_height_();
+  const int tab_w = W / kTabCount;
+
+  for (int i = 0; i < kTabCount; ++i) {
+    const int tx = i * tab_w;
+    const int tw = (i == kTabCount - 1) ? W - tx : tab_w;
+    const bool is_active = (i == active_tab_);
+    const bool inverted = is_active && (focus_state_ == FocusState::TabBar);
+
+    if (inverted)
+      buf.fill_rect(tx, y, tw, tab_h, false);
+
+    if (!ui_font_.valid()) continue;
+    const char* name = kTabNames[i];
+    const int nw = static_cast<int>(ui_font_.word_width(name, strlen(name), FontStyle::Regular));
+    const int cx = tx + tw / 2 - nw / 2;
+    const int ty = y + (tab_h - ui_font_.y_advance()) / 2 + static_cast<int>(ui_font_.baseline());
+    buf.draw_text_proportional(cx, ty, name, strlen(name), ui_font_, inverted);
+
+    // Underline active tab when in list mode
+    if (is_active && focus_state_ == FocusState::List)
+      buf.fill_rect(tx, y + tab_h - 2, tw, 2, false);
+
+    // Vertical divider between tabs
+    if (i < kTabCount - 1)
+      buf.fill_rect(tx + tw - 1, y + 4, 1, tab_h - 8, false);
+  }
+
+  // Bottom border
+  buf.fill_rect(0, y + tab_h - 1, W, 1, false);
+}
+
+// ---------------------------------------------------------------------------
+// on_start
+// ---------------------------------------------------------------------------
+
 void SettingsScreen::on_start() {
   title_ = "Settings";
   subtitle_ = MICROREADER_VERSION;
+  focus_state_ = FocusState::TabBar;
 
+  // Reset all idx
+  idx_clear_cache_ = idx_rebuild_index_ = idx_list_format_ = idx_sort_order_ = -1;
+  idx_switch_ota_ = idx_invalidate_font_ = idx_spiffs_ = -1;
+  idx_invert_menu_ = idx_invert_bottom_paging_ = idx_invert_side_ = -1;
+  idx_rotate_display_ = idx_reader_rotate_display_ = idx_menu_font_ = -1;
+  idx_font_ = idx_sleep_image_ = idx_sleep_text_ = idx_reader_images_ = -1;
+  idx_battery_display_ = idx_sleep_timeout_ = idx_convert_all_ = idx_theme_ = -1;
+  idx_whats_new_ = idx_show_whats_new_ = -1;
+#ifdef MICROREADER_ENABLE_DEMOS
+  idx_bouncing_ball_ = idx_grayscale_demo_ = -1;
+#endif
+
+  // Build font list
   sd_fonts_.clear();
-  sd_fonts_.push_back("Bookerly");
-  sd_fonts_.push_back("Alegreya");
+  sd_fonts_.push_back("Literata");
   font_sel_idx_ = 0;
 #ifdef ESP_PLATFORM
   DIR* d = opendir("/sdcard/fonts");
   if (d) {
     struct dirent* ent;
     while ((ent = readdir(d)) != nullptr) {
-      if (ent->d_name[0] == '.')
-        continue;
+      if (ent->d_name[0] == '.') continue;
       const char* ext = std::strrchr(ent->d_name, '.');
-      if (ext && strcmp(ext, ".mfb") == 0) {
+      if (ext && strcmp(ext, ".mfb") == 0)
         sd_fonts_.push_back(std::string("/sdcard/fonts/") + ent->d_name);
-      }
     }
     closedir(d);
   }
@@ -163,21 +240,16 @@ void SettingsScreen::on_start() {
   namespace fs = std::filesystem;
   try {
     for (const auto& entry : fs::directory_iterator("sd/fonts")) {
-      std::string ext = entry.path().extension().string();
-      if (ext == ".mfb") {
+      if (entry.path().extension() == ".mfb")
         sd_fonts_.push_back(entry.path().string());
-      }
     }
   } catch (...) {}
 #endif
-
   if (app_) {
     const std::string& current = app_->custom_font_path();
+    const std::string& match = (current.empty() || current == "Vollkorn" || current == "Alegreya") ? sd_fonts_[0] : current;
     for (size_t i = 0; i < sd_fonts_.size(); ++i) {
-      if (sd_fonts_[i] == current) {
-        font_sel_idx_ = static_cast<int>(i);
-        break;
-      }
+      if (sd_fonts_[i] == match) { font_sel_idx_ = static_cast<int>(i); break; }
     }
   }
 
@@ -193,8 +265,7 @@ void SettingsScreen::on_start() {
     if (sd) {
       struct dirent* ent;
       while ((ent = readdir(sd)) != nullptr) {
-        if (ent->d_name[0] == '.')
-          continue;
+        if (ent->d_name[0] == '.') continue;
         const char* ext = std::strrchr(ent->d_name, '.');
         if (!ext) continue;
         if (strcmp(ext, ".mgr") == 0)
@@ -219,74 +290,81 @@ void SettingsScreen::on_start() {
   if (app_) {
     const std::string& current = app_->sleep_image_path();
     for (size_t i = 0; i < sleep_images_.size(); ++i) {
-      if (sleep_images_[i] == current) {
-        sleep_image_sel_idx_ = static_cast<int>(i);
-        break;
-      }
+      if (sleep_images_[i] == current) { sleep_image_sel_idx_ = static_cast<int>(i); break; }
     }
   }
 
-  // --- Appearance ---
-  add_separator("APPEARANCE");
-  idx_rotate_display_ = count();
-  add_item(get_rotate_menu_label(app_ ? app_->rotate_display() : 0));
-
-  idx_reader_rotate_display_ = count();
-  add_item(get_rotate_reader_label(app_ ? app_->rotate_reader() : 0));
+  // ── Tab 0: Appearance ───────────────────────────────────────────────────
+  tab_start_[0] = count();
 
   idx_theme_ = count();
   add_item(get_theme_label(app_ ? app_->menu_theme() : 0));
 
+  const uint8_t cur_theme = app_ ? app_->menu_theme() : 0;
+  const bool is_lyra_theme = (cur_theme == static_cast<uint8_t>(MenuTheme::Lyra) ||
+                               cur_theme == static_cast<uint8_t>(MenuTheme::LyraExt));
+  if (!is_lyra_theme) {
+    idx_rotate_display_ = count();
+    add_item(get_rotate_menu_label(app_ ? app_->rotate_display() : 0));
+  }
+
   idx_menu_font_ = count();
   add_item(get_menu_font_label(app_ ? app_->menu_font_size() : 0));
+
+  idx_sleep_image_ = count();
+  add_item(get_sleep_image_label(sleep_images_[sleep_image_sel_idx_]));
+
+  idx_sleep_text_ = count();
+  add_item(get_sleep_text_label(app_ ? app_->show_sleep_text() : true));
+
+  idx_battery_display_ = count();
+  add_item(get_battery_display_label(app_ ? app_->battery_display() : 0));
+
+  tab_end_[0] = count() - 1;
+
+  // ── Tab 1: Reader ────────────────────────────────────────────────────────
+  tab_start_[1] = count();
+
+  idx_reader_rotate_display_ = count();
+  add_item(get_rotate_reader_label(app_ ? app_->rotate_reader() : 0));
+
+  idx_font_ = count();
+  add_item(get_font_label(sd_fonts_[font_sel_idx_]));
+
+  idx_reader_images_ = count();
+  add_item(get_reader_images_label(app_ ? app_->show_reader_images() : true));
 
   idx_list_format_ = count();
   if (app_) {
     add_item(get_list_format_label(app_->main_menu() ? app_->main_menu()->list_format() : BookListFormat::TitleOnly));
   } else {
-    add_item("List: Title");
+    add_item("Book List: Title");
   }
 
   idx_sort_order_ = count();
   add_item(get_sort_order_label(app_ ? app_->sort_order() : BookSortOrder::Alphabetical));
 
-  idx_font_ = count();
-  add_item(get_font_label(sd_fonts_[font_sel_idx_]));
-
-  idx_sleep_image_ = count();
-  add_item(get_sleep_image_label(sleep_images_[sleep_image_sel_idx_]));
-
-  idx_nav_arrows_ = count();
-  add_item(get_nav_arrows_label(app_ ? app_->show_nav_arrows() : true));
-
-  idx_reader_images_ = count();
-  add_item(get_reader_images_label(app_ ? app_->show_reader_images() : true));
-
-  idx_battery_display_ = count();
-  add_item(get_battery_display_label(app_ ? app_->battery_display() : 0));
-
-  idx_conv_indicator_ = count();
-  add_item(get_conv_indicator_label(app_ ? app_->show_converted_indicator() : false));
-
-  idx_list_align_ = count();
-  add_item(get_list_align_label(app_ ? app_->list_align() : 0));
-
   idx_sleep_timeout_ = count();
   add_item(get_sleep_timeout_label(app_ ? app_->sleep_timeout_min() : 10));
 
-  add_separator("CONTROLS");
+  tab_end_[1] = count() - 1;
 
-  // --- Controls ---
+  // ── Tab 2: Control ───────────────────────────────────────────────────────
+  tab_start_[2] = count();
+
   idx_invert_side_ = count();
-  add_item(get_side_paging_label(app_->invert_side_buttons()));
+  add_item(get_side_paging_label(app_ ? app_->invert_side_buttons() : false));
 
   idx_invert_bottom_paging_ = count();
-  add_item(get_bottom_paging_label(app_->invert_bottom_paging()));
+  add_item(get_bottom_paging_label(app_ ? app_->invert_bottom_paging() : true));
 
   idx_invert_menu_ = count();
-  add_item(get_menu_nav_label(app_->invert_menu_buttons()));
+  add_item(get_menu_nav_label(app_ ? app_->invert_menu_buttons() : false));
 
-  add_separator("SYSTEM");
+  tab_end_[2] = count() - 1;
+
+  // ── Tab 3: System ────────────────────────────────────────────────────────
+  tab_start_[3] = count();
 
   if (data_dir_) {
     idx_clear_cache_ = count();
@@ -295,6 +373,15 @@ void SettingsScreen::on_start() {
     idx_rebuild_index_ = count();
     add_item("Rebuild Book Index");
   }
+
+  idx_convert_all_ = count();
+  add_item("Convert All Books");
+
+  idx_whats_new_ = count();
+  add_item("What's New");
+
+  idx_show_whats_new_ = count();
+  add_item(get_show_whats_new_label(app_ ? app_->show_whats_new_on_update() : true));
 
 #ifdef ESP_PLATFORM
   if (app_ && app_->has_invalidate_font_fn()) {
@@ -311,7 +398,6 @@ void SettingsScreen::on_start() {
     if (next) {
       esp_ota_img_states_t state = ESP_OTA_IMG_UNDEFINED;
       esp_ota_get_state_partition(next, &state);
-      ESP_LOGI("OTA", "on_start: next=%s state=%d", next->label, (int)state);
       if (state == ESP_OTA_IMG_VALID || state == ESP_OTA_IMG_NEW || state == ESP_OTA_IMG_PENDING_VERIFY ||
           state == ESP_OTA_IMG_UNDEFINED) {
         idx_switch_ota_ = count();
@@ -323,9 +409,7 @@ void SettingsScreen::on_start() {
   }
 #endif
 
-  // --- Demos ---
 #ifdef MICROREADER_ENABLE_DEMOS
-  add_separator();
   idx_bouncing_ball_ = count();
   add_item("Bouncing Ball");
 
@@ -333,33 +417,141 @@ void SettingsScreen::on_start() {
   add_item("Grayscale Demo");
 #endif
 
-  add_separator();
-  idx_convert_all_ = count();
-  add_item("Convert All Books");
+  tab_end_[3] = count() - 1;
+
+  // Pin scroll and selection to the active tab's start so returning from a
+  // sub-screen (which resets scroll_offset_ to 0 via clear_items) never
+  // shows items from other tabs.
+  set_selected(tab_start_[active_tab_]);
+  set_scroll_offset_(tab_start_[active_tab_]);
+}
+
+// ---------------------------------------------------------------------------
+// Navigation
+// ---------------------------------------------------------------------------
+
+void SettingsScreen::on_back() {
+  if (focus_state_ == FocusState::List) {
+    focus_state_ = FocusState::TabBar;
+    request_redraw();
+    // Do NOT call pop_screen — just return to tab bar
+  } else {
+    ListMenuScreen::on_back();
+  }
 }
 
 int SettingsScreen::get_visible_count_(int H, int scroll_off) const {
-  const int list_top = 16 + (header_font_.valid() ? header_font_.y_advance() : ui_font_.y_advance()) + 7;
+  // Before this tab's range starts, nothing is visible — forces ensure_visible_()
+  // to advance scroll_offset_ to tab_start_ before counting begins.
+  if (scroll_off < tab_start_[active_tab_]) return 0;
+  const int list_top = 16
+      + (header_font_.valid() ? header_font_.y_advance() : ui_font_.y_advance())
+      + 7 + tab_bar_height_();
   const int available_h = H - list_top;
-  int h = 0, cnt = 0, n = count();
-  for (int i = scroll_off; i < n; ++i) {
-    const int item_h = is_separator(i)
-        ? (8 + (!get_item_label(i).empty() && section_font_.valid() ? section_font_.y_advance() : 0) + 4)
-        : kRowH;
-    if (h + item_h > available_h) break;
-    h += item_h;
-    cnt++;
+  int h = 0, cnt = 0;
+  const int end = tab_end_[active_tab_];
+  for (int i = scroll_off; i <= end; ++i) {
+    if (h + kRowH > available_h) break;
+    h += kRowH;
+    ++cnt;
   }
   return cnt;
 }
 
-std::string_view SettingsScreen::get_item_subtitle(int index) const {
-  std::string_view label = ListMenuScreen::get_item_label(index);
-  const auto pos = label.find(": ");
-  if (pos == std::string_view::npos) return {};
-  subtitle_buf_ = label.substr(pos + 2);
-  return subtitle_buf_;
+bool SettingsScreen::is_item_focusable(int index) const {
+  if (!ListMenuScreen::is_item_focusable(index)) return false;
+  // Only items within the active tab are reachable
+  if (index < tab_start_[active_tab_] || index > tab_end_[active_tab_]) return false;
+  return true;
 }
+
+// ---------------------------------------------------------------------------
+// update
+// ---------------------------------------------------------------------------
+
+void SettingsScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& runtime) {
+  buf_ = &buf;
+
+  // Toast countdown
+  if (toast_frames_ > 0) {
+    --toast_frames_;
+    if (toast_frames_ == 0 && toast_idx_ >= 0) {
+      set_item_label(toast_idx_, toast_original_label_);
+      toast_idx_ = -1;
+      toast_original_label_.clear();
+      request_redraw();
+    }
+  }
+
+  // Picker takes priority
+  if (picker_open_) {
+    const bool inv = app_ && app_->invert_menu_buttons();
+    const Button btn_up   = inv ? Button::Button2 : Button::Button3;
+    const Button btn_down = inv ? Button::Button3 : Button::Button2;
+    const int n = static_cast<int>(picker_options_.size());
+    bool redraw = false;
+    Button btn;
+    while (buttons.next_press(btn)) {
+      if (btn == btn_up || btn == Button::Up) {
+        picker_sel_ = (picker_sel_ - 1 + n) % n;
+        redraw = true;
+      } else if (btn == btn_down || btn == Button::Down) {
+        picker_sel_ = (picker_sel_ + 1) % n;
+        redraw = true;
+      } else if (btn == Button::Button1) {
+        apply_picker_(picker_sel_);
+        return;
+      } else if (btn == Button::Button0) {
+        picker_open_ = false;
+        redraw = true;
+      }
+    }
+    if (redraw) {
+      draw_all_(buf, runtime.battery_percentage());
+      buf.refresh();
+    }
+    return;
+  }
+
+  // Tab bar focus
+  if (focus_state_ == FocusState::TabBar) {
+    const bool inv = app_ && app_->invert_menu_buttons();
+    const Button btn_down_front = inv ? Button::Button3 : Button::Button2;
+    bool redraw = false;
+    Button btn;
+    while (buttons.next_press(btn)) {
+      if (btn == Button::Button1) {
+        // Select: cycle to next tab
+        active_tab_ = (active_tab_ + 1) % kTabCount;
+        set_selected(tab_start_[active_tab_]);
+        set_scroll_offset_(tab_start_[active_tab_]);
+        redraw = true;
+      } else if (btn == btn_down_front || btn == Button::Down) {
+        // Down: enter list at first item of this tab
+        focus_state_ = FocusState::List;
+        set_selected(tab_start_[active_tab_]);
+        set_scroll_offset_(tab_start_[active_tab_]);
+        redraw = true;
+      } else if (btn == Button::Button0) {
+        // Back: exit to main menu
+        if (app_) app_->pop_screen();
+        return;
+      }
+    }
+    if (redraw) {
+      draw_all_(buf, runtime.battery_percentage());
+      buf.refresh();
+    }
+    return;
+  }
+
+  // List focus — delegate to base class (it calls on_select / on_back)
+  ListMenuScreen::update(buttons, buf, runtime);
+}
+
+// ---------------------------------------------------------------------------
+// Picker
+// ---------------------------------------------------------------------------
 
 void SettingsScreen::open_picker_(const char* title, int target_idx, std::vector<std::string> opts, int cur_sel) {
   picker_title_   = title;
@@ -375,8 +567,9 @@ void SettingsScreen::apply_picker_(int sel) {
   if (!app_) return;
 
   if (picker_target_ == idx_theme_) {
+    static constexpr uint8_t kThemeOrder[] = {1, 0, 2, 3, 4, 5};
     const uint8_t old_v = app_->menu_theme();
-    const uint8_t v = static_cast<uint8_t>(sel);
+    const uint8_t v = kThemeOrder[sel >= 0 && sel < 6 ? sel : 0];
     app_->set_menu_theme(v);
     set_item_label(idx_theme_, get_theme_label(v));
     if (v == static_cast<uint8_t>(ListMenuScreen::MenuTheme::Lyra))
@@ -392,17 +585,18 @@ void SettingsScreen::apply_picker_(int sel) {
   }
   if (picker_target_ == idx_menu_font_) {
     app_->set_menu_font_size(sel);
-    restart();
+    const int saved_tab = active_tab_;
+    restart();  // rebuilds items + fonts; resets active_tab_ and focus_state_
+    active_tab_ = saved_tab;
+    focus_state_ = FocusState::List;
+    set_selected(idx_menu_font_);
+    ensure_visible_();
     return;
   }
   if (picker_target_ == idx_battery_display_) {
     auto v = static_cast<uint8_t>(sel);
     app_->set_battery_display(v);
     set_item_label(idx_battery_display_, get_battery_display_label(v));
-  } else if (picker_target_ == idx_list_align_) {
-    auto v = static_cast<uint8_t>(sel);
-    app_->set_list_align(v);
-    set_item_label(idx_list_align_, get_list_align_label(v));
   } else if (picker_target_ == idx_sleep_timeout_) {
     static constexpr uint8_t kTimeouts[] = {0, 1, 3, 5, 10, 20, 30};
     uint8_t v = (sel >= 0 && sel < (int)sizeof(kTimeouts)) ? kTimeouts[sel] : 0;
@@ -443,63 +637,23 @@ void SettingsScreen::apply_picker_(int sel) {
   request_redraw();
 }
 
-void SettingsScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& runtime) {
-  buf_ = &buf;
-  if (toast_frames_ > 0) {
-    --toast_frames_;
-    if (toast_frames_ == 0 && toast_idx_ >= 0) {
-      set_item_label(toast_idx_, toast_original_label_);
-      toast_idx_ = -1;
-      toast_original_label_.clear();
-      request_redraw();
-    }
-  }
-
-  if (picker_open_) {
-    const bool inv = app_ && app_->invert_menu_buttons();
-    const Button btn_up   = inv ? Button::Button2 : Button::Button3;
-    const Button btn_down = inv ? Button::Button3 : Button::Button2;
-    const int n = static_cast<int>(picker_options_.size());
-    bool redraw = false;
-    Button btn;
-    while (buttons.next_press(btn)) {
-      if (btn == btn_up || btn == Button::Up) {
-        picker_sel_ = (picker_sel_ - 1 + n) % n;
-        redraw = true;
-      } else if (btn == btn_down || btn == Button::Down) {
-        picker_sel_ = (picker_sel_ + 1) % n;
-        redraw = true;
-      } else if (btn == Button::Button1) {
-        apply_picker_(picker_sel_);
-        return;
-      } else if (btn == Button::Button0) {
-        picker_open_ = false;
-        redraw = true;
-      }
-    }
-    if (redraw) {
-      draw_all_(buf, runtime.battery_percentage());
-      buf.refresh();
-    }
-    return;
-  }
-
-  ListMenuScreen::update(buttons, buf, runtime);
-}
+// ---------------------------------------------------------------------------
+// on_select
+// ---------------------------------------------------------------------------
 
 void SettingsScreen::on_select(int index) {
   if (index == idx_theme_) {
-    open_picker_("Select Theme", idx_theme_,
-      {"Chronicle", "Minimal", "Stele", "Codex", "Lyra on Budget", "Lyra Extended on Budget"},
-      app_ ? static_cast<int>(app_->menu_theme()) : 0);
-    return;
-  }
-  if (index == idx_nav_arrows_) {
+    // Picker order: Minimal(1), Chronicle(0), Stele(2), Codex(3), Lyra(4), LyraExt(5)
+    static constexpr uint8_t kThemeOrder[] = {1, 0, 2, 3, 4, 5};
+    int cur_sel = 0;
     if (app_) {
-      bool v = !app_->show_nav_arrows();
-      app_->set_show_nav_arrows(v);
-      set_item_label(idx_nav_arrows_, get_nav_arrows_label(v));
+      const uint8_t cur = app_->menu_theme();
+      for (int i = 0; i < 6; ++i)
+        if (kThemeOrder[i] == cur) { cur_sel = i; break; }
     }
+    open_picker_("Select Theme", idx_theme_,
+      {"Minimal", "Chronicle", "Stele", "Codex", "Lyra Like", "Lyra Extended Like"},
+      cur_sel);
     return;
   }
   if (index == idx_reader_images_) {
@@ -510,24 +664,18 @@ void SettingsScreen::on_select(int index) {
     }
     return;
   }
+  if (index == idx_sleep_text_) {
+    if (app_) {
+      bool v = !app_->show_sleep_text();
+      app_->set_show_sleep_text(v);
+      set_item_label(idx_sleep_text_, get_sleep_text_label(v));
+    }
+    return;
+  }
   if (index == idx_battery_display_) {
     open_picker_("Battery Display", idx_battery_display_,
       {"Icon", "Number", "Icon & Number"},
       app_ ? static_cast<int>(app_->battery_display()) : 0);
-    return;
-  }
-  if (index == idx_conv_indicator_) {
-    if (app_) {
-      bool v = !app_->show_converted_indicator();
-      app_->set_show_converted_indicator(v);
-      set_item_label(idx_conv_indicator_, get_conv_indicator_label(v));
-    }
-    return;
-  }
-  if (index == idx_list_align_) {
-    open_picker_("List Align", idx_list_align_,
-      {"Center", "Left", "Right"},
-      app_ ? static_cast<int>(app_->list_align()) : 0);
     return;
   }
   if (index == idx_sleep_timeout_) {
@@ -544,45 +692,25 @@ void SettingsScreen::on_select(int index) {
     return;
   }
   if (index == idx_convert_all_) {
-    if (app_)
-      app_->push_screen(ScreenId::ConvertAll);
+    if (app_) app_->push_screen(ScreenId::ConvertAll);
     return;
   }
-#ifdef MICROREADER_ENABLE_DEMOS
-  if (index == idx_bouncing_ball_) {
-    app_->push_screen(ScreenId::BouncingBall);
+  if (index == idx_whats_new_) {
+    if (app_) app_->push_screen(ScreenId::WhatsNew);
     return;
   }
-  if (index == idx_grayscale_demo_) {
-    app_->push_screen(ScreenId::GrayscaleDemo);
-    return;
-  }
-#endif
-  if (index == idx_clear_cache_) {
-    clear_cache_();
-    toast_original_label_ = get_item_label(idx_clear_cache_);
-    toast_idx_ = idx_clear_cache_;
-    toast_frames_ = 15;
-    set_item_label(idx_clear_cache_, "Cache cleared!");
-    return;
-  }
-  if (index == idx_rebuild_index_) {
-    if (app_->main_menu() && app_->main_menu()->has_books_dir() && app_->data_dir_) {
-      std::string root_dir = app_->main_menu()->books_dir();
-      std::string index_path = std::string(app_->data_dir_) + "/book_index.dat";
-
-      buf_->sync_bw_ram();
-      BookIndex::instance().load(index_path);
-      BookIndex::instance().build_index(root_dir, *buf_);
-      BookIndex::instance().save(index_path);
-      buf_->reset_after_scratch(true);
-      app_->pop_screen();  // go back to main menu
+  if (index == idx_show_whats_new_) {
+    if (app_) {
+      bool v = !app_->show_whats_new_on_update();
+      app_->set_show_whats_new_on_update(v);
+      set_item_label(idx_show_whats_new_, get_show_whats_new_label(v));
     }
     return;
   }
   if (index == idx_sort_order_) {
     if (app_) {
-      BookSortOrder order = (app_->sort_order() == BookSortOrder::Alphabetical) ? BookSortOrder::LastOpened : BookSortOrder::Alphabetical;
+      BookSortOrder order = (app_->sort_order() == BookSortOrder::Alphabetical)
+          ? BookSortOrder::LastOpened : BookSortOrder::Alphabetical;
       app_->set_sort_order(order);
       set_item_label(idx_sort_order_, get_sort_order_label(order));
     }
@@ -644,17 +772,48 @@ void SettingsScreen::on_select(int index) {
   if (index == idx_font_) {
     std::vector<std::string> font_names;
     font_names.reserve(sd_fonts_.size());
-    for (const auto& fp : sd_fonts_) font_names.push_back(get_font_label(fp).substr(6)); // strip "Font: "
+    for (const auto& fp : sd_fonts_) font_names.push_back(get_font_label(fp).substr(6));
     open_picker_("Font", idx_font_, std::move(font_names), font_sel_idx_);
     return;
   }
   if (index == idx_sleep_image_) {
     std::vector<std::string> img_names;
     img_names.reserve(sleep_images_.size());
-    for (const auto& ip : sleep_images_) img_names.push_back(get_sleep_image_label(ip).substr(13)); // strip "Sleep Image: "
+    for (const auto& ip : sleep_images_) img_names.push_back(get_sleep_image_label(ip).substr(13));
     open_picker_("Sleep Image", idx_sleep_image_, std::move(img_names), sleep_image_sel_idx_);
     return;
   }
+  if (index == idx_clear_cache_) {
+    clear_cache_();
+    toast_original_label_ = get_item_label(idx_clear_cache_);
+    toast_idx_ = idx_clear_cache_;
+    toast_frames_ = 15;
+    set_item_label(idx_clear_cache_, "Cache cleared!");
+    return;
+  }
+  if (index == idx_rebuild_index_) {
+    if (app_->main_menu() && app_->main_menu()->has_books_dir() && app_->data_dir_) {
+      std::string root_dir = app_->main_menu()->books_dir();
+      std::string index_path = std::string(app_->data_dir_) + "/book_index.dat";
+      buf_->sync_bw_ram();
+      BookIndex::instance().load(index_path);
+      BookIndex::instance().build_index(root_dir, *buf_);
+      BookIndex::instance().save(index_path);
+      buf_->reset_after_scratch(true);
+      app_->pop_screen();
+    }
+    return;
+  }
+#ifdef MICROREADER_ENABLE_DEMOS
+  if (index == idx_bouncing_ball_) {
+    app_->push_screen(ScreenId::BouncingBall);
+    return;
+  }
+  if (index == idx_grayscale_demo_) {
+    app_->push_screen(ScreenId::GrayscaleDemo);
+    return;
+  }
+#endif
 #ifdef ESP_PLATFORM
   if (index == idx_switch_ota_) {
     switch_ota_partition_();
@@ -685,9 +844,7 @@ void SettingsScreen::on_select(int index) {
       uint8_t* work = static_cast<uint8_t*>(malloc(kDecompSize + kDictSize + kWriteSize));
       if (work) {
         esp_partition_erase_range(part, 0, part->size);
-
-        if (buf_)
-          buf_->show_loading("Writing...", 50);
+        if (buf_) buf_->show_loading("Writing...", 50);
 
         auto* decomp = reinterpret_cast<tinfl_decompressor*>(work);
         uint8_t* dict = work + kDecompSize;
@@ -702,8 +859,7 @@ void SettingsScreen::on_select(int index) {
           size_t in_sz = in_left;
           size_t out_sz = kDictSize - dict_ofs;
           mz_uint32 flags = TINFL_FLAG_PARSE_ZLIB_HEADER;
-          if (in_left > in_sz)
-            flags |= TINFL_FLAG_HAS_MORE_INPUT;
+          if (in_left > in_sz) flags |= TINFL_FLAG_HAS_MORE_INPUT;
           status = tinfl_decompress(decomp, in_ptr, &in_sz, dict, dict + dict_ofs, &out_sz, flags);
           in_ptr += in_sz;
           in_left -= in_sz;
@@ -711,156 +867,110 @@ void SettingsScreen::on_select(int index) {
           size_t write_ofs = 0;
           while (write_ofs < produced) {
             size_t chunk = produced - write_ofs;
-            if (chunk > kWriteSize)
-              chunk = kWriteSize;
+            if (chunk > kWriteSize) chunk = kWriteSize;
             memcpy(wbuf, dict + dict_ofs + write_ofs, chunk);
             esp_partition_write(part, flash_offset, wbuf, chunk);
             flash_offset += chunk;
             write_ofs += chunk;
           }
           dict_ofs = (dict_ofs + produced) & (kDictSize - 1);
-          if (status <= TINFL_STATUS_DONE)
-            break;
+          if (status <= TINFL_STATUS_DONE) break;
         }
         free(work);
-
         buf_->show_loading("Done!", 100);
       }
     }
     esp_restart();
   }
 #endif
-  return;
 }
 
-#ifdef ESP_PLATFORM
-// Fallback: write the otadata partition directly, bypassing esp_image_verify.
-// Mirrors what tools/switch_partition.py does from the host side.
-// Use only when esp_ota_set_boot_partition refuses an image we know is
-// good (e.g. foreign firmware whose seg0 is too large to mmap from a
-// running app on ESP32-C3).
-static esp_err_t force_switch_via_otadata_(const esp_partition_t* next) {
-  if (!next)
-    return ESP_ERR_INVALID_ARG;
-  const esp_partition_t* otadata =
-      esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_OTA, nullptr);
-  if (!otadata) {
-    ESP_LOGE("OTA", "otadata partition not found");
-    return ESP_ERR_NOT_FOUND;
-  }
+// ---------------------------------------------------------------------------
+// Subtitle (value column for list items)
+// ---------------------------------------------------------------------------
 
-  // ota_seq: 1 -> ota_0 (app0), 2 -> ota_1 (app1)
-  uint32_t seq = (next->subtype == ESP_PARTITION_SUBTYPE_APP_OTA_0) ? 1u : 2u;
-  uint8_t entry[32];
-  std::memset(entry, 0xFF, sizeof(entry));
-  std::memcpy(entry, &seq, 4);
-  uint32_t crc = esp_rom_crc32_le(UINT32_MAX, reinterpret_cast<const uint8_t*>(&seq), 4);
-  std::memcpy(entry + 28, &crc, 4);
-
-  esp_err_t err = esp_partition_erase_range(otadata, 0, otadata->size);
-  if (err != ESP_OK) {
-    ESP_LOGE("OTA", "otadata erase failed: %s", esp_err_to_name(err));
-    return err;
-  }
-  err = esp_partition_write(otadata, 0, entry, sizeof(entry));
-  if (err != ESP_OK) {
-    ESP_LOGE("OTA", "otadata write failed: %s", esp_err_to_name(err));
-    return err;
-  }
-  ESP_LOGW("OTA", "Forced boot slot via otadata write (seq=%u -> %s)", (unsigned)seq, next->label);
-  return ESP_OK;
+std::string_view SettingsScreen::get_item_subtitle(int index) const {
+  std::string_view label = ListMenuScreen::get_item_label(index);
+  const auto pos = label.find(": ");
+  if (pos == std::string_view::npos) return {};
+  subtitle_buf_ = label.substr(pos + 2);
+  return subtitle_buf_;
 }
 
-void SettingsScreen::switch_ota_partition_() {
-  auto running = esp_ota_get_running_partition();
-  auto next = esp_ota_get_next_update_partition(running);
-  ESP_LOGI("OTA", "Running: %s @ 0x%08lx", running ? running->label : "null",
-           running ? (unsigned long)running->address : 0UL);
-  ESP_LOGI("OTA", "Next:    %s @ 0x%08lx", next ? next->label : "null", next ? (unsigned long)next->address : 0UL);
-  if (!next) {
-    ESP_LOGE("OTA", "No next OTA partition found, aborting");
-    return;
-  }
+// ---------------------------------------------------------------------------
+// draw_all_
+// ---------------------------------------------------------------------------
 
-  esp_err_t ret = esp_ota_set_boot_partition(next);
-  if (ret == ESP_OK) {
-    ESP_LOGI("OTA", "Switching to %s, restarting", next->label);
-    esp_restart();
-    return;
-  }
+void SettingsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) const {
+  const int W = buf.width();
+  const int H = buf.height();
+  buf.fill(true);
 
-  ESP_LOGW("OTA", "esp_ota_set_boot_partition refused (%s); falling back to direct otadata write",
-           esp_err_to_name(ret));
-  if (force_switch_via_otadata_(next) == ESP_OK) {
-    ESP_LOGI("OTA", "Restarting into %s (unverified)", next->label);
-    esp_restart();
-  } else {
-    ESP_LOGE("OTA", "Forced switch failed; staying on %s", running ? running->label : "running");
-  }
-}
-#endif
+  if (!ui_font_.valid()) return;
 
-void SettingsScreen::clear_cache_() {
-  if (!data_dir_)
-    return;
-#ifdef ESP_PLATFORM
-  char cache_dir[768];
-  std::snprintf(cache_dir, sizeof(cache_dir), "%s/cache", data_dir_);
-  DIR* d = opendir(cache_dir);
-  if (!d) {
-    mkdir(cache_dir, 0775);
-    return;
-  }
-  struct dirent* ent;
-  char subdir_path[768];
-  while ((ent = readdir(d)) != nullptr) {
-    if (ent->d_name[0] == '.')
-      continue;
-    std::snprintf(subdir_path, sizeof(subdir_path), "%s/%s", cache_dir, ent->d_name);
-    // Remove all files inside the per-book subdir.
-    DIR* sd = opendir(subdir_path);
-    if (sd) {
-      struct dirent* sf;
-      char file_path[768];
-      while ((sf = readdir(sd)) != nullptr) {
-        if (sf->d_name[0] == '.')
-          continue;
-        std::snprintf(file_path, sizeof(file_path), "%s/%s", subdir_path, sf->d_name);
-        std::remove(file_path);
-      }
-      closedir(sd);
+  static constexpr int kLM = 14;
+  static constexpr int kRM = 14;
+  int y = 16;
+
+  // ── Header ───────────────────────────────────────────────────────────────
+  if (header_font_.valid()) {
+    buf.draw_text_proportional(kLM, y + header_font_.baseline(), "Settings", header_font_, false);
+    if (!subtitle_.empty()) {
+      const BitmapFont& vfont = section_font_.valid() ? section_font_ : subtitle_font_;
+      const int vw = vfont.word_width(subtitle_.c_str(), subtitle_.size(), FontStyle::Regular);
+      const int vy = y + header_font_.y_advance() - vfont.y_advance() + vfont.baseline();
+      buf.draw_text_proportional(W - kRM - vw, vy, subtitle_.c_str(), subtitle_.size(), vfont, false);
     }
-    rmdir(subdir_path);
+    y += header_font_.y_advance();
+  } else {
+    buf.draw_text_proportional(kLM, y + ui_font_.baseline(), "Settings", ui_font_, false);
+    y += ui_font_.y_advance();
   }
-  closedir(d);
-  rmdir(cache_dir);
-  mkdir(cache_dir, 0775);
-#else
-  namespace fs = std::filesystem;
-  try {
-    std::string cache_path = std::string(data_dir_) + "/cache";
-    fs::remove_all(cache_path);
-    fs::create_directories(cache_path);
-  } catch (...) {}
-#endif
+  y += 6;
+  buf.fill_rect(0, y, W, 1, false);
+  y += 1;
+
+  // ── Tab bar ──────────────────────────────────────────────────────────────
+  draw_tab_bar_(buf, y, W);
+  y += tab_bar_height_();
+
+  // ── Item list (active tab only) ───────────────────────────────────────────
+  const int range_end = tab_end_[active_tab_];
+  const int so = scroll_offset();
+
+  for (int i = so; i <= range_end && y < H; ++i) {
+    const std::string_view label = get_item_label(i);
+    std::string_view disp_label = label;
+    std::string_view disp_value;
+    const auto pos = label.find(": ");
+    if (pos != std::string_view::npos) {
+      disp_label = label.substr(0, pos);
+      disp_value = label.substr(pos + 2);
+    }
+
+    const bool sel = (focus_state_ == FocusState::List) && (i == selected());
+    if (sel)
+      buf.fill_rect(0, y, W, kRowH, false);
+
+    const int text_y = y + (kRowH - ui_font_.y_advance()) / 2 + ui_font_.baseline();
+    buf.draw_text_proportional(kLM, text_y, disp_label.data(), disp_label.size(), ui_font_, sel);
+
+    if (!disp_value.empty()) {
+      const int vw = ui_font_.word_width(disp_value.data(), disp_value.size(), FontStyle::Regular);
+      buf.draw_text_proportional(W - kRM - vw, text_y, disp_value.data(), disp_value.size(), ui_font_, sel);
+    }
+
+    y += kRowH;
+  }
+
+  // ── Picker overlay ───────────────────────────────────────────────────────
+  if (picker_open_ && ui_font_.valid())
+    draw_picker_(buf);
 }
 
-bool SettingsScreen::is_item_focusable(int index) const {
-  if (!ListMenuScreen::is_item_focusable(index)) return false;
-  const bool is_minimal = (theme() == MenuTheme::Minimal);
-  const bool is_stele   = (theme() == MenuTheme::Stele);
-  const bool is_codex   = (theme() == MenuTheme::Codex);
-  const bool is_lyra    = (theme() == MenuTheme::Lyra);
-  // List Align: only Minimal (and Lyra's child screens use Minimal fallback)
-  if (index == idx_list_align_ && !is_minimal && !is_lyra) return false;
-  // Nav Arrows: only Minimal has the bottom arrow bar; Lyra has its own tooltip
-  if (index == idx_nav_arrows_ && !is_minimal) return false;
-  // Battery Display: Stele/Codex/Lyra hardcode battery in their own headers
-  if (index == idx_battery_display_ && (is_stele || is_codex || is_lyra)) return false;
-  // Converted Mark: Stele always shows dots regardless of this toggle
-  if (index == idx_conv_indicator_ && is_stele) return false;
-  return true;
-}
+// ---------------------------------------------------------------------------
+// Picker drawing
+// ---------------------------------------------------------------------------
 
 void SettingsScreen::draw_picker_(DrawBuffer& buf) const {
   if (!ui_font_.valid()) return;
@@ -903,97 +1013,89 @@ void SettingsScreen::draw_picker_(DrawBuffer& buf) const {
   buf.fill_rect(popup_x, popup_y + popup_h - 1, popup_w, 1, false);
 }
 
-void SettingsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) const {
-  const int W = buf.width();
-  const int H = buf.height();
-  buf.fill(true);
+// ---------------------------------------------------------------------------
+// Cache clearing
+// ---------------------------------------------------------------------------
 
-  if (!ui_font_.valid() || !subtitle_font_.valid()) return;
-
-  static constexpr int kLM = 14;
-  static constexpr int kRM = 14;
-  static constexpr int kRowH = 28;
-  int y = 16;
-
-  // ── Header: "Settings" left, version right ──────────────────────────────
-  if (header_font_.valid()) {
-    buf.draw_text_proportional(kLM, y + header_font_.baseline(), "Settings", header_font_, false);
-    if (!subtitle_.empty()) {
-      const BitmapFont& vfont = section_font_.valid() ? section_font_ : subtitle_font_;
-      const int vw = vfont.word_width(subtitle_.c_str(), subtitle_.size(), FontStyle::Regular);
-      const int vy = y + header_font_.y_advance() - vfont.y_advance() + vfont.baseline();
-      buf.draw_text_proportional(W - kRM - vw, vy, subtitle_.c_str(), subtitle_.size(), vfont, false);
-    }
-    y += header_font_.y_advance();
-  } else {
-    buf.draw_text_proportional(kLM, y + ui_font_.baseline(), "Settings", ui_font_, false);
-    y += ui_font_.y_advance();
-  }
-  y += 6;
-  buf.fill_rect(0, y, W, 1, false);
-  y += 1;
-
-  // ── Item list ────────────────────────────────────────────────────────────
-  const int n = count();
-  const int list_top = y;
-
-  // Only scroll if content actually overflows the available height
-  int total_content_h = 0;
-  for (int i = 0; i < n; ++i) {
-    if (is_separator(i)) {
-      total_content_h += 8;
-      if (!get_item_label(i).empty() && section_font_.valid())
-        total_content_h += section_font_.y_advance();
-      total_content_h += 4;
-    } else {
-      total_content_h += kRowH;
-    }
-  }
-  const int so = (total_content_h <= H - list_top) ? 0 : scroll_offset();
-
-  for (int i = so; i < n && y < H; ++i) {
-    if (is_separator(i)) {
-      const std::string_view hdr = get_item_label(i);
-      y += 8;
-      if (y >= H) break;
-      if (!hdr.empty()) {
-        buf.draw_text_proportional(kLM, y + section_font_.baseline(),
-                                   hdr.data(), hdr.size(), section_font_, false);
-        y += section_font_.y_advance();
+void SettingsScreen::clear_cache_() {
+  if (!data_dir_) return;
+#ifdef ESP_PLATFORM
+  char cache_dir[768];
+  std::snprintf(cache_dir, sizeof(cache_dir), "%s/cache", data_dir_);
+  DIR* d = opendir(cache_dir);
+  if (!d) { mkdir(cache_dir, 0775); return; }
+  struct dirent* ent;
+  char subdir_path[768];
+  while ((ent = readdir(d)) != nullptr) {
+    if (ent->d_name[0] == '.') continue;
+    std::snprintf(subdir_path, sizeof(subdir_path), "%s/%s", cache_dir, ent->d_name);
+    DIR* sd = opendir(subdir_path);
+    if (sd) {
+      struct dirent* sf;
+      char file_path[768];
+      while ((sf = readdir(sd)) != nullptr) {
+        if (sf->d_name[0] == '.') continue;
+        std::snprintf(file_path, sizeof(file_path), "%s/%s", subdir_path, sf->d_name);
+        std::remove(file_path);
       }
-      y += 4;
-      continue;
+      closedir(sd);
     }
-
-    const std::string_view label = get_item_label(i);
-    std::string_view disp_label = label;
-    std::string_view disp_value;
-    const auto pos = label.find(": ");
-    if (pos != std::string_view::npos) {
-      disp_label = label.substr(0, pos);
-      disp_value = label.substr(pos + 2);
-    }
-
-    const bool sel = (i == selected());
-    if (sel)
-      buf.fill_rect(0, y, W, kRowH, false);
-
-    const int text_y = y + (kRowH - ui_font_.y_advance()) / 2 + ui_font_.baseline();
-    buf.draw_text_proportional(kLM, text_y, disp_label.data(), disp_label.size(), ui_font_, sel);
-
-    if (!disp_value.empty()) {
-      const int vw = ui_font_.word_width(disp_value.data(), disp_value.size(), FontStyle::Regular);
-      const int val_y = y + (kRowH - ui_font_.y_advance()) / 2 + ui_font_.baseline();
-      buf.draw_text_proportional(W - kRM - vw, val_y, disp_value.data(), disp_value.size(), ui_font_, sel);
-    }
-
-    y += kRowH;
+    rmdir(subdir_path);
   }
-
-  // ── Generic picker overlay ────────────────────────────────────────────────
-  if (picker_open_ && ui_font_.valid()) {
-    draw_picker_(buf);
-  }
+  closedir(d);
+  rmdir(cache_dir);
+  mkdir(cache_dir, 0775);
+#else
+  namespace fs = std::filesystem;
+  try {
+    std::string cache_path = std::string(data_dir_) + "/cache";
+    fs::remove_all(cache_path);
+    fs::create_directories(cache_path);
+  } catch (...) {}
+#endif
 }
+
+// ---------------------------------------------------------------------------
+// OTA partition switch (ESP only)
+// ---------------------------------------------------------------------------
+
+#ifdef ESP_PLATFORM
+static esp_err_t force_switch_via_otadata_(const esp_partition_t* next) {
+  if (!next) return ESP_ERR_INVALID_ARG;
+  const esp_partition_t* otadata =
+      esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_OTA, nullptr);
+  if (!otadata) { ESP_LOGE("OTA", "otadata partition not found"); return ESP_ERR_NOT_FOUND; }
+
+  uint32_t seq = (next->subtype == ESP_PARTITION_SUBTYPE_APP_OTA_0) ? 1u : 2u;
+  uint8_t entry[32];
+  std::memset(entry, 0xFF, sizeof(entry));
+  std::memcpy(entry, &seq, 4);
+  uint32_t crc = esp_rom_crc32_le(UINT32_MAX, reinterpret_cast<const uint8_t*>(&seq), 4);
+  std::memcpy(entry + 28, &crc, 4);
+
+  esp_err_t err = esp_partition_erase_range(otadata, 0, otadata->size);
+  if (err != ESP_OK) { ESP_LOGE("OTA", "otadata erase failed: %s", esp_err_to_name(err)); return err; }
+  err = esp_partition_write(otadata, 0, entry, sizeof(entry));
+  if (err != ESP_OK) { ESP_LOGE("OTA", "otadata write failed: %s", esp_err_to_name(err)); return err; }
+  ESP_LOGW("OTA", "Forced boot slot via otadata write (seq=%u -> %s)", (unsigned)seq, next->label);
+  return ESP_OK;
+}
+
+void SettingsScreen::switch_ota_partition_() {
+  auto running = esp_ota_get_running_partition();
+  auto next = esp_ota_get_next_update_partition(running);
+  if (!next) { ESP_LOGE("OTA", "No next OTA partition found, aborting"); return; }
+
+  esp_err_t ret = esp_ota_set_boot_partition(next);
+  if (ret == ESP_OK) { esp_restart(); return; }
+
+  ESP_LOGW("OTA", "esp_ota_set_boot_partition refused (%s); falling back to direct otadata write",
+           esp_err_to_name(ret));
+  if (force_switch_via_otadata_(next) == ESP_OK)
+    esp_restart();
+  else
+    ESP_LOGE("OTA", "Forced switch failed; staying on %s", running ? running->label : "running");
+}
+#endif
 
 }  // namespace microreader

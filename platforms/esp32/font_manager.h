@@ -22,10 +22,8 @@ class FontManager : public microreader::FontManager {
   // Returns the asset name for the currently selected built-in font, or
   // nullptr if the user selected a custom (SD-card) font.
   static const char* embedded_asset_for(const std::string& font_name) {
-    if (font_name == "Alegreya")
-      return "alegreya.bin";
-    if (font_name == "" || font_name == "Bookerly")
-      return "bookerly.bin";
+    if (font_name == "" || font_name == "Literata")
+      return "Literata.bin";
     return nullptr;
   }
 

@@ -22,6 +22,7 @@ set(lib_sources
     ${LIB}/screens/LyraScreen.cpp
     ${LIB}/screens/LyraExtScreen.cpp
     ${LIB}/screens/RecentBooksScreen.cpp
+    ${LIB}/screens/WhatsNewScreen.cpp
     ${LIB}/content/ZipReader.cpp
     ${LIB}/content/XmlReader.cpp
     ${LIB}/content/CssParser.cpp

@@ -21,6 +21,7 @@
 #include "screens/ReaderScreen.h"
 #include "screens/SettingsScreen.h"
 #include "screens/StatsScreen.h"
+#include "screens/WhatsNewScreen.h"
 #include "screens/demo/BouncingBallDemo.h"
 #include "screens/demo/GrayscaleDemo.h"
 
@@ -41,6 +42,7 @@ enum class ScreenId : uint8_t {
   Lyra,
   LyraExt,
   RecentBooks,
+  WhatsNew,
   BouncingBall,
   GrayscaleDemo,
 };
@@ -167,6 +169,12 @@ class Application {
 
   bool show_nav_arrows() const { return show_nav_arrows_; }
   void set_show_nav_arrows(bool v) { show_nav_arrows_ = v; save_settings_(); }
+
+  bool show_sleep_text() const { return show_sleep_text_; }
+  void set_show_sleep_text(bool v) { show_sleep_text_ = v; save_settings_(); }
+
+  bool show_whats_new_on_update() const { return show_whats_new_on_update_; }
+  void set_show_whats_new_on_update(bool v) { show_whats_new_on_update_ = v; save_settings_(); }
 
   bool show_reader_images() const { return show_reader_images_; }
   void set_show_reader_images(bool v);
@@ -342,13 +350,17 @@ class Application {
 
   ScreenManager screen_mgr_;
 
-  bool show_nav_arrows_ = false;
-  bool show_converted_indicator_ = false;
+  bool show_nav_arrows_ = true;
+  bool show_converted_indicator_ = true;
   bool show_reader_images_ = true;
+  bool show_sleep_text_ = true;
   uint8_t battery_display_ = 0;  // 0=icon, 1=number, 2=both
   uint8_t list_align_ = 0;       // 0=center, 1=left, 2=right
   uint8_t sleep_timeout_min_ = 10;  // 0=off, else minutes until auto-sleep
-  uint8_t menu_theme_ = 3;       // 3=Codex default
+  uint8_t menu_theme_ = 4;       // 4=Lyra default
+
+  std::string last_seen_version_;
+  bool show_whats_new_on_update_ = true;
 
   LyraScreen lyra_;
   LyraExtScreen lyra_ext_;
@@ -362,6 +374,7 @@ class Application {
   ConvertAllScreen convert_all_;
   StatsScreen stats_;
   HiddenBooksMenu hidden_books_;
+  WhatsNewScreen whats_new_;
 
 #ifdef MICROREADER_ENABLE_DEMOS
   BouncingBallDemo bouncing_ball_;

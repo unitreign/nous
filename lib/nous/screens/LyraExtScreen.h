@@ -8,7 +8,7 @@
 
 namespace microreader {
 
-// Home-screen theme for Lyra Extended on Budget.
+// Home-screen theme for Lyra Extended Like.
 // Shows up to 3 recent books (covers + titles) and nav items.
 // Long-press back → Hidden Books; short press → no-op.
 class LyraExtScreen final : public ListMenuScreen {

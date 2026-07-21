@@ -23,8 +23,7 @@ import zlib
 
 # (manifest_name, source_path_relative_to_project_dir)
 DEFAULT_ASSETS = [
-    ("bookerly.bin", "resources/fonts/bookerly.bin"),
-    ("alegreya.bin", "resources/fonts/alegreya.bin"),
+    ("Literata.bin", "resources/fonts/Literata.bin"),
     ("sleep_0.mgr", "resources/sleep/sleep_0.mgr"),
 ]
 

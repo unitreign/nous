@@ -41,6 +41,9 @@ class ListMenuScreen : public IScreen {
   static int font_size() {
     return font_size_idx_;
   }
+  // Initialise `out` with the MBF4 data for the current menu font size.
+  // Declared here; implemented in ListMenuScreen.cpp (which owns the font headers).
+  static void apply_ui_font(BitmapFont& out);
 
   // Global visual theme — affects all ListMenuScreen instances (static).
   enum class MenuTheme : uint8_t { Chronicle = 0, Minimal = 1, Stele = 2, Codex = 3, Lyra = 4, LyraExt = 5 };
@@ -165,6 +168,8 @@ class ListMenuScreen : public IScreen {
   BitmapFont header_font_;
   BitmapFont subtitle_font_;   // always small; used for item subtitles and tight labels
   BitmapFont section_font_;    // one step below ui_font_; use for APPEARANCE/NAVIGATE etc.
+  BitmapFont brand_font_;        // "nous" logotype, sized to match ui_font_
+  BitmapFont brand_header_font_; // "nous" logotype, sized to match header_font_
   static int font_size_idx_;  // 0=Normal, 1=Large, 2=XLarge
   static MenuTheme theme_;
 
@@ -179,7 +184,11 @@ class ListMenuScreen : public IScreen {
   }
 
   virtual void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const;
-  void ensure_visible_();
+  virtual void ensure_visible_();
+  void set_scroll_offset_(int v) { scroll_offset_ = v; }
+  int current_height_() const { return buf_ ? buf_->height() : 0; }
+  Rotation current_rotation_() const { return buf_ ? buf_->rotation() : Rotation::Deg90; }
+  void set_buf_rotation_(Rotation r) { if (buf_) buf_->set_rotation(r); }
   void center_on_selected_();
 
   // Returns the number of visual indices visible from scroll_off given screen height H.
