@@ -168,6 +168,9 @@ class Application {
   bool show_nav_arrows() const { return show_nav_arrows_; }
   void set_show_nav_arrows(bool v) { show_nav_arrows_ = v; save_settings_(); }
 
+  bool show_sleep_text() const { return show_sleep_text_; }
+  void set_show_sleep_text(bool v) { show_sleep_text_ = v; save_settings_(); }
+
   bool show_reader_images() const { return show_reader_images_; }
   void set_show_reader_images(bool v);
 
@@ -337,9 +340,10 @@ class Application {
 
   ScreenManager screen_mgr_;
 
-  bool show_nav_arrows_ = false;
-  bool show_converted_indicator_ = false;
+  bool show_nav_arrows_ = true;
+  bool show_converted_indicator_ = true;
   bool show_reader_images_ = true;
+  bool show_sleep_text_ = true;
   uint8_t battery_display_ = 0;  // 0=icon, 1=number, 2=both
   uint8_t list_align_ = 0;       // 0=center, 1=left, 2=right
   uint8_t sleep_timeout_min_ = 10;  // 0=off, else minutes until auto-sleep

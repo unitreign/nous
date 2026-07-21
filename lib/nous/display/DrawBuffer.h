@@ -544,18 +544,18 @@ class DrawBuffer {
 
   // Load and show sleep image from MGR2 file (2bpp, 4 gray levels).
   // state = (RED_bit << 1) | BW_bit; 0=black, 1=dark gray, 2=light gray, 3=white.
-  bool show_sleep_image(const char* path) {
+  bool show_sleep_image(const char* path, bool show_text = true) {
     FILE* f = std::fopen(path, "rb");
     if (!f)
       return false;
     Mgr2Source_ src = Mgr2Source_::from_file(f);
     if (src.valid())
-      show_mgr2_sleep_(src, false);
+      show_mgr2_sleep_(src, false, show_text);
     std::fclose(f);
     return src.valid();
   }
 
-  bool show_sleep_image_embedded(int idx = 0) {
+  bool show_sleep_image_embedded(int idx = 0, bool show_text = true) {
     Mgr2Source_ src;
 
 #ifdef ESP_PLATFORM
@@ -576,7 +576,7 @@ class DrawBuffer {
 #endif
 
     if (src.valid())
-      show_mgr2_sleep_(src, true);
+      show_mgr2_sleep_(src, true, show_text);
 
 #ifdef ESP_PLATFORM
     asset_blob::g_assets.unmap(mmap_h);
@@ -925,7 +925,7 @@ class DrawBuffer {
     }
   };
 
-  void show_mgr2_sleep_(Mgr2Source_& src, bool deep_sleep_after) {
+  void show_mgr2_sleep_(Mgr2Source_& src, bool deep_sleep_after, bool show_text = true) {
     auto decode_pass = [&](bool red_bit) {
       fill(false);
       for (uint16_t y = 0; y < src.h && y < DisplayFrame::kPhysicalHeight; ++y) {
@@ -940,10 +940,10 @@ class DrawBuffer {
     };
 
     decode_pass(false);
-    draw_text_centered(kWidth / 2, kHeight - 24, "sleeping...", false, false);
+    if (show_text) draw_text_centered(kWidth / 2, kHeight - 24, "sleeping...", false, false);
     display_.write_ram_bw(inactive_());
     decode_pass(true);
-    draw_text_centered(kWidth / 2, kHeight - 24, "sleeping...", false, false);
+    if (show_text) draw_text_centered(kWidth / 2, kHeight - 24, "sleeping...", false, false);
     display_.write_ram_red(inactive_());
     display_.grayscale_refresh_1pass(/*turnOffScreen=*/true);
     if (deep_sleep_after)

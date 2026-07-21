@@ -433,7 +433,6 @@ int ListMenuScreen::draw_bottom_(DrawBuffer& buf, int W, int H, std::optional<ui
       if (bat_mode == 2 && ui_font_.valid()) {
         char num_buf[8];
         const int nlen = std::snprintf(num_buf, sizeof(num_buf), "%d%%", bat_pct);
-        const int nw = ui_font_.word_width(num_buf, static_cast<size_t>(nlen), FontStyle::Regular);
         const int nx = kBarX + kBarW + 4;
         const int ny = H - kHintCenterY - (ui_font_.y_advance() + 1) / 2 + ui_font_.baseline();
         buf.draw_text_proportional(nx, ny, num_buf, static_cast<size_t>(nlen), ui_font_, false);
