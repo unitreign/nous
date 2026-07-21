@@ -17,6 +17,17 @@ namespace microreader {
 int ListMenuScreen::font_size_idx_ = 0;
 ListMenuScreen::MenuTheme ListMenuScreen::theme_ = ListMenuScreen::MenuTheme::Chronicle;
 
+void ListMenuScreen::apply_ui_font(BitmapFont& out) {
+  if (font_size_idx_ == 1)
+    out.init(kFontData_ui_medium_mbf, kFontData_ui_medium_mbf_size);
+  else if (font_size_idx_ == 2)
+    out.init(kFontData_ui_large_mbf, kFontData_ui_large_mbf_size);
+  else if (font_size_idx_ == 3)
+    out.init(kFontData_ui_header_mbf, kFontData_ui_header_mbf_size);
+  else
+    out.init(kFontData_ui_small_mbf, kFontData_ui_small_mbf_size);
+}
+
 static constexpr int kHeaderY = 15;         // top padding before the title text
 static constexpr int kHeaderBottomGap = 4;  // gap between last header line and first list item
 // The hint row (nav glyphs + battery bar) is centred on a line kHintCenterY pixels above the

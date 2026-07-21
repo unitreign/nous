@@ -118,8 +118,10 @@ static std::string get_sleep_timeout_label(uint8_t min) {
 
 static std::string get_font_label(const std::string& font_path) {
   std::string label = "Font: ";
-  if (font_path == "Bookerly" || font_path == "Alegreya") {
+  if (font_path == "Literata") {
     label += font_path;
+  } else if (font_path.empty()) {
+    label += "Literata";
   } else {
     const char* p = font_path.c_str();
     const char* slash = nullptr;
@@ -129,6 +131,18 @@ static std::string get_font_label(const std::string& font_path) {
     label += std::string(slash ? slash + 1 : p);
   }
   return label;
+}
+
+// ---------------------------------------------------------------------------
+// ensure_visible_ override — clamps scroll to never go below tab_start_
+// ---------------------------------------------------------------------------
+
+void SettingsScreen::ensure_visible_() {
+  if (scroll_offset() < tab_start_[active_tab_])
+    set_scroll_offset_(tab_start_[active_tab_]);
+  ListMenuScreen::ensure_visible_();
+  if (scroll_offset() < tab_start_[active_tab_])
+    set_scroll_offset_(tab_start_[active_tab_]);
 }
 
 // ---------------------------------------------------------------------------
@@ -194,8 +208,7 @@ void SettingsScreen::on_start() {
 
   // Build font list
   sd_fonts_.clear();
-  sd_fonts_.push_back("Bookerly");
-  sd_fonts_.push_back("Alegreya");
+  sd_fonts_.push_back("Literata");
   font_sel_idx_ = 0;
 #ifdef ESP_PLATFORM
   DIR* d = opendir("/sdcard/fonts");
@@ -220,8 +233,9 @@ void SettingsScreen::on_start() {
 #endif
   if (app_) {
     const std::string& current = app_->custom_font_path();
+    const std::string& match = (current.empty() || current == "Vollkorn" || current == "Alegreya") ? sd_fonts_[0] : current;
     for (size_t i = 0; i < sd_fonts_.size(); ++i) {
-      if (sd_fonts_[i] == current) { font_sel_idx_ = static_cast<int>(i); break; }
+      if (sd_fonts_[i] == match) { font_sel_idx_ = static_cast<int>(i); break; }
     }
   }
 
@@ -378,8 +392,11 @@ void SettingsScreen::on_start() {
 
   tab_end_[3] = count() - 1;
 
-  // Start with selection on first item of active tab
+  // Pin scroll and selection to the active tab's start so returning from a
+  // sub-screen (which resets scroll_offset_ to 0 via clear_items) never
+  // shows items from other tabs.
   set_selected(tab_start_[active_tab_]);
+  set_scroll_offset_(tab_start_[active_tab_]);
 }
 
 // ---------------------------------------------------------------------------
@@ -480,13 +497,13 @@ void SettingsScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntim
         // Select: cycle to next tab
         active_tab_ = (active_tab_ + 1) % kTabCount;
         set_selected(tab_start_[active_tab_]);
-        ensure_visible_();
+        set_scroll_offset_(tab_start_[active_tab_]);
         redraw = true;
       } else if (btn == btn_down_front || btn == Button::Down) {
         // Down: enter list at first item of this tab
         focus_state_ = FocusState::List;
         set_selected(tab_start_[active_tab_]);
-        ensure_visible_();
+        set_scroll_offset_(tab_start_[active_tab_]);
         redraw = true;
       } else if (btn == Button::Button0) {
         // Back: exit to main menu

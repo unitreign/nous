@@ -41,6 +41,9 @@ class ListMenuScreen : public IScreen {
   static int font_size() {
     return font_size_idx_;
   }
+  // Initialise `out` with the MBF4 data for the current menu font size.
+  // Declared here; implemented in ListMenuScreen.cpp (which owns the font headers).
+  static void apply_ui_font(BitmapFont& out);
 
   // Global visual theme — affects all ListMenuScreen instances (static).
   enum class MenuTheme : uint8_t { Chronicle = 0, Minimal = 1, Stele = 2, Codex = 3, Lyra = 4, LyraExt = 5 };
@@ -179,7 +182,8 @@ class ListMenuScreen : public IScreen {
   }
 
   virtual void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const;
-  void ensure_visible_();
+  virtual void ensure_visible_();
+  void set_scroll_offset_(int v) { scroll_offset_ = v; }
   void center_on_selected_();
 
   // Returns the number of visual indices visible from scroll_off given screen height H.

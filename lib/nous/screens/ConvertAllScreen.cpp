@@ -67,6 +67,7 @@ void ConvertAllScreen::start(DrawBuffer& buf, IRuntime& runtime) {
   failed_count_ = 0;
   cancel_requested_ = false;
   phase_ = Phase::Converting;
+  ListMenuScreen::apply_ui_font(ui_font_);
 
   scan_jobs_();
 
@@ -185,56 +186,76 @@ void ConvertAllScreen::draw_done_(DrawBuffer& buf) const {
   buf.fill(true);
   const int W = buf.width();
   const int H = buf.height();
-  const int cx = W / 2;
+  const bool have_font = ui_font_.valid();
+  const int fa = have_font ? ui_font_.y_advance() : 16;
+  const int bl = have_font ? static_cast<int>(ui_font_.baseline()) : 12;
+  constexpr int kPad = 8;
+  constexpr int kLM = 14;
+
+  auto draw_centered = [&](int y, const char* text) {
+    if (!text || !*text) return;
+    const size_t len = std::strlen(text);
+    if (have_font) {
+      const int tw = static_cast<int>(ui_font_.word_width(text, len, FontStyle::Regular));
+      buf.draw_text_proportional((W - tw) / 2, y + bl, text, len, ui_font_, false);
+    } else {
+      buf.draw_text_centered(W / 2, y, text, true);
+    }
+  };
+  auto draw_left = [&](int y, const char* text) {
+    if (!text || !*text) return;
+    const size_t len = std::strlen(text);
+    if (have_font)
+      buf.draw_text_proportional(kLM, y + bl, text, len, ui_font_, false);
+    else
+      buf.draw_text_centered(W / 2, y, text, true);
+  };
 
   // Title
   const char* heading = cancel_requested_ ? "Stopped" : "Done";
-  buf.draw_text_centered(cx, 24, heading, true);
-  buf.fill_rect(16, 40, W - 32, 1, false);
+  int y = kPad;
+  draw_centered(y, heading);
+  y += fa + kPad;
+  buf.fill_rect(kLM, y, W - kLM * 2, 1, false);
+  y += kPad;
 
   int skipped = static_cast<int>(std::count_if(jobs_.begin(), jobs_.end(),
       [](const BookJob& j) { return j.skipped && !j.failed; }));
 
   if (!cancel_requested_ && converted_count_ == 0 && failed_count_ == 0) {
-    buf.draw_text_centered(cx, H / 2 - 8, "All books up to date.", true);
+    draw_centered(H / 2 - fa / 2, "All books up to date.");
   } else {
-    int y = 56;
-    constexpr int kRowH = 22;
     char line[64];
-
     std::snprintf(line, sizeof(line), "Converted:    %d", converted_count_);
-    buf.draw_text_centered(cx, y, line, true);
-    y += kRowH;
+    draw_left(y, line);
+    y += fa + 4;
 
     std::snprintf(line, sizeof(line), "Already done: %d", skipped);
-    buf.draw_text_centered(cx, y, line, true);
-    y += kRowH;
+    draw_left(y, line);
+    y += fa + 4;
 
     std::snprintf(line, sizeof(line), "Failed:       %d", failed_count_);
-    buf.draw_text_centered(cx, y, line, true);
-    y += kRowH + 4;
+    draw_left(y, line);
+    y += fa + 8;
 
     if (failed_count_ > 0) {
-      buf.fill_rect(16, y, W - 32, 1, false);
-      y += 8;
+      buf.fill_rect(kLM, y, W - kLM * 2, 1, false);
+      y += kPad;
       int shown = 0;
       for (const auto& job : jobs_) {
         if (!job.failed) continue;
-        if (shown >= 5) {
-          buf.draw_text_centered(cx, y, "...", true);
-          break;
-        }
+        if (shown >= 5) { draw_left(y, "..."); break; }
         const std::string& t = job.title.empty() ? job.path : job.title;
-        char entry[64];
-        std::snprintf(entry, sizeof(entry), "%.50s", t.c_str());
-        buf.draw_text_centered(cx, y, entry, true);
-        y += 18;
+        char entry[80];
+        std::snprintf(entry, sizeof(entry), "%.70s", t.c_str());
+        draw_left(y, entry);
+        y += fa + 2;
         ++shown;
       }
     }
   }
 
-  buf.draw_text_centered(cx, H - 22, "Back to return", true);
+  draw_centered(H - fa - kPad, "Back to return");
 }
 
 }  // namespace microreader

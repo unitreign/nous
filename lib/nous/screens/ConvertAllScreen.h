@@ -3,8 +3,10 @@
 #include <string>
 #include <vector>
 
+#include "../content/BitmapFont.h"
 #include "../display/DrawBuffer.h"
 #include "IScreen.h"
+#include "ListMenuScreen.h"
 
 namespace microreader {
 
@@ -24,6 +26,7 @@ class ConvertAllScreen final : public IScreen {
 
  private:
   DrawBuffer* buf_ = nullptr;
+  BitmapFont ui_font_;
 
   enum class Phase { Converting, Covers, Done };
   Phase phase_ = Phase::Converting;

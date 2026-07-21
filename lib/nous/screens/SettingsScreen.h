@@ -91,6 +91,7 @@ class SettingsScreen final : public ListMenuScreen {
   std::string picker_title_;
   std::vector<std::string> picker_options_;
 
+  void ensure_visible_() override;
   int tab_bar_height_() const;
   void draw_tab_bar_(DrawBuffer& buf, int y, int W) const;
 

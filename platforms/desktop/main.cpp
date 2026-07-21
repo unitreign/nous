@@ -46,13 +46,11 @@ class DesktopFontManager : public microreader::FontManager {
 
     std::string path = custom_font;
     if (path.empty()) {
-      path = fonts_dir + "/bookerly.mfb";
+      path = fonts_dir + "/Literata.mfb";
     } else {
-      // Map built-in names from ESP32 to local .mfb files
-      if (path == "Bookerly")
-        path = "bookerly.mfb";
-      else if (path == "Alegreya")
-        path = "alegreya.mfb";
+      // Map built-in name from ESP32 to local .mfb file
+      if (path == "Literata")
+        path = "Literata.mfb";
 
       // Allow relative paths inside sd/fonts/ for testing,
       // or absolute paths if provided.
