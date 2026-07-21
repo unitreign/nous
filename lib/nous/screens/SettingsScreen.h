@@ -73,6 +73,8 @@ class SettingsScreen final : public ListMenuScreen {
   int idx_sleep_timeout_ = -1;
   int idx_convert_all_ = -1;
   int idx_theme_ = -1;
+  int idx_whats_new_ = -1;
+  int idx_show_whats_new_ = -1;
 
   DrawBuffer* buf_ = nullptr;
   mutable std::string subtitle_buf_;

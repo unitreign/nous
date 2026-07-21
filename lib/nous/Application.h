@@ -21,6 +21,7 @@
 #include "screens/ReaderScreen.h"
 #include "screens/SettingsScreen.h"
 #include "screens/StatsScreen.h"
+#include "screens/WhatsNewScreen.h"
 #include "screens/demo/BouncingBallDemo.h"
 #include "screens/demo/GrayscaleDemo.h"
 
@@ -41,6 +42,7 @@ enum class ScreenId : uint8_t {
   Lyra,
   LyraExt,
   RecentBooks,
+  WhatsNew,
   BouncingBall,
   GrayscaleDemo,
 };
@@ -170,6 +172,9 @@ class Application {
 
   bool show_sleep_text() const { return show_sleep_text_; }
   void set_show_sleep_text(bool v) { show_sleep_text_ = v; save_settings_(); }
+
+  bool show_whats_new_on_update() const { return show_whats_new_on_update_; }
+  void set_show_whats_new_on_update(bool v) { show_whats_new_on_update_ = v; save_settings_(); }
 
   bool show_reader_images() const { return show_reader_images_; }
   void set_show_reader_images(bool v);
@@ -349,6 +354,9 @@ class Application {
   uint8_t sleep_timeout_min_ = 10;  // 0=off, else minutes until auto-sleep
   uint8_t menu_theme_ = 3;       // 3=Codex default
 
+  std::string last_seen_version_;
+  bool show_whats_new_on_update_ = true;
+
   LyraScreen lyra_;
   LyraExtScreen lyra_ext_;
   RecentBooksScreen recent_books_;
@@ -361,6 +369,7 @@ class Application {
   ConvertAllScreen convert_all_;
   StatsScreen stats_;
   HiddenBooksMenu hidden_books_;
+  WhatsNewScreen whats_new_;
 
 #ifdef MICROREADER_ENABLE_DEMOS
   BouncingBallDemo bouncing_ball_;

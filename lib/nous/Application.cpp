@@ -6,6 +6,7 @@
 #include <ctime>
 
 #include "HeapLog.h"
+#include "version.h"
 #include "content/Book.h"
 #include "content/BookIndex.h"
 #include "content/BmpSleepConverter.h"
@@ -55,6 +56,7 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   convert_all_.set_app(this);
   stats_.set_app(this);
   hidden_books_.set_app(this);
+  whats_new_.set_app(this);
 
 #ifdef MICROREADER_ENABLE_DEMOS
   bouncing_ball_.set_app(this);
@@ -109,6 +111,13 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
     screen_mgr_.push(&settings_, buf, runtime);
   }
   pending_screen_.clear();
+
+  // Show What's New on first boot after a version update.
+  if (show_whats_new_on_update_ && last_seen_version_ != MICROREADER_VERSION) {
+    last_seen_version_ = MICROREADER_VERSION;
+    save_settings_();
+    screen_mgr_.push(&whats_new_, buf, runtime);
+  }
 
   buf.full_refresh();
 }
@@ -322,6 +331,8 @@ IScreen* microreader::Application::screen_for_(ScreenId id) {
       return &lyra_ext_;
     case ScreenId::RecentBooks:
       return &recent_books_;
+    case ScreenId::WhatsNew:
+      return &whats_new_;
 
 #ifdef MICROREADER_ENABLE_DEMOS
     case ScreenId::BouncingBall:
@@ -407,6 +418,9 @@ void microreader::Application::save_settings_() {
   std::fprintf(f, "sleep_timeout_min=%u\n", static_cast<unsigned>(sleep_timeout_min_));
   std::fprintf(f, "menu_theme=%u\n", static_cast<unsigned>(menu_theme_));
   std::fprintf(f, "sleep_text=%u\n", show_sleep_text_ ? 1u : 0u);
+  std::fprintf(f, "show_whats_new=%u\n", show_whats_new_on_update_ ? 1u : 0u);
+  if (!last_seen_version_.empty())
+    std::fprintf(f, "last_version=%s\n", last_seen_version_.c_str());
 
   std::fclose(f);
 }
@@ -551,6 +565,10 @@ void microreader::Application::load_settings_() {
       menu_theme_ = static_cast<uint8_t>(uval <= 5 ? uval : 0);
     else if (std::sscanf(line, "sleep_text=%u", &uval) == 1)
       show_sleep_text_ = (uval != 0);
+    else if (std::sscanf(line, "show_whats_new=%u", &uval) == 1)
+      show_whats_new_on_update_ = (uval != 0);
+    else if (std::sscanf(line, "last_version=%511[^\n]", sval) == 1)
+      last_seen_version_ = sval;
   }
   std::fclose(f);
 
