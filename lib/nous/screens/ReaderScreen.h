@@ -51,6 +51,8 @@ class ReaderScreen final : public IScreen {
   // Export helpers.
   bool render_current_page(DrawBuffer& buf);
   bool next_page_and_render(DrawBuffer& buf);
+  bool previous_page_and_render(DrawBuffer& buf);
+  bool change_font_size(int delta);
   bool is_open_ok() const;
   // When set, start() will pop back to the book list instead of converting if
   // the MRB cache is missing. The flag is consumed (reset to false) in start().

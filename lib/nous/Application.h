@@ -67,6 +67,32 @@ inline const char* rotation_label(uint8_t v) {
   }
 }
 
+// Actions that can be assigned to the power-button tap/hold gestures and to
+// hold gestures on the six navigation buttons.
+enum class ButtonAction : uint8_t {
+  None = 0,
+  NextPage,
+  PreviousPage,
+  Sleep,
+  RotateCCW,
+  RotateCW,
+  IncreaseFont,
+  DecreaseFont,
+};
+
+inline const char* button_action_label(ButtonAction action) {
+  switch (action) {
+    case ButtonAction::NextPage:     return "Next Page";
+    case ButtonAction::PreviousPage: return "Previous Page";
+    case ButtonAction::Sleep:        return "Sleep";
+    case ButtonAction::RotateCCW:    return "Rotate CCW";
+    case ButtonAction::RotateCW:     return "Rotate CW";
+    case ButtonAction::IncreaseFont: return "Font Larger";
+    case ButtonAction::DecreaseFont: return "Font Smaller";
+    default:                         return "None";
+  }
+}
+
 class Application {
  public:
   Application() = default;
@@ -196,6 +222,30 @@ class Application {
   uint8_t sleep_timeout_min() const { return sleep_timeout_min_; }
   void set_sleep_timeout_min(uint8_t v) { sleep_timeout_min_ = v; save_settings_(); }
 
+  ButtonAction power_short_action() const { return power_short_action_; }
+  void set_power_short_action(ButtonAction action) {
+    power_short_action_ = sanitize_button_action_(action);
+    save_settings_();
+  }
+
+  ButtonAction power_long_action() const { return power_long_action_; }
+  void set_power_long_action(ButtonAction action) {
+    power_long_action_ = sanitize_button_action_(action);
+    save_settings_();
+  }
+
+  ButtonAction button_long_action(Button button) const {
+    const uint8_t idx = static_cast<uint8_t>(button);
+    return idx < 6 ? button_long_actions_[idx] : ButtonAction::None;
+  }
+  void set_button_long_action(Button button, ButtonAction action) {
+    const uint8_t idx = static_cast<uint8_t>(button);
+    if (idx < 6) {
+      button_long_actions_[idx] = sanitize_button_action_(action);
+      save_settings_();
+    }
+  }
+
   bool invert_menu_buttons() const {
     return invert_menu_buttons_;
   }
@@ -320,7 +370,25 @@ class Application {
   uint32_t uptime_ms() const;
 
  private:
+  struct ButtonHoldState {
+    ButtonAction action = ButtonAction::None;
+    uint32_t elapsed_ms = 0;
+    bool tracking = false;
+    bool action_fired = false;
+  };
+
+  static constexpr uint32_t kButtonLongPressMs = 700;
+
+  static ButtonAction sanitize_button_action_(ButtonAction action) {
+    return static_cast<uint8_t>(action) <= static_cast<uint8_t>(ButtonAction::DecreaseFont)
+               ? action
+               : ButtonAction::None;
+  }
+  ButtonState process_button_actions_(const ButtonState& raw, uint32_t dt_ms, DrawBuffer& buf, IRuntime& runtime);
+  void execute_button_action_(ButtonAction action, DrawBuffer& buf, IRuntime& runtime);
+
   ButtonState buttons_{};
+  ButtonHoldState button_holds_[ButtonState::kButtonCount]{};
   uint64_t ticks_ = 0;
   uint32_t uptime_ms_ = 0;
 
@@ -329,9 +397,15 @@ class Application {
 
   uint32_t inactivity_ms_ = 0;
 
-  bool invert_menu_buttons_ = false;
-  bool invert_bottom_paging_ = true;
-  bool invert_side_buttons_ = false;
+  bool invert_menu_buttons_ = true;       // physical right = down
+  bool invert_bottom_paging_ = false;     // physical right = next page
+  bool invert_side_buttons_ = true;       // physical top = previous page
+  ButtonAction power_short_action_ = ButtonAction::NextPage;
+  ButtonAction power_long_action_ = ButtonAction::Sleep;
+  // Physical order: bottom Back, OK, Left, Right, then side Up and Down.
+  ButtonAction button_long_actions_[6] = {
+      ButtonAction::None, ButtonAction::None, ButtonAction::DecreaseFont,
+      ButtonAction::IncreaseFont, ButtonAction::RotateCCW, ButtonAction::RotateCW};
   uint8_t rotate_display_ = 0;  // 0=Portrait(Deg90), 1=Landscape(Deg0), 2=Portrait-Flip(Deg270), 3=Landscape-Flip(Deg180)
   uint8_t rotate_reader_ = 0;   // independent reader rotation, same encoding
 

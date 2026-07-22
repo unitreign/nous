@@ -27,6 +27,9 @@
 namespace microreader {
 
 static constexpr const char* kTabNames[4] = {"Look", "Reader", "Control", "System"};
+static constexpr const char* kButtonActionSettingNames[8] = {
+    "Power Tap",       "Power Hold",       "Side Up Hold",    "Side Down Hold",
+    "Bottom Back Hold", "Bottom OK Hold",   "Bottom Left Hold", "Bottom Right Hold"};
 
 // ---------------------------------------------------------------------------
 // Label helpers
@@ -118,6 +121,41 @@ static std::string get_sleep_timeout_label(uint8_t min) {
 
 static std::string get_show_whats_new_label(bool on) {
   return std::string("Show on Update: ") + (on ? "On" : "Off");
+}
+
+static ButtonAction get_configured_button_action(const Application* app, int slot) {
+  if (!app)
+    return ButtonAction::None;
+  if (slot == 0)
+    return app->power_short_action();
+  if (slot == 1)
+    return app->power_long_action();
+  static constexpr Button kButtons[6] = {
+      Button::Up, Button::Down, Button::Button0, Button::Button1, Button::Button2, Button::Button3};
+  return slot >= 2 && slot < 8 ? app->button_long_action(kButtons[slot - 2]) : ButtonAction::None;
+}
+
+static void set_configured_button_action(Application* app, int slot, ButtonAction action) {
+  if (!app)
+    return;
+  if (slot == 0) {
+    app->set_power_short_action(action);
+    return;
+  }
+  if (slot == 1) {
+    app->set_power_long_action(action);
+    return;
+  }
+  static constexpr Button kButtons[6] = {
+      Button::Up, Button::Down, Button::Button0, Button::Button1, Button::Button2, Button::Button3};
+  if (slot >= 2 && slot < 8)
+    app->set_button_long_action(kButtons[slot - 2], action);
+}
+
+static std::string get_button_action_setting_label(int slot, ButtonAction action) {
+  if (slot < 0 || slot >= 8)
+    return {};
+  return std::string(kButtonActionSettingNames[slot]) + ": " + button_action_label(action);
 }
 
 static std::string get_font_label(const std::string& font_path) {
@@ -214,6 +252,8 @@ void SettingsScreen::on_start() {
   idx_font_ = idx_sleep_image_ = idx_sleep_text_ = idx_reader_images_ = -1;
   idx_battery_display_ = idx_sleep_timeout_ = idx_convert_all_ = idx_theme_ = -1;
   idx_whats_new_ = idx_show_whats_new_ = -1;
+  for (int& idx : idx_button_actions_)
+    idx = -1;
 #ifdef MICROREADER_ENABLE_DEMOS
   idx_bouncing_ball_ = idx_grayscale_demo_ = -1;
 #endif
@@ -356,6 +396,11 @@ void SettingsScreen::on_start() {
 
   idx_invert_menu_ = count();
   add_item(get_menu_nav_label(app_ ? app_->invert_menu_buttons() : false));
+
+  for (int slot = 0; slot < kButtonActionSettingCount; ++slot) {
+    idx_button_actions_[slot] = count();
+    add_item(get_button_action_setting_label(slot, get_configured_button_action(app_, slot)));
+  }
 
   tab_end_[2] = count() - 1;
 
@@ -562,6 +607,19 @@ void SettingsScreen::apply_picker_(int sel) {
   picker_open_ = false;
   if (!app_) return;
 
+  for (int slot = 0; slot < kButtonActionSettingCount; ++slot) {
+    if (picker_target_ == idx_button_actions_[slot]) {
+      const ButtonAction action =
+          (sel >= 0 && sel <= static_cast<int>(ButtonAction::DecreaseFont))
+              ? static_cast<ButtonAction>(sel)
+              : ButtonAction::None;
+      set_configured_button_action(app_, slot, action);
+      set_item_label(idx_button_actions_[slot], get_button_action_setting_label(slot, action));
+      request_redraw();
+      return;
+    }
+  }
+
   if (picker_target_ == idx_theme_) {
     static constexpr uint8_t kThemeOrder[] = {1, 0, 2, 3, 4, 5};
     const uint8_t old_v = app_->menu_theme();
@@ -638,6 +696,15 @@ void SettingsScreen::apply_picker_(int sel) {
 // ---------------------------------------------------------------------------
 
 void SettingsScreen::on_select(int index) {
+  for (int slot = 0; slot < kButtonActionSettingCount; ++slot) {
+    if (index == idx_button_actions_[slot]) {
+      open_picker_(kButtonActionSettingNames[slot], index,
+                   {"None", "Next Page", "Previous Page", "Sleep", "Rotate CCW", "Rotate CW",
+                    "Increase Font", "Decrease Font"},
+                   static_cast<int>(get_configured_button_action(app_, slot)));
+      return;
+    }
+  }
   if (index == idx_theme_) {
     // Picker order: Minimal(1), Chronicle(0), Stele(2), Codex(3), Lyra(4), LyraExt(5)
     static constexpr uint8_t kThemeOrder[] = {1, 0, 2, 3, 4, 5};

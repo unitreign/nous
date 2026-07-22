@@ -928,6 +928,10 @@ void ReaderScreen::draw_bottom_(DrawBuffer& buf, bool landscape) {
 bool ReaderScreen::render_current_page(DrawBuffer& buf) {
   if (!open_ok_)
     return false;
+  if (grayscale_active_) {
+    buf.revert_grayscale();
+    grayscale_active_ = false;
+  }
   render_page_(buf);
   return true;
 }
@@ -942,6 +946,50 @@ bool ReaderScreen::next_page_and_render(DrawBuffer& buf) {
     grayscale_active_ = false;
   }
   render_page_(buf);
+  save_position_();
+  return true;
+}
+
+bool ReaderScreen::previous_page_and_render(DrawBuffer& buf) {
+  if (!open_ok_)
+    return false;
+  if (!prev_page_())
+    return false;
+  if (grayscale_active_) {
+    buf.revert_grayscale();
+    grayscale_active_ = false;
+  }
+  render_page_(buf);
+  save_position_();
+  return true;
+}
+
+bool ReaderScreen::change_font_size(int delta) {
+  if (!open_ok_ || delta == 0)
+    return false;
+
+  uint8_t font_count = ReaderSettings::kNumFontSizePresets;
+  const BitmapFontSet* fset = ext_font_set_ ? ext_font_set_ : (font_set_.valid() ? &font_set_ : nullptr);
+  if (fset && fset->num_fonts() > 0)
+    font_count = static_cast<uint8_t>(fset->num_fonts());
+  if (font_count == 0)
+    return false;
+
+  const int current = static_cast<int>(reader_settings_.font_size_idx);
+  const int next = std::max(0, std::min(static_cast<int>(font_count) - 1, current + delta));
+  if (next == current)
+    return false;
+
+  reader_settings_.font_size_idx = static_cast<uint8_t>(next);
+  if (fset)
+    const_cast<BitmapFontSet*>(fset)->set_base_size_index(reader_settings_.font_size_idx);
+
+  // BitmapFontSet keeps the same object address when its active size changes,
+  // so TextLayout::set_font() cannot detect that its metrics changed. Drop the
+  // cached line breaks before rendering. render_page_() then resolves the old
+  // page start from its stable text offset, keeping the first visible line as
+  // the inexpensive reading-position anchor while reflowing the whole page.
+  layout_engine_.invalidate_cache();
   return true;
 }
 

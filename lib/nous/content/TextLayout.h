@@ -256,6 +256,13 @@ class TextLayout {
     cache_valid_ = false;
   }
 
+  // Invalidate cached line breaks when the metrics of the current font object
+  // change in place (for example, BitmapFontSet selecting a new base size).
+  // The next layout rebuilds only the paragraphs needed for the current page.
+  void invalidate_cache() {
+    cache_valid_ = false;
+  }
+
   // Break a single paragraph into lines using the stored font.
   std::vector<LayoutLine> layout_paragraph(const LayoutOptions& opts, const TextParagraph& para) const;
 

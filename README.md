@@ -66,6 +66,7 @@ Four visual themes, switchable from Settings:
 | **Auto-Sleep** | Configurable inactivity timeout — 1 / 3 / 5 / 10 / 20 / 30 min, or Off |
 | **Sleep Image** | Custom sleep screen from SD card (`.mgr` or `.bmp` in `/.sleep/`) with auto-cycle support |
 | **Button Remapping** | Invert menu navigation direction, bottom paging direction, and side button paging direction independently |
+| **Button Actions** | Configure power-button tap/hold actions and long-press actions for all six navigation buttons: page navigation, sleep, rotate CW/CCW, font size, or none |
 
 ### Fonts
 

@@ -75,6 +75,8 @@ class SettingsScreen final : public ListMenuScreen {
   int idx_theme_ = -1;
   int idx_whats_new_ = -1;
   int idx_show_whats_new_ = -1;
+  static constexpr int kButtonActionSettingCount = 8;
+  int idx_button_actions_[kButtonActionSettingCount] = {};
 
   DrawBuffer* buf_ = nullptr;
   mutable std::string subtitle_buf_;

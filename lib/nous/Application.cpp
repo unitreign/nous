@@ -32,6 +32,8 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   ticks_ = 0;
   uptime_ms_ = 0;
   buttons_ = ButtonState{};
+  for (auto& hold : button_holds_)
+    hold = ButtonHoldState{};
   started_ = true;
   running_ = true;
 
@@ -248,6 +250,151 @@ void Application::do_sleep_(DrawBuffer& buf) {
   running_ = false;
 }
 
+void Application::execute_button_action_(ButtonAction action, DrawBuffer& buf, IRuntime& runtime) {
+  switch (action) {
+    case ButtonAction::NextPage:
+      if (screen_mgr_.top() == &reader_ && reader_.next_page_and_render(buf))
+        buf.refresh();
+      return;
+    case ButtonAction::PreviousPage:
+      if (screen_mgr_.top() == &reader_ && reader_.previous_page_and_render(buf))
+        buf.refresh();
+      return;
+    case ButtonAction::Sleep:
+      do_sleep_(buf);
+      return;
+    case ButtonAction::RotateCCW:
+    case ButtonAction::RotateCW: {
+      const bool reader_context = screen_mgr_.contains(&reader_);
+      uint8_t& rotation = reader_context ? rotate_reader_ : rotate_display_;
+      // Settings advance clockwise through 90, 0, 270, 180 degrees.
+      const uint8_t step = action == ButtonAction::RotateCW ? 1u : 3u;
+      rotation = static_cast<uint8_t>((rotation + step) % 4u);
+      save_settings_();
+      buf.set_rotation(rotation_from_setting(rotation));
+
+      IScreen* top = screen_mgr_.top();
+      if (top == &reader_)
+        reader_.render_current_page(buf);
+      else if (top)
+        top->resume(buf, runtime);
+      buf.full_refresh();
+      return;
+    }
+    case ButtonAction::IncreaseFont:
+    case ButtonAction::DecreaseFont: {
+      if (!screen_mgr_.contains(&reader_))
+        return;
+      const int delta = action == ButtonAction::IncreaseFont ? 1 : -1;
+      if (!reader_.change_font_size(delta))
+        return;
+      save_settings_();
+
+      IScreen* top = screen_mgr_.top();
+      if (top == &reader_)
+        reader_.render_current_page(buf);
+      else if (top)
+        top->resume(buf, runtime);
+      buf.refresh();
+      return;
+    }
+    default:
+      return;
+  }
+}
+
+ButtonState Application::process_button_actions_(const ButtonState& raw, uint32_t dt_ms, DrawBuffer& buf,
+                                                 IRuntime& runtime) {
+  ButtonState forwarded;
+  forwarded.current = raw.current;
+
+  auto append_press = [&](Button button) {
+    const uint8_t idx = static_cast<uint8_t>(button);
+    forwarded.pressed_latch |= static_cast<uint8_t>(1u << idx);
+    if (forwarded.press_history_count < ButtonState::kMaxPressHistory)
+      forwarded.press_history[forwarded.press_history_count++] = idx;
+  };
+
+  // Resolve buttons that were held across a previous frame. Their current
+  // state remains hidden from screens until the gesture becomes a tap or hold.
+  for (uint8_t idx = 0; idx < ButtonState::kButtonCount; ++idx) {
+    ButtonHoldState& hold = button_holds_[idx];
+    if (!hold.tracking)
+      continue;
+
+    const uint8_t mask = static_cast<uint8_t>(1u << idx);
+    forwarded.current &= static_cast<uint8_t>(~mask);
+    if ((raw.current & mask) != 0) {
+      if (hold.elapsed_ms < kButtonLongPressMs) {
+        const uint32_t remaining = kButtonLongPressMs - hold.elapsed_ms;
+        hold.elapsed_ms += dt_ms < remaining ? dt_ms : remaining;
+      }
+      if (!hold.action_fired && hold.elapsed_ms >= kButtonLongPressMs) {
+        hold.action_fired = true;
+        execute_button_action_(hold.action, buf, runtime);
+        if (!running_)
+          return forwarded;
+      }
+    } else {
+      if (!hold.action_fired) {
+        if (idx == static_cast<uint8_t>(Button::Power))
+          execute_button_action_(power_short_action_, buf, runtime);
+        else
+          append_press(static_cast<Button>(idx));
+      }
+      hold = ButtonHoldState{};
+      if (!running_)
+        return forwarded;
+    }
+  }
+
+  auto handle_press = [&](Button button) {
+    const uint8_t idx = static_cast<uint8_t>(button);
+    if (idx >= ButtonState::kButtonCount || button_holds_[idx].tracking)
+      return;
+
+    const bool is_power = button == Button::Power;
+    const ButtonAction hold_action = is_power ? power_long_action_ : button_long_action(button);
+    const uint8_t mask = static_cast<uint8_t>(1u << idx);
+    if ((is_power || hold_action != ButtonAction::None) && (raw.current & mask) != 0) {
+      ButtonHoldState& hold = button_holds_[idx];
+      hold.action = hold_action;
+      hold.elapsed_ms = 0;
+      hold.tracking = true;
+      hold.action_fired = false;
+      forwarded.current &= static_cast<uint8_t>(~mask);
+    } else if (is_power) {
+      // A complete tap can occur between two UI frames. It cannot become a
+      // hold, so execute its tap action immediately.
+      execute_button_action_(power_short_action_, buf, runtime);
+    } else {
+      append_press(button);
+    }
+  };
+
+  uint8_t seen_press_mask = 0;
+  for (uint8_t i = 0; i < raw.press_history_count; ++i) {
+    const uint8_t idx = raw.press_history[i];
+    if (idx >= ButtonState::kButtonCount)
+      continue;
+    seen_press_mask |= static_cast<uint8_t>(1u << idx);
+    handle_press(static_cast<Button>(idx));
+    if (!running_)
+      return forwarded;
+  }
+  // Backward compatibility for input sources that only populate pressed_latch.
+  const uint8_t latch_only = static_cast<uint8_t>(raw.pressed_latch & ~seen_press_mask);
+  for (uint8_t idx = 0; idx < ButtonState::kButtonCount; ++idx) {
+    if ((latch_only & static_cast<uint8_t>(1u << idx)) != 0) {
+      handle_press(static_cast<Button>(idx));
+      if (!running_)
+        return forwarded;
+    }
+  }
+
+  return forwarded;
+}
+
 void Application::update(const ButtonState& buttons, uint32_t dt_ms, DrawBuffer& buf, IRuntime& runtime) {
   if (!started_)
     start(buf, runtime);
@@ -256,10 +403,9 @@ void Application::update(const ButtonState& buttons, uint32_t dt_ms, DrawBuffer&
 
   ++ticks_;
   uptime_ms_ += dt_ms;
-  buttons_ = buttons;
 
   // Inactivity / auto-sleep tracking
-  if (buttons_.current != 0 || buttons_.pressed_latch != 0) {
+  if (buttons.current != 0 || buttons.pressed_latch != 0) {
     inactivity_ms_ = 0;
   } else {
     inactivity_ms_ += dt_ms;
@@ -273,10 +419,9 @@ void Application::update(const ButtonState& buttons, uint32_t dt_ms, DrawBuffer&
     }
   }
 
-  if (buttons_.is_pressed(Button::Power)) {
-    do_sleep_(buf);
+  buttons_ = process_button_actions_(buttons, dt_ms, buf, runtime);
+  if (!running_)
     return;
-  }
 
   IScreen* top = screen_mgr_.top();
   if (top) {
@@ -399,6 +544,11 @@ void microreader::Application::save_settings_() {
   std::fprintf(f, "inv_menu=%u\n", invert_menu_buttons_ ? 1u : 0u);
   std::fprintf(f, "inv_bpage=%u\n", invert_bottom_paging_ ? 1u : 0u);
   std::fprintf(f, "inv_side=%u\n", invert_side_buttons_ ? 1u : 0u);
+  std::fprintf(f, "control_defaults_version=1\n");
+  std::fprintf(f, "button_power_short=%u\n", static_cast<unsigned>(power_short_action_));
+  std::fprintf(f, "button_power_long=%u\n", static_cast<unsigned>(power_long_action_));
+  for (uint8_t i = 0; i < 6; ++i)
+    std::fprintf(f, "button_long_%u=%u\n", static_cast<unsigned>(i), static_cast<unsigned>(button_long_actions_[i]));
   std::fprintf(f, "rotate_display=%u\n", static_cast<unsigned>(rotate_display_));
   std::fprintf(f, "rotate_reader=%u\n", static_cast<unsigned>(rotate_reader_));
   std::fprintf(f, "menu_font_size=%d\n", menu_font_size_);
@@ -481,6 +631,7 @@ void microreader::Application::load_settings_() {
   char line[512];
   std::string last_screen, last_book_path, book_sel;
   int setting_sel = 0;
+  bool has_current_control_defaults = false;
   ReaderSettings& rs = reader_.reader_settings();
 
   while (std::fgets(line, sizeof(line), f)) {
@@ -491,6 +642,13 @@ void microreader::Application::load_settings_() {
 
     char sval[512];
     unsigned uval = 0;
+    unsigned button_idx = 0;
+    unsigned button_action = 0;
+    if (std::sscanf(line, "button_long_%u=%u", &button_idx, &button_action) == 2 && button_idx < 6) {
+      button_long_actions_[button_idx] =
+          sanitize_button_action_(static_cast<ButtonAction>(button_action));
+      continue;
+    }
     if (std::sscanf(line, "screen=%511s", sval) == 1)
       last_screen = sval;
     else if (std::sscanf(line, "setting_sel=%d", &setting_sel) == 1)
@@ -535,6 +693,12 @@ void microreader::Application::load_settings_() {
       invert_bottom_paging_ = (uval != 0);
     else if (std::sscanf(line, "inv_side=%u", &uval) == 1)
       invert_side_buttons_ = (uval != 0);
+    else if (std::sscanf(line, "control_defaults_version=%u", &uval) == 1)
+      has_current_control_defaults = (uval >= 1);
+    else if (std::sscanf(line, "button_power_short=%u", &uval) == 1)
+      power_short_action_ = sanitize_button_action_(static_cast<ButtonAction>(uval));
+    else if (std::sscanf(line, "button_power_long=%u", &uval) == 1)
+      power_long_action_ = sanitize_button_action_(static_cast<ButtonAction>(uval));
     else if (std::sscanf(line, "rotate_display=%u", &uval) == 1)
       rotate_display_ = static_cast<uint8_t>(uval <= 3 ? uval : 0);
     else if (std::sscanf(line, "rotate_reader=%u", &uval) == 1)
@@ -571,6 +735,14 @@ void microreader::Application::load_settings_() {
       last_seen_version_ = sval;
   }
   std::fclose(f);
+
+  // One-time migration for settings written before the configurable button
+  // actions established these fork-specific physical directions.
+  if (!has_current_control_defaults) {
+    invert_menu_buttons_ = true;       // right = down
+    invert_bottom_paging_ = false;     // right = next page
+    invert_side_buttons_ = true;       // top = previous page
+  }
 
   // These toggles have been removed from Settings UI — always enforce.
   show_nav_arrows_ = true;
