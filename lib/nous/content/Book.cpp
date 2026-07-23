@@ -106,18 +106,18 @@ bool Book::read_image_size(uint16_t entry_index, uint16_t& w, uint16_t& h, uint8
   return true;
 }
 
-bool Book::write_cover_bin(const char* cover_path, uint8_t* work_buf, size_t work_buf_size) {
+bool Book::write_cover_bin(const char* cover_path, int max_w, int max_h,
+                            uint8_t* work_buf, size_t work_buf_size) {
   const int idx = epub_.cover_zip_idx();
   if (idx < 0 || idx >= static_cast<int>(epub_.zip().entry_count()))
     return false;
   DecodedImage img;
-  // Decode to fit within 160×240, preserving aspect ratio.
   // Force images_enabled=true so covers are always generated regardless of
   // the "show reader images" setting.
   auto& entry = epub_.zip().entry(static_cast<uint16_t>(idx));
   const bool was_enabled = images_enabled;
   images_enabled = true;
-  auto err = decode_image_from_entry(file_, entry, 160, 240, img, work_buf, work_buf_size, /*scale_to_fill=*/false);
+  auto err = decode_image_from_entry(file_, entry, max_w, max_h, img, work_buf, work_buf_size, /*scale_to_fill=*/false);
   images_enabled = was_enabled;
   if (err != ImageError::Ok || img.data.empty())
     return false;
@@ -131,16 +131,22 @@ bool Book::write_cover_bin(const char* cover_path, uint8_t* work_buf, size_t wor
   return true;
 }
 
-std::string cover_bin_path(const char* epub_path, const char* data_dir) {
-  // Extract stem from epub_path (filename without extension).
+static std::string epub_stem_(const char* epub_path) {
   const char* p = epub_path;
   const char* slash = nullptr;
   for (const char* c = p; *c; ++c)
     if (*c == '/' || *c == '\\') slash = c;
   const char* name = slash ? slash + 1 : p;
   const char* dot = std::strrchr(name, '.');
-  std::string stem = dot ? std::string(name, static_cast<size_t>(dot - name)) : std::string(name);
-  return std::string(data_dir) + "/cache/" + stem + "/cover.bin";
+  return dot ? std::string(name, static_cast<size_t>(dot - name)) : std::string(name);
+}
+
+std::string cover_bin_path(const char* epub_path, const char* data_dir) {
+  return std::string(data_dir) + "/cache/" + epub_stem_(epub_path) + "/cover.bin";
+}
+
+std::string cover_sleep_bin_path(const char* epub_path, const char* data_dir) {
+  return std::string(data_dir) + "/cache/" + epub_stem_(epub_path) + "/cover_sleep.bin";
 }
 
 }  // namespace microreader

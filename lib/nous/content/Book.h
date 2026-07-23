@@ -98,8 +98,10 @@ class Book {
 
   // Extract and write cover image to cover_path as a 1-bit packed bitmap file.
   // Header: uint16_t width, uint16_t height (LE), then packed row data.
+  // max_w/max_h cap the output dimensions (aspect-ratio-preserving).
   // Returns true on success, false if no cover or decode failed.
   bool write_cover_bin(const char* cover_path,
+                       int max_w, int max_h,
                        uint8_t* work_buf = nullptr, size_t work_buf_size = 0);
 
  private:
@@ -108,8 +110,12 @@ class Book {
   bool file_open_ = false;
 };
 
-// Derive the cover.bin path for an epub file.
+// Derive the cover.bin path for an epub file (small display thumbnail).
 // Returns: {data_dir}/cache/{epub_stem}/cover.bin
 std::string cover_bin_path(const char* epub_path, const char* data_dir);
+
+// Derive the cover_sleep.bin path for an epub file (full-res sleep screen).
+// Returns: {data_dir}/cache/{epub_stem}/cover_sleep.bin
+std::string cover_sleep_bin_path(const char* epub_path, const char* data_dir);
 
 }  // namespace microreader

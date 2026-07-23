@@ -600,8 +600,12 @@ void ReaderOptionsScreen::on_select(int index) {
     if (app_) {
       auto* r = app_->reader();
       app_->stats_screen()->set_book_stats(
-          r->book_title(), r->times_opened(), r->reading_ms_total(),
-          r->progress_pct(), r->estimated_time_left_ms(), r->page_turn_count());
+          r->book_title(), subtitle_, chapter_title_,
+          static_cast<int>(r->chapter_index()), static_cast<int>(r->chapter_count()),
+          r->times_opened(), r->reading_ms_total(),
+          r->progress_pct(), chapter_progress_pct_,
+          r->estimated_time_left_ms(), r->page_turn_count(),
+          r->get_path());
       app_->push_screen(ScreenId::Stats);
     }
     return;

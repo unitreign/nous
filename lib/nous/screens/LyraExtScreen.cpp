@@ -75,14 +75,42 @@ void LyraExtScreen::load_cover_(int i) {
   if (!f) return;
   uint16_t hdr[2] = {};
   if (std::fread(hdr, 2, 2, f) != 2) { std::fclose(f); return; }
-  s.cover_w = hdr[0];
-  s.cover_h = hdr[1];
-  const size_t stride = (s.cover_w + 7) / 8;
-  const size_t data_sz = stride * s.cover_h;
-  if (data_sz == 0 || data_sz > 8192) { std::fclose(f); return; }
-  s.cover_data.resize(data_sz);
-  if (std::fread(s.cover_data.data(), 1, data_sz, f) == data_sz)
+  const int src_w = hdr[0], src_h = hdr[1];
+  if (src_w <= 0 || src_h <= 0) { std::fclose(f); return; }
+
+  // Scale to the display slot size during load — avoids holding the full
+  // high-res bitmap (up to 47 KB) in RAM for each of the 3 slots.
+  const int slot_w = (480 - 2 * 12 - 2 * 8) / 3;  // kPortraitW=480, kPad=12, kSlotGap=8
+  const int slot_h = slot_w * 3 / 2;
+  int dst_w = slot_w, dst_h = slot_w * src_h / src_w;
+  if (dst_h > slot_h) { dst_h = slot_h; dst_w = slot_h * src_w / src_h; }
+  if (dst_w <= 0 || dst_h <= 0) { std::fclose(f); return; }
+
+  const int src_stride = (src_w + 7) / 8;
+  const int dst_stride = (dst_w + 7) / 8;
+  s.cover_data.assign(static_cast<size_t>(dst_stride) * dst_h, 0xFF);
+  std::vector<uint8_t> src_row(src_stride);
+  int prev_sy = -1;
+  for (int dy = 0; dy < dst_h; ++dy) {
+    const int sy = dy * src_h / dst_h;
+    if (sy != prev_sy) {
+      std::fseek(f, 4 + static_cast<long>(sy) * src_stride, SEEK_SET);
+      if (std::fread(src_row.data(), 1, src_stride, f) != static_cast<size_t>(src_stride))
+        { s.cover_data.clear(); break; }
+      prev_sy = sy;
+    }
+    uint8_t* dr = s.cover_data.data() + static_cast<size_t>(dy) * dst_stride;
+    for (int dx = 0; dx < dst_w; ++dx) {
+      const int sx = dx * src_w / dst_w;
+      if (!((src_row[sx >> 3] >> (7 - (sx & 7))) & 1))
+        dr[dx >> 3] &= static_cast<uint8_t>(~(1u << (7 - (dx & 7))));
+    }
+  }
+  if (!s.cover_data.empty()) {
+    s.cover_w = static_cast<uint16_t>(dst_w);
+    s.cover_h = static_cast<uint16_t>(dst_h);
     s.cover_loaded = true;
+  }
   std::fclose(f);
 }
 

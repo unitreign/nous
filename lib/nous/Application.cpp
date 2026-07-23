@@ -130,6 +130,77 @@ void Application::auto_open_book(const char* epub_path, DrawBuffer& buf, IRuntim
   screen_mgr_.push(&reader_, buf, runtime);
 }
 
+// Scale-to-fit the most recent book's cover onto the sleep screen (white letterbox).
+// Returns true and does a full refresh if successful.
+static bool show_book_cover_sleep_(DrawBuffer& buf, const char* data_dir) {
+  if (!data_dir) return false;
+
+  // Find most recently opened book in the index.
+  std::string best_path;
+  uint32_t best_order = 0;
+  BookIndex::instance().load(std::string(data_dir) + "/book_index.dat");
+  const StringPool& pool = BookIndex::instance().pool();
+  for (const auto& e : BookIndex::instance().entries()) {
+    if (e.last_open_order > best_order) {
+      best_order = e.last_open_order;
+      best_path  = e.path.to_string(pool);
+    }
+  }
+  if (best_path.empty()) return false;
+
+  // Load the pre-extracted full-res 1-bit cover for the sleep screen.
+  const std::string cpath = cover_sleep_bin_path(best_path.c_str(), data_dir);
+  FILE* f = std::fopen(cpath.c_str(), "rb");
+  if (!f) return false;
+
+  uint16_t hdr[2] = {};
+  if (std::fread(hdr, 2, 2, f) != 2) { std::fclose(f); return false; }
+  const int cw = static_cast<int>(hdr[0]);
+  const int ch = static_cast<int>(hdr[1]);
+  const size_t stride  = (static_cast<size_t>(cw) + 7) / 8;
+  const size_t data_sz = stride * static_cast<size_t>(ch);
+  if (cw <= 0 || ch <= 0 || data_sz == 0 || data_sz > 65536) { std::fclose(f); return false; }
+
+  std::vector<uint8_t> data(data_sz);
+  const bool ok = (std::fread(data.data(), 1, data_sz, f) == data_sz);
+  std::fclose(f);
+  if (!ok) return false;
+
+  // Scale-to-fit within W×H, preserving aspect ratio, white letterbox.
+  const int W = buf.width();
+  const int H = buf.height();
+  buf.fill(true);  // white background
+
+  int dst_w = W;
+  int dst_h = W * ch / cw;
+  if (dst_h > H) {
+    dst_h = H;
+    dst_w = H * cw / ch;
+  }
+  const int ox = (W - dst_w) / 2;
+  const int oy = (H - dst_h) / 2;
+
+  // Nearest-neighbour blit row-by-row.
+  uint8_t row_buf[80];
+  if ((dst_w + 7) / 8 > static_cast<int>(sizeof(row_buf))) return false;
+  for (int dy = 0; dy < dst_h; ++dy) {
+    const int sy = dy * ch / dst_h;
+    const uint8_t* src_row = data.data() + static_cast<size_t>(sy) * stride;
+    std::memset(row_buf, 0xFF, sizeof(row_buf));  // 1 = white
+    for (int dx = 0; dx < dst_w; ++dx) {
+      const int sx  = dx * cw / dst_w;
+      const int bit = (src_row[sx >> 3] >> (7 - (sx & 7))) & 1;
+      if (bit == 0)  // 0 = black pixel
+        row_buf[dx >> 3] &= static_cast<uint8_t>(~(0x80u >> (dx & 7)));
+    }
+    buf.blit_1bit_row(ox, oy + dy, row_buf, dst_w);
+  }
+
+  buf.full_refresh(RefreshMode::Full, /*turnOffScreen=*/true);
+  buf.deep_sleep();
+  return true;
+}
+
 // Convert/cache a BMP sleep image and display it. Returns true if shown.
 static bool show_bmp_sleep(const char* bmp_path, const char* data_dir, DrawBuffer& buf, bool show_text = true) {
   if (!data_dir) return false;
@@ -172,7 +243,9 @@ void Application::do_sleep_(DrawBuffer& buf) {
     save_settings_();
     buf.set_rotation(Rotation::Deg90);
     bool shown = false;
-    if (sleep_image_path_.rfind("embedded:", 0) == 0) {
+    if (sleep_image_path_ == "book-cover:") {
+      shown = show_book_cover_sleep_(buf, data_dir_);
+    } else if (sleep_image_path_.rfind("embedded:", 0) == 0) {
       shown = buf.show_sleep_image_embedded(std::atoi(sleep_image_path_.c_str() + 9), show_sleep_text_);
     } else if (sleep_image_path_.rfind("bmp:", 0) == 0) {
       shown = show_bmp_sleep(sleep_image_path_.c_str() + 4, data_dir_, buf, show_sleep_text_);
@@ -451,11 +524,33 @@ void microreader::Application::record_book_opened(const std::string& path) {
   }
   save_settings_();
 }
-void Application::ensure_cover_bin(const std::string& epub_path) {
+void Application::ensure_cover_bin(const std::string& epub_path,
+                                    uint8_t* scratch1, uint8_t* scratch2,
+                                    size_t scratch_size) {
   if (!data_dir_) return;
-  const std::string cpath = cover_bin_path(epub_path.c_str(), data_dir_);
+  const std::string cpath  = cover_bin_path(epub_path.c_str(), data_dir_);
+  const std::string spath  = cover_sleep_bin_path(epub_path.c_str(), data_dir_);
+
+  // cover.bin: small thumbnail (≤160×240). Stale if width > 200 (old 480px extract).
+  bool need_thumb = true;
   FILE* chk = std::fopen(cpath.c_str(), "rb");
-  if (chk) { std::fclose(chk); return; }  // already exists
+  if (chk) {
+    uint16_t hdr[2] = {};
+    need_thumb = (std::fread(hdr, 2, 2, chk) != 2 || hdr[0] > 200);
+    std::fclose(chk);
+  }
+
+  // cover_sleep.bin: full-res (≤480×786). Stale if missing or width < 400.
+  bool need_sleep = true;
+  FILE* schk = std::fopen(spath.c_str(), "rb");
+  if (schk) {
+    uint16_t hdr[2] = {};
+    need_sleep = (std::fread(hdr, 2, 2, schk) != 2 || hdr[0] < 400);
+    std::fclose(schk);
+  }
+
+  if (!need_thumb && !need_sleep) return;
+
   // Create data_dir/cache/ and data_dir/cache/STEM/ before writing.
   const std::string cache_base = std::string(data_dir_) + "/cache";
   const size_t last_slash = cpath.rfind('/');
@@ -466,9 +561,11 @@ void Application::ensure_cover_bin(const std::string& epub_path) {
 #else
   try { fs::create_directories(stem_dir); } catch (...) {}
 #endif
+
   Book book;
-  if (book.open(epub_path.c_str()) != EpubError::Ok) return;
-  book.write_cover_bin(cpath.c_str());
+  if (book.open(epub_path.c_str(), scratch1, scratch2) != EpubError::Ok) return;
+  if (need_thumb) book.write_cover_bin(cpath.c_str(),  160, 240, scratch1, scratch_size);
+  if (need_sleep) book.write_cover_bin(spath.c_str(),  480, 786, scratch1, scratch_size);
 }
 
 void microreader::Application::load_settings_() {

@@ -340,7 +340,7 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
     const size_t pos = cover_path.rfind("book.mrb");
     if (pos != std::string::npos) {
       cover_path.replace(pos, 8, "cover.bin");
-      book.write_cover_bin(cover_path.c_str(), work_buf,
+      book.write_cover_bin(cover_path.c_str(), 160, 240, work_buf,
                            work_buf ? (ZipEntryInput::kDecompSize + ZipEntryInput::kDictSize + 1024) : 0);
     }
   }

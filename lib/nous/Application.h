@@ -279,10 +279,12 @@ class Application {
   // counter in the index and persists both the index and settings.
   void record_book_opened(const std::string& path);
 
-  // Extract cover.bin for the given EPUB if it doesn't exist yet.
+  // Extract cover.bin for the given EPUB if it doesn't exist or is stale.
   // No-op if data_dir is not set or the EPUB has no cover.
-  // Blocking — can take ~1s on first call for old books.
-  void ensure_cover_bin(const std::string& epub_path);
+  // Blocking — can take ~1s. Pass scratch bufs when available to avoid heap pressure.
+  void ensure_cover_bin(const std::string& epub_path,
+                        uint8_t* scratch1 = nullptr, uint8_t* scratch2 = nullptr,
+                        size_t scratch_size = 0);
 
   // Navigate to a screen: push on top of the current screen (current stays on stack).
   // Or replace the current screen (pop it first, then push the new one).

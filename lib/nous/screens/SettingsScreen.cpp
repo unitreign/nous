@@ -73,7 +73,11 @@ static std::string get_menu_font_label(int size) {
 
 static std::string get_sleep_image_label(const std::string& path) {
   std::string label = "Sleep Image: ";
-  if (path.rfind("embedded:", 0) == 0) {
+  if (path == "auto:") {
+    label += "Auto";
+  } else if (path == "book-cover:") {
+    label += "Book Cover";
+  } else if (path.rfind("embedded:", 0) == 0) {
     label += "nous";
   } else {
     const char* p = path.rfind("bmp:", 0) == 0 ? path.c_str() + 4 : path.c_str();
@@ -251,9 +255,11 @@ void SettingsScreen::on_start() {
     }
   }
 
-  // Build sleep image list
+  // Build sleep image list: nous → Auto → Book Cover → individual files
   sleep_images_.clear();
   sleep_images_.push_back("embedded:0");
+  sleep_images_.push_back("auto:");
+  sleep_images_.push_back("book-cover:");
   sleep_image_sel_idx_ = 0;
 #ifdef ESP_PLATFORM
   {
@@ -285,8 +291,10 @@ void SettingsScreen::on_start() {
 #endif
   if (app_) {
     const std::string& current = app_->sleep_image_path();
+    // Empty path means auto-cycle — map to the "auto:" sentinel entry.
+    const std::string match = current.empty() ? "auto:" : current;
     for (size_t i = 0; i < sleep_images_.size(); ++i) {
-      if (sleep_images_[i] == current) { sleep_image_sel_idx_ = static_cast<int>(i); break; }
+      if (sleep_images_[i] == match) { sleep_image_sel_idx_ = static_cast<int>(i); break; }
     }
   }
 
@@ -626,8 +634,10 @@ void SettingsScreen::apply_picker_(int sel) {
   } else if (picker_target_ == idx_sleep_image_) {
     if (sel >= 0 && sel < (int)sleep_images_.size()) {
       sleep_image_sel_idx_ = sel;
-      app_->set_sleep_image_path(sleep_images_[sel]);
-      set_item_label(idx_sleep_image_, get_sleep_image_label(sleep_images_[sel]));
+      // "auto:" sentinel → store empty string so Application auto-cycles.
+      const std::string& chosen = sleep_images_[sel];
+      app_->set_sleep_image_path(chosen == "auto:" ? "" : chosen);
+      set_item_label(idx_sleep_image_, get_sleep_image_label(chosen));
     }
   }
   request_redraw();

@@ -188,6 +188,8 @@ class ReaderScreen final : public IScreen {
   uint64_t reading_ms_total() const;
   uint32_t page_turn_count() const { return page_turn_count_; }
   uint64_t estimated_time_left_ms() const;
+  uint16_t chapter_index() const { return static_cast<uint16_t>(chapter_idx_); }
+  uint16_t chapter_count() const { return mrb_.chapter_count(); }
 
   // Access to user-adjustable display settings (read/write by Application for persistence).
   ReaderSettings& reader_settings() {

@@ -35,12 +35,10 @@ void ConvertAllScreen::scan_jobs_() {
   jobs_.clear();
   if (!app_ || !app_->data_dir_) return;
 
-  // MainMenu::stop() (called via pause() default) clears BookIndex entries.
-  // Reload from disk so we see all books even when navigated here from Settings.
-  if (BookIndex::instance().entries().empty()) {
-    std::string index_path = std::string(app_->data_dir_) + "/book_index.dat";
-    BookIndex::instance().load(index_path);
-  }
+  // Always reload from disk — a prior screen may have left entries populated
+  // from a different context (e.g. filtered/sorted view from MainMenu).
+  std::string index_path = std::string(app_->data_dir_) + "/book_index.dat";
+  BookIndex::instance().load(index_path);
 
   const StringPool& pool = BookIndex::instance().pool();
   for (const auto& e : BookIndex::instance().entries()) {
@@ -96,6 +94,9 @@ void ConvertAllScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRunt
 
   if (phase_ == Phase::Done) return;
 
+  // Prevent auto-sleep from firing mid-conversion and resetting the device.
+  if (app_) app_->keep_awake();
+
   if (phase_ == Phase::Covers) {
     if (cancel_requested_ || cover_idx_ >= static_cast<int>(jobs_.size())) {
       phase_ = Phase::Done;
@@ -110,7 +111,7 @@ void ConvertAllScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRunt
     std::snprintf(msg, sizeof(msg), "Covers %d / %d: %.55s", cover_idx_ + 1, total, title.c_str());
     buf.sync_bw_ram();
     buf.show_loading(msg, cover_idx_ * 100 / total);
-    if (app_) app_->ensure_cover_bin(job.path);
+    if (app_) app_->ensure_cover_bin(job.path, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize);
     buf.reset_after_scratch(true);
     ++cover_idx_;
     if (cover_idx_ >= total) {

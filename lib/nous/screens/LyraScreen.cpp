@@ -10,6 +10,8 @@
 
 namespace microreader {
 
+static constexpr int kMaxCoverDisplayW = 100;  // thumbnail width for the recent-book card
+
 // Cover mode blit: scale src to fill dst_w × dst_h, centered, crop overflow.
 static void blit_cover(DrawBuffer& buf, int dst_x, int dst_y,
                         const uint8_t* data, int src_w, int src_h,
@@ -110,14 +112,40 @@ void LyraScreen::load_cover_data_() {
   if (!f) return;
   uint16_t hdr[2] = {};
   if (std::fread(hdr, 2, 2, f) != 2) { std::fclose(f); return; }
-  cover_w_ = hdr[0];
-  cover_h_ = hdr[1];
-  const size_t stride = (cover_w_ + 7) / 8;
-  const size_t data_sz = stride * cover_h_;
-  if (data_sz == 0 || data_sz > 8192) { std::fclose(f); return; }
-  cover_data_.resize(data_sz);
-  if (std::fread(cover_data_.data(), 1, data_sz, f) == data_sz)
+  const int src_w = hdr[0], src_h = hdr[1];
+  if (src_w <= 0 || src_h <= 0) { std::fclose(f); return; }
+
+  // Scale to thumbnail display size during load — avoid keeping the full
+  // high-res bitmap (up to 47 KB) in RAM when only ~100 px are displayed.
+  const int dst_w = std::min(src_w, kMaxCoverDisplayW);
+  const int dst_h = dst_w * src_h / src_w;
+  if (dst_w <= 0 || dst_h <= 0) { std::fclose(f); return; }
+
+  const int src_stride = (src_w + 7) / 8;
+  const int dst_stride = (dst_w + 7) / 8;
+  cover_data_.assign(static_cast<size_t>(dst_stride) * dst_h, 0xFF);
+  std::vector<uint8_t> src_row(src_stride);
+  int prev_sy = -1;
+  for (int dy = 0; dy < dst_h; ++dy) {
+    const int sy = dy * src_h / dst_h;
+    if (sy != prev_sy) {
+      std::fseek(f, 4 + static_cast<long>(sy) * src_stride, SEEK_SET);
+      if (std::fread(src_row.data(), 1, src_stride, f) != static_cast<size_t>(src_stride))
+        { cover_data_.clear(); break; }
+      prev_sy = sy;
+    }
+    uint8_t* dr = cover_data_.data() + static_cast<size_t>(dy) * dst_stride;
+    for (int dx = 0; dx < dst_w; ++dx) {
+      const int sx = dx * src_w / dst_w;
+      if (!((src_row[sx >> 3] >> (7 - (sx & 7))) & 1))
+        dr[dx >> 3] &= static_cast<uint8_t>(~(1u << (7 - (dx & 7))));
+    }
+  }
+  if (!cover_data_.empty()) {
+    cover_w_ = static_cast<uint16_t>(dst_w);
+    cover_h_ = static_cast<uint16_t>(dst_h);
     cover_loaded_ = true;
+  }
   std::fclose(f);
 }
 
@@ -244,8 +272,14 @@ void LyraScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) 
 
   // ── Recent book card ─────────────────────────────────────────────────────
   if (has_recent_ && idx_recent_ >= 0) {
+    // Cover already loaded at kMaxCoverDisplayW; compute proportional display height.
+    const int disp_cov_w = (cover_loaded_ && cover_w_ > 0)
+        ? std::min(static_cast<int>(cover_w_), kMaxCoverDisplayW) : 0;
+    const int disp_cov_h = (cover_loaded_ && cover_w_ > 0 && cover_h_ > 0)
+        ? disp_cov_w * static_cast<int>(cover_h_) / static_cast<int>(cover_w_) : 0;
+
     // Determine text column bounds.
-    const int cover_col_w = cover_loaded_ ? kPad + static_cast<int>(cover_w_) + kCoverGap : 0;
+    const int cover_col_w = cover_loaded_ ? kPad + disp_cov_w + kCoverGap : 0;
     const int text_x      = kPad + cover_col_w;
     const int text_max_w  = W - text_x - kPad;
 
@@ -260,22 +294,20 @@ void LyraScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) 
     // Card height: enough for text (with padding) or cover (with padding), whichever is taller.
     const int text_h = kCardPadV + text_group_h + kCardPadV;
     const int card_h = cover_loaded_
-        ? std::max(text_h, static_cast<int>(cover_h_) + kCardPadV * 2)
+        ? std::max(text_h, disp_cov_h + kCardPadV * 2)
         : text_h;
 
     const bool sel = (selected() == idx_recent_);
     if (sel)
       buf.fill_rect(0, y, W, card_h, false);
 
-    // Cover on the LEFT — cover mode fills the card's cover slot.
+    // Cover on the LEFT — scale high-res source down to thumbnail display size.
     if (cover_loaded_ && cover_w_ > 0 && cover_h_ > 0) {
-      const int slot_h = card_h - kCardPadV * 2;
-      const int slot_w_actual = static_cast<int>(cover_w_);
       const int img_x = kPad;
       const int img_y = y + kCardPadV;
       blit_cover(buf, img_x, img_y,
                  cover_data_.data(), cover_w_, cover_h_,
-                 slot_w_actual, slot_h);
+                 disp_cov_w, disp_cov_h);
     }
 
     // Text group: vertically centered in card.
