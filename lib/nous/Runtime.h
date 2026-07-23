@@ -15,6 +15,13 @@ class IRuntime {
   virtual uint32_t frame_time_ms() const = 0;
   virtual void wait_next_frame() = 0;
 
+  // Monotonic milliseconds since boot. frame_time_ms() is only the *nominal*
+  // frame period — real frames routinely overrun it, an e-ink refresh alone
+  // being several hundred ms — so anything measuring elapsed wall time must
+  // read this rather than summing frame_time_ms(). Wraps every ~49.7 days;
+  // callers use modular subtraction.
+  virtual uint32_t now_ms() const = 0;
+
   // Read battery level (0-100 percentage).
   // Returns empty optional if the platform does not have a battery.
   virtual std::optional<uint8_t> battery_percentage() const = 0;

@@ -195,15 +195,20 @@ void ReaderOptionsScreen::on_start() {
     }
   }
 
-  // Compute cumulative read time and look up author in one BookIndex pass.
+  // Look up the author in one BookIndex pass.
+  //
+  // The read time comes from the reader alone. reading_ms_total() is already
+  // the lifetime total (persisted .pos value + the live session), and the
+  // index entry is a copy of that same total written by the previous stop() —
+  // adding them displayed roughly double. The equivalent bug was fixed on the
+  // Stats path in 6cad8c9 but missed here.
   subtitle3_ = "< 1m read";
   std::string_view author_sv;
   if (app_ && app_->reader()) {
-    uint64_t ms = app_->reader()->reading_ms_total();
+    const uint64_t ms = app_->reader()->reading_ms_total();
     const std::string cur_path = app_->reader()->get_path();
     for (const auto& e : BookIndex::instance().entries()) {
       if (e.path.view(BookIndex::instance().pool()) == cur_path) {
-        ms += e.read_time_ms;
         author_sv = e.author.view(BookIndex::instance().pool());
         break;
       }

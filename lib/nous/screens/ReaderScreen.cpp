@@ -21,11 +21,20 @@
 
 namespace microreader {
 
+uint32_t ReaderScreen::now_ms_() const {
+  return runtime_ ? runtime_->now_ms() : 0u;
+}
+
+// The lifetime total is the value persisted in the .pos file plus whatever the
+// current session has earned so far. The tracker is advanced every frame, so
+// this needs no session fixup — and unlike the old accounting, the live value
+// and the value committed by stop() are always the same quantity.
 uint64_t ReaderScreen::reading_ms_total() const {
-  uint64_t total = reading_ms_total_;
-  if (open_ok_ && app_ && session_start_ms_ > 0)
-    total += static_cast<uint64_t>(app_->uptime_ms() - session_start_ms_);
-  return total;
+  return reading_ms_base_ + tracker_.total_ms();
+}
+
+void ReaderScreen::pause() {
+  tracker_.on_pause(now_ms_());
 }
 
 // ---------------------------------------------------------------------------
@@ -282,14 +291,15 @@ static std::string make_book_key_legacy(const EpubMetadata& meta, const char* ep
 
 void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
   buf_ = &buf;
+  runtime_ = &runtime;
   if (app_)
     buf.set_rotation(rotation_from_setting(app_->rotate_reader()));
   book_key_.clear();
   pos_path_.clear();
   times_opened_ = 0;
-  reading_ms_total_ = 0;
-  session_start_ms_ = 0;
+  reading_ms_base_ = 0;
   page_turn_count_ = 0;
+  tracker_ = ReadingActivityTracker{};
   MR_LOGI("reader", "start: path='%s'", path_.c_str());
 
   if (app_ && app_->font_manager())
@@ -393,9 +403,12 @@ void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
   saved_chapter_idx_ = 0;
   saved_page_pos_ = PagePosition{0, 0};
   load_position_();
-  times_opened_++;
-  if (app_) session_start_ms_ = app_->uptime_ms();
-  save_position_();
+  tracker_.on_open(now_ms_(), open_reason_);
+  // A user-opened book counts as opened straight away. An auto-resumed one is
+  // provisional: it only counts once the reader actually turns a page, so
+  // waking the device no longer inflates the open count.
+  if (tracker_.consume_confirmation())
+    times_opened_++;
   load_chapter_(saved_chapter_idx_);
   if (!chapter_src_) {
     // Fallback to chapter 0 if saved index is invalid.
@@ -408,6 +421,10 @@ void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
     goto show_error;
   }
   page_pos_ = saved_page_pos_;
+  // Persist only once the restored position is actually in place. This used to
+  // run before load_chapter_(), writing "0 0 0 0" over a valid bookmark and
+  // losing the reader's place if power was cut before the first page turn.
+  save_position_();
   layout_engine_ = TextLayout{};
   layout_engine_.set_source(*chapter_src_);
   layout_engine_.set_image_size_fn(image_size_fn_);
@@ -430,10 +447,15 @@ show_error:
 
 void ReaderScreen::resume(DrawBuffer& buf, IRuntime& runtime) {
   buf_ = &buf;
+  runtime_ = &runtime;
   if (app_)
     buf.set_rotation(rotation_from_setting(app_->rotate_reader()));
   if (!open_ok_)
     return;
+  // Back from a child screen: re-anchor the clock so the time spent in that
+  // screen is not billed, and refresh the active window (dismissing a menu is
+  // deliberate). It never confirms a provisional auto-resume.
+  tracker_.on_resume(runtime.now_ms());
 
   // Handle pending chapter jump (from ChapterSelectScreen).
   if (app_ && app_->chapter_select()->has_pending()) {
@@ -471,16 +493,20 @@ void ReaderScreen::resume(DrawBuffer& buf, IRuntime& runtime) {
 }
 
 void ReaderScreen::stop() {
-  if (open_ok_ && app_)
-    reading_ms_total_ += static_cast<uint64_t>(app_->uptime_ms() - session_start_ms_);
+  if (open_ok_)
+    tracker_.on_close(now_ms_());
   image_size_fn_ = {};
   chapter_src_.reset();
   mrb_.close();
   book_.close();
   if (open_ok_) {
+    // Fold this session into the lifetime total exactly once, so .pos and the
+    // book index agree and neither can drift into double counting.
+    reading_ms_base_ = reading_ms_total();
+    tracker_ = ReadingActivityTracker{};
     save_position_();
     if (app_ && !path_.empty())
-      app_->update_book_read_time(path_, reading_ms_total_);
+      app_->update_book_read_time(path_, reading_ms_base_);
   }
   page_ = PageContent{};
   mrb_path_.clear();
@@ -499,7 +525,8 @@ void ReaderScreen::stop() {
   buf_ = nullptr;
 }
 
-void ReaderScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& /*runtime*/) {
+void ReaderScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& runtime) {
+  runtime_ = &runtime;
   if (!open_ok_) {
     // Auto-pop if the book was never found (no display was touched).
     // Otherwise wait for back button so user can see the error message.
@@ -517,6 +544,16 @@ void ReaderScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime&
     }
     return;
   }
+
+  // Credit the time since the previous frame before any input is registered.
+  // Advancing first matters: noting activity extends the idle deadline, so
+  // doing it the other way round would retroactively pay for a gap the user
+  // spent away from the device.
+  tracker_.advance(runtime.now_ms());
+  // Any press keeps a confirmed session alive; only page turns (below) can
+  // confirm a provisional one.
+  if (buttons.current != 0 || buttons.pressed_latch != 0)
+    tracker_.on_activity(runtime.now_ms(), Activity::Other);
 
   // Process press events in the order they arrived.
   int page_delta = 0;
@@ -557,6 +594,10 @@ void ReaderScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime&
             layout_engine_.set_hyphenation_lang(reader_settings_.hyphenation_enabled ? detect_language(mrb_.metadata().language) : HyphenationLang::None);
             render_page_(buf);
             buf.refresh();
+            // Following a link back is navigation, same as turning a page.
+            tracker_.on_activity(runtime.now_ms(), Activity::PageNavigation);
+            if (tracker_.consume_confirmation())
+              times_opened_++;
             save_position_();
             return;
           }
@@ -591,6 +632,15 @@ void ReaderScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime&
     ++page_delta;
   if (!had_prev_press && (buttons.is_down(logical_prev_front) || buttons.is_down(logical_prev_side)))
     --page_delta;
+
+  // Turning a page is the one signal that proves someone is actually reading,
+  // so it — and not Back or the options menu — is what confirms a session that
+  // started as a boot auto-resume.
+  if (page_delta != 0) {
+    tracker_.on_activity(runtime.now_ms(), Activity::PageNavigation);
+    if (tracker_.consume_confirmation())
+      times_opened_++;
+  }
 
   bool changed = false;
   if (page_delta > 0) {
@@ -1087,12 +1137,13 @@ void ReaderScreen::save_position_() {
   FILE* f = std::fopen(pos_path_.c_str(), "w");
   if (!f)
     return;
-  std::fprintf(f, "%u %u %u %u %u %llu %u\n",
+  std::fprintf(f, "%u %u %u %u %u %llu %u %u\n",
                static_cast<unsigned>(chapter_idx_), static_cast<unsigned>(page_pos_.paragraph),
                static_cast<unsigned>(page_pos_.offset), static_cast<unsigned>(page_pos_.text_offset),
                static_cast<unsigned>(times_opened_),
-               static_cast<unsigned long long>(reading_ms_total_),
-               static_cast<unsigned>(page_turn_count_));
+               static_cast<unsigned long long>(reading_ms_base_),
+               static_cast<unsigned>(page_turn_count_),
+               static_cast<unsigned>(kStatsEpoch));
   std::fclose(f);
 }
 
@@ -1124,25 +1175,42 @@ void ReaderScreen::load_position_() {
 
   if (!f)
     return;
-  unsigned ch = 0, para = 0, line = 0, to = 0, topen = 0, ptc = 0;
+  unsigned ch = 0, para = 0, line = 0, to = 0, topen = 0, ptc = 0, epoch = 0;
   unsigned long long rms = 0;
-  int scanned = std::fscanf(f, "%u %u %u %u %u %llu %u", &ch, &para, &line, &to, &topen, &rms, &ptc);
+  int scanned = std::fscanf(f, "%u %u %u %u %u %llu %u %u", &ch, &para, &line, &to, &topen, &rms, &ptc, &epoch);
   std::fclose(f);
   if (scanned >= 3) {
     saved_chapter_idx_ = ch;
     saved_page_pos_ = PagePosition{static_cast<uint16_t>(para), static_cast<uint16_t>(line), static_cast<uint32_t>(to)};
-    if (scanned >= 5)
+
+    // Statistics written before the current epoch came from the broken
+    // accounting (menus and idle time billed as reading, and an index that
+    // accumulated an already-cumulative total). They are not repairable, so
+    // drop them — the reading position above is unaffected and is kept.
+    // Gate on the epoch value, not the field count: a file can carry eight
+    // fields and still predate the fix.
+    const bool stats_trusted = (scanned >= 8 && epoch == kStatsEpoch);
+    if (stats_trusted) {
       times_opened_ = static_cast<uint32_t>(topen);
-    if (scanned >= 6)
-      reading_ms_total_ = static_cast<uint64_t>(rms);
-    if (scanned >= 7)
+      reading_ms_base_ = static_cast<uint64_t>(rms);
       page_turn_count_ = static_cast<uint32_t>(ptc);
-    MR_LOGI("reader", "Loaded pos ch=%u para=%u line=%u to=%u opens=%u rms=%llu ptc=%u (scanned=%d)",
-            ch, para, line, to, topen, rms, ptc, scanned);
+    } else {
+      times_opened_ = 0;
+      reading_ms_base_ = 0;
+      page_turn_count_ = 0;
+      MR_LOGI("reader", "pos stats epoch %u != %u — resetting reading stats, keeping position",
+              epoch, static_cast<unsigned>(kStatsEpoch));
+    }
+    MR_LOGI("reader", "Loaded pos ch=%u para=%u line=%u to=%u opens=%u rms=%llu ptc=%u (scanned=%d trusted=%d)",
+            ch, para, line, to, topen, rms, ptc, scanned, (int)stats_trusted);
     if (migrating) {
       FILE* fw = std::fopen(pos_path_.c_str(), "w");
       if (fw) {
-        std::fprintf(fw, "%u %u %u %u %u %llu %u\n", ch, para, line, to, topen, rms, ptc);
+        std::fprintf(fw, "%u %u %u %u %u %llu %u %u\n", ch, para, line, to,
+                     static_cast<unsigned>(times_opened_),
+                     static_cast<unsigned long long>(reading_ms_base_),
+                     static_cast<unsigned>(page_turn_count_),
+                     static_cast<unsigned>(kStatsEpoch));
         std::fclose(fw);
       }
     }

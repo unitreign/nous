@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "../Input.h"
+#include "../ReadingActivityTracker.h"
 #include "../content/BitmapFont.h"
 #include "../content/Book.h"
 #include "../content/TextLayout.h"
@@ -28,8 +29,12 @@ class ReaderScreen final : public IScreen {
   ReaderScreen() = default;
   explicit ReaderScreen(std::string epub_path) : path_(std::move(epub_path)) {}
 
-  void set_path(std::string epub_path) {
+  // Defaults to UserOpened so the menu screens need no change: picking a book
+  // from a list is an explicit statement of intent. Only the boot/serial
+  // auto-open path passes AutoResumed.
+  void set_path(std::string epub_path, OpenReason reason = OpenReason::UserOpened) {
     path_ = std::move(epub_path);
+    open_reason_ = reason;
   }
   bool has_path() const {
     return !path_.empty();
@@ -76,11 +81,18 @@ class ReaderScreen final : public IScreen {
 
   void start(DrawBuffer& buf, IRuntime& runtime) override;
   void stop() override;
-  // pause(): keep mrb_ open while a child screen (options/chapter) is active.
-  void pause() override {}
+  // pause(): keep mrb_ open while a child screen (options/chapter) is active,
+  // but stop the reading clock — time spent in the options menu, chapter list,
+  // links or stats screen is not reading time.
+  void pause() override;
   // resume(): return from a child screen — handle any pending navigation, then re-render.
   void resume(DrawBuffer& buf, IRuntime& runtime) override;
   void update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& runtime) override;
+
+  // Bumping this invalidates every previously recorded reading statistic
+  // (time, opens, page turns) while leaving reading positions intact. Epoch 1
+  // discards everything written by the pre-fix accounting.
+  static constexpr unsigned kStatsEpoch = 1;
 
   // Layout constants â€” exposed so tests and tools can build matching PageOptions.
   static constexpr int kScale = 2;
@@ -133,9 +145,17 @@ class ReaderScreen final : public IScreen {
   bool cache_only_ = false;
 
   uint32_t times_opened_ = 0;
-  uint64_t reading_ms_total_ = 0;
-  uint32_t session_start_ms_ = 0;
   uint32_t page_turn_count_ = 0;
+
+  // --- Reading-time accounting --------------------------------------------
+  // reading_ms_base_ is the lifetime total loaded from the .pos file; the
+  // tracker holds only what this session has earned. The displayed total is
+  // the sum (see reading_ms_total()).
+  uint64_t reading_ms_base_ = 0;
+  ReadingActivityTracker tracker_;
+  OpenReason open_reason_ = OpenReason::UserOpened;
+  // Cached in start(); pause()/stop() need a clock but receive no IRuntime.
+  IRuntime* runtime_ = nullptr;
 
   // Navigation history: stack of positions pushed before following a hyperlink.
   struct NavHistoryEntry {
@@ -180,6 +200,8 @@ class ReaderScreen final : public IScreen {
   void load_chapter_(size_t idx);
   void save_position_();
   void load_position_();
+  // Current monotonic time, or 0 if no runtime has been seen yet.
+  uint32_t now_ms_() const;
 
  public:
   // Stats accessors — valid while book is open or after stop() (values persist until next start()).

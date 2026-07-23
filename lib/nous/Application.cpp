@@ -123,7 +123,17 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
 }
 
 void Application::auto_open_book(const char* epub_path, DrawBuffer& buf, IRuntime& runtime) {
-  reader_.set_path(epub_path);
+  // Bail before touching set_path(): the serial Open command can arrive while
+  // the Reader is already on the stack, and rewriting path_ there would leave
+  // the open MRB pointing at one book while saves went to another.
+  if (screen_mgr_.contains(&reader_)) {
+    MR_LOGI("app", "auto_open_book: reader already active, ignoring '%s'", epub_path);
+    return;
+  }
+  // Not a user-initiated open — the boot path re-opens the last book before the
+  // user has touched anything, so it must not count as reading until they
+  // actually turn a page.
+  reader_.set_path(epub_path, OpenReason::AutoResumed);
   if (reader_font_)
     reader_.set_fonts(reader_font_);
 
@@ -234,8 +244,16 @@ static bool show_bmp_sleep(const char* bmp_path, const char* data_dir, DrawBuffe
 
 void Application::do_sleep_(DrawBuffer& buf) {
   // Stop the active screen so it can save state (e.g. reading position).
-  if (IScreen* top = screen_mgr_.top())
+  IScreen* top = screen_mgr_.top();
+  if (top)
     top->stop();
+  // The Reader may be sitting under a child screen (options, chapters, links,
+  // stats). Stopping only the top screen dropped its whole session — reading
+  // time and final position both — whenever the user slept from one of those.
+  // ReaderScreen::stop() is idempotent (guarded by open_ok_), so the case where
+  // the Reader *is* the top screen stays correct.
+  if (top != &reader_ && screen_mgr_.contains(&reader_))
+    reader_.stop();
 
   // If a specific image is pinned, always show it. Otherwise auto-cycle.
   MR_LOGI("sleep", "do_sleep_: pinned='%s' idx=%d", sleep_image_path_.c_str(), sleep_image_idx_);

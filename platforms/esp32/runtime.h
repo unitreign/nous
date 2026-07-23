@@ -39,6 +39,10 @@ class Esp32Runtime final : public microreader::IRuntime {
     return frame_time_ms_;
   }
 
+  uint32_t now_ms() const override {
+    return millis();
+  }
+
   void wait_next_frame() override {
     const uint32_t now = millis();
     if (frame_start_ms_ != 0) {

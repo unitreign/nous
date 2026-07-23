@@ -21,6 +21,17 @@ struct BookIndexEntry {
 static constexpr int MAX_BOOKS = 250;
 static constexpr uint32_t INDEX_FORMAT_VERSION = 2;
 
+// Bumping this discards every stored read_time_ms while leaving the book list,
+// titles, authors and open ordering intact. Epoch 1 clears the totals produced
+// by the pre-fix accounting, which accumulated an already-cumulative value and
+// so grew quadratically (see BookIndex::update_read_time).
+//
+// Deliberately separate from INDEX_FORMAT_VERSION: this is a data reset, not a
+// layout change, and a version bump would instead force a full metadata-based
+// rescan — which would carry the poisoned values straight back in via
+// build_index().
+static constexpr uint32_t INDEX_STATS_EPOCH = 1;
+
 class BookIndex {
  public:
   static BookIndex& instance();

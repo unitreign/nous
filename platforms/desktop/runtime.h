@@ -171,6 +171,10 @@ class DesktopRuntime final : public microreader::IRuntime {
     return frame_time_ms_;
   }
 
+  uint32_t now_ms() const override {
+    return SDL_GetTicks();
+  }
+
   void wait_next_frame() override {
     SDL_Delay(frame_time_ms_);
   }

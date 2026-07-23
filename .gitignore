@@ -1,0 +1,13 @@
+# CMake build output — the unit tests configure under build/.
+/build/
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# PlatformIO firmware build output.
+.pio/
+/firmware.bin
+
+# Python bytecode cache.
+__pycache__/

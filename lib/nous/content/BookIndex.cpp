@@ -71,13 +71,23 @@ bool BookIndex::load(const std::string& index_file) {
   char line[1024];
   bool first_line = true;
   bool needs_rebuild = false;
+  uint32_t stats_epoch = 0;
   while (std::fgets(line, sizeof(line), f) && static_cast<int>(entries_.size()) < MAX_BOOKS) {
     if (first_line) {
       first_line = false;
       if (std::strncmp(line, "#microreader-index v", 20) == 0) {
-        uint32_t v = static_cast<uint32_t>(std::strtoul(line + 20, nullptr, 10));
+        char* vend = nullptr;
+        uint32_t v = static_cast<uint32_t>(std::strtoul(line + 20, &vend, 10));
         if (v != INDEX_FORMAT_VERSION)
           needs_rebuild = true;
+        // Optional " e<N>" suffix records the stats epoch. Absent on files
+        // written before the reading-time fix — exactly the case to detect.
+        // Scan from the end of the version digits, not the start of the line:
+        // "#microreader-index" itself contains an 'e'.
+        if (vend) {
+          if (const char* e = std::strchr(vend, 'e'))
+            stats_epoch = static_cast<uint32_t>(std::strtoul(e + 1, nullptr, 10));
+        }
         continue;
       } else {
         needs_rebuild = true;
@@ -122,6 +132,21 @@ bool BookIndex::load(const std::string& index_file) {
   }
 
   std::fclose(f);
+
+  // Reading times recorded before the current epoch are unusable: the index
+  // used to accumulate an already-cumulative total, so they grew quadratically
+  // with every close. Zero them here, in memory, keeping paths, titles, authors
+  // and open ordering. Doing it at load time (rather than by bumping the format
+  // version) matters — a version bump makes load() fail, and the rescan that
+  // follows copies read_time_ms forward in build_index(), which would restore
+  // the very values we are trying to discard.
+  if (stats_epoch != INDEX_STATS_EPOCH) {
+    for (auto& e : entries_)
+      e.read_time_ms = 0;
+    MR_LOGI("index", "stats epoch %lu != %lu — cleared %zu stored read times",
+            (unsigned long)stats_epoch, (unsigned long)INDEX_STATS_EPOCH, entries_.size());
+  }
+
   if (needs_rebuild)
     return false;
   return true;
@@ -132,7 +157,8 @@ bool BookIndex::save(const std::string& index_file) const {
   if (!f)
     return false;
 
-  std::fprintf(f, "#microreader-index v%lu\n", (unsigned long)INDEX_FORMAT_VERSION);
+  std::fprintf(f, "#microreader-index v%lu e%lu\n", (unsigned long)INDEX_FORMAT_VERSION,
+               (unsigned long)INDEX_STATS_EPOCH);
 
   for (const auto& entry : entries_) {
     auto path_v = entry.path.view(pool_);
