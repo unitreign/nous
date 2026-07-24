@@ -55,6 +55,7 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   links_screen_.set_app(this);
   convert_all_.set_app(this);
   stats_.set_app(this);
+  global_stats_.set_app(this);
   hidden_books_.set_app(this);
   whats_new_.set_app(this);
 
@@ -232,7 +233,64 @@ static bool show_bmp_sleep(const char* bmp_path, const char* data_dir, DrawBuffe
   return cached && buf.show_sleep_image(cache_path, show_text);
 }
 
+void Application::prepare_book_stats_for_sleep_() {
+  // Capture live stats from the reader while the book is open (mrb_ valid, chapter info accurate).
+  const std::string& rpath = reader_.get_path();
+  if (!rpath.empty() && reader_.is_open()) {
+    std::string author;
+    const StringPool& pool = BookIndex::instance().pool();
+    for (const auto& e : BookIndex::instance().entries()) {
+      if (e.path.view(pool) == rpath) {
+        author = e.author.to_string(pool);
+        break;
+      }
+    }
+    stats_.set_book_stats(
+        reader_.book_title(), author, "",
+        static_cast<int>(reader_.chapter_index()),
+        static_cast<int>(reader_.chapter_count()),
+        reader_.times_opened(), reader_.reading_ms_total(),
+        reader_.progress_pct(), reader_.chapter_progress_pct(),
+        reader_.estimated_time_left_ms(), reader_.page_turn_count(),
+        rpath);
+    return;
+  }
+
+  // Fallback: no book open this session — use most recently opened from BookIndex.
+  if (!data_dir_) return;
+  std::string best_path, best_title, best_author;
+  uint64_t best_read_ms = 0, best_time_left_ms = 0;
+  uint32_t best_order = 0, best_times_opened = 0, best_page_turns = 0;
+  uint16_t best_progress_pct = 0, best_chapter_count = 0;
+  BookIndex::instance().load(std::string(data_dir_) + "/book_index.dat");
+  const StringPool& pool = BookIndex::instance().pool();
+  for (const auto& e : BookIndex::instance().entries()) {
+    if (e.last_open_order > best_order) {
+      best_order        = e.last_open_order;
+      best_path         = e.path.to_string(pool);
+      best_title        = e.title.to_string(pool);
+      best_author       = e.author.to_string(pool);
+      best_read_ms      = e.read_time_ms;
+      best_times_opened = e.times_opened;
+      best_page_turns   = e.page_turns;
+      best_progress_pct = e.progress_pct;
+      best_chapter_count= e.chapter_count;
+      best_time_left_ms = e.time_left_ms;
+    }
+  }
+  if (best_path.empty()) return;
+  stats_.set_book_stats(best_title, best_author, "", 0,
+                        static_cast<int>(best_chapter_count ? best_chapter_count : 1),
+                        best_times_opened, best_read_ms,
+                        static_cast<int>(best_progress_pct), 0,
+                        best_time_left_ms, best_page_turns, best_path);
+}
+
 void Application::do_sleep_(DrawBuffer& buf) {
+  // Pre-capture book stats before stop() so live progress/chapter data is available.
+  if (sleep_image_path_ == "book-stats:")
+    prepare_book_stats_for_sleep_();
+
   // Stop the active screen so it can save state (e.g. reading position).
   if (IScreen* top = screen_mgr_.top())
     top->stop();
@@ -241,16 +299,21 @@ void Application::do_sleep_(DrawBuffer& buf) {
   MR_LOGI("sleep", "do_sleep_: pinned='%s' idx=%d", sleep_image_path_.c_str(), sleep_image_idx_);
   if (!sleep_image_path_.empty()) {
     save_settings_();
-    buf.set_rotation(Rotation::Deg90);
     bool shown = false;
-    if (sleep_image_path_ == "book-cover:") {
-      shown = show_book_cover_sleep_(buf, data_dir_);
-    } else if (sleep_image_path_.rfind("embedded:", 0) == 0) {
-      shown = buf.show_sleep_image_embedded(std::atoi(sleep_image_path_.c_str() + 9), show_sleep_text_);
-    } else if (sleep_image_path_.rfind("bmp:", 0) == 0) {
-      shown = show_bmp_sleep(sleep_image_path_.c_str() + 4, data_dir_, buf, show_sleep_text_);
+    if (sleep_image_path_ == "book-stats:") {
+      stats_.draw_for_sleep(buf);
+      shown = true;
     } else {
-      shown = buf.show_sleep_image(sleep_image_path_.c_str(), show_sleep_text_);
+      buf.set_rotation(Rotation::Deg90);
+      if (sleep_image_path_ == "book-cover:") {
+        shown = show_book_cover_sleep_(buf, data_dir_);
+      } else if (sleep_image_path_.rfind("embedded:", 0) == 0) {
+        shown = buf.show_sleep_image_embedded(std::atoi(sleep_image_path_.c_str() + 9), show_sleep_text_);
+      } else if (sleep_image_path_.rfind("bmp:", 0) == 0) {
+        shown = show_bmp_sleep(sleep_image_path_.c_str() + 4, data_dir_, buf, show_sleep_text_);
+      } else {
+        shown = buf.show_sleep_image(sleep_image_path_.c_str(), show_sleep_text_);
+      }
     }
     MR_LOGI("sleep", "show result: %d", (int)shown);
     if (!shown && !buf.show_sleep_image_embedded(0, show_sleep_text_))
@@ -398,6 +461,8 @@ IScreen* microreader::Application::screen_for_(ScreenId id) {
       return &stats_;
     case ScreenId::HiddenBooks:
       return &hidden_books_;
+    case ScreenId::GlobalStats:
+      return &global_stats_;
     case ScreenId::Lyra:
       return &lyra_;
     case ScreenId::LyraExt:
@@ -510,10 +575,14 @@ void microreader::Application::set_show_reader_images(bool v) {
   save_settings_();
 }
 
-void microreader::Application::update_book_read_time(const std::string& path, uint64_t ms) {
+void microreader::Application::update_book_read_time(const std::string& path, uint64_t ms,
+                                                     uint32_t times_opened, uint32_t page_turns,
+                                                     int progress_pct, uint64_t time_left_ms,
+                                                     uint16_t chapter_count, uint32_t total_chars) {
   if (!data_dir_) return;
   const std::string index_path = std::string(data_dir_) + "/book_index.dat";
-  BookIndex::instance().update_read_time(path, ms, index_path);
+  BookIndex::instance().update_reading_stats(path, ms, times_opened, page_turns,
+      static_cast<uint16_t>(progress_pct), chapter_count, time_left_ms, index_path, total_chars);
 }
 
 void microreader::Application::record_book_opened(const std::string& path) {

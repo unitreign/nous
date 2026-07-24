@@ -23,9 +23,21 @@ namespace microreader {
 
 uint64_t ReaderScreen::reading_ms_total() const {
   uint64_t total = reading_ms_total_;
-  if (open_ok_ && app_ && session_start_ms_ > 0)
-    total += static_cast<uint64_t>(app_->uptime_ms() - session_start_ms_);
+  if (open_ok_ && last_activity_ms_ > 0 && app_) {
+    const uint32_t elapsed = app_->uptime_ms() - last_activity_ms_;
+    total += std::min(elapsed, kActivityWindowMs);
+  }
   return total;
+}
+
+void ReaderScreen::tick_activity_() {
+  if (!open_ok_ || !app_) return;
+  const uint32_t now = app_->uptime_ms();
+  if (last_activity_ms_ > 0) {
+    const uint32_t elapsed = now - last_activity_ms_;
+    reading_ms_total_ += std::min(elapsed, kActivityWindowMs);
+  }
+  last_activity_ms_ = now;
 }
 
 // ---------------------------------------------------------------------------
@@ -288,7 +300,7 @@ void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
   pos_path_.clear();
   times_opened_ = 0;
   reading_ms_total_ = 0;
-  session_start_ms_ = 0;
+  last_activity_ms_ = 0;
   page_turn_count_ = 0;
   MR_LOGI("reader", "start: path='%s'", path_.c_str());
 
@@ -394,8 +406,7 @@ void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
   saved_page_pos_ = PagePosition{0, 0};
   load_position_();
   times_opened_++;
-  if (app_) session_start_ms_ = app_->uptime_ms();
-  save_position_();
+  last_activity_ms_ = 0;  // timer starts on first page-turn, not on open
   load_chapter_(saved_chapter_idx_);
   if (!chapter_src_) {
     // Fallback to chapter 0 if saved index is invalid.
@@ -408,6 +419,7 @@ void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
     goto show_error;
   }
   page_pos_ = saved_page_pos_;
+  save_position_();  // persist incremented times_opened_ with the correct chapter/pos
   layout_engine_ = TextLayout{};
   layout_engine_.set_source(*chapter_src_);
   layout_engine_.set_image_size_fn(image_size_fn_);
@@ -425,6 +437,14 @@ show_error:
   if (buf_was_touched_) {
     buf.fill(true);
     buf.draw_text(kPaddingLeft, kPaddingTop, "Failed to open book", true, kScale);
+  }
+}
+
+void ReaderScreen::pause() {
+  if (open_ok_ && last_activity_ms_ > 0 && app_) {
+    const uint32_t now = app_->uptime_ms();
+    reading_ms_total_ += std::min(now - last_activity_ms_, kActivityWindowMs);
+    last_activity_ms_ = 0;
   }
 }
 
@@ -466,22 +486,28 @@ void ReaderScreen::resume(DrawBuffer& buf, IRuntime& runtime) {
   if (chapter_src_)
     layout_engine_.set_source(*chapter_src_);
 
+  if (open_ok_ && app_)
+    last_activity_ms_ = app_->uptime_ms();
   render_page_(buf);
   save_position_();
 }
 
 void ReaderScreen::stop() {
-  if (open_ok_ && app_)
-    reading_ms_total_ += static_cast<uint64_t>(app_->uptime_ms() - session_start_ms_);
+  pause();  // flush any pending reading time within the activity window
+  if (open_ok_) {
+    // Compute and persist stats while mrb_ is still open.
+    const int pp = progress_pct();
+    const uint64_t tl = estimated_time_left_ms();
+    const uint16_t cc = static_cast<uint16_t>(chapter_count());
+    save_position_();
+    if (app_ && !path_.empty())
+      app_->update_book_read_time(path_, reading_ms_total_, times_opened_, page_turn_count_, pp, tl, cc,
+                                  static_cast<uint32_t>(mrb_.total_char_count()));
+  }
   image_size_fn_ = {};
   chapter_src_.reset();
   mrb_.close();
   book_.close();
-  if (open_ok_) {
-    save_position_();
-    if (app_ && !path_.empty())
-      app_->update_book_read_time(path_, reading_ms_total_);
-  }
   page_ = PageContent{};
   mrb_path_.clear();
   mrb_path_.shrink_to_fit();
@@ -574,7 +600,8 @@ void ReaderScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime&
           saved_page_pos_ = page_pos_;
           app_->reader_options()->set_settings(&reader_settings_);
           app_->reader_options()->populate(mrb_.toc(), static_cast<uint16_t>(chapter_idx_), page_pos_.paragraph,
-                                           mrb_.metadata().title, progress_pct(), chapter_progress_pct());
+                                           mrb_.metadata().title, progress_pct(), chapter_progress_pct(),
+                                           mrb_.chapter_count());
           app_->reader_options()->set_page_links(page_links_, mrb_.spine_files(), mrb_);
           app_->push_screen(ScreenId::ReaderOptions);
           return;
@@ -591,6 +618,9 @@ void ReaderScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime&
     ++page_delta;
   if (!had_prev_press && (buttons.is_down(logical_prev_front) || buttons.is_down(logical_prev_side)))
     --page_delta;
+
+  if (page_delta != 0)
+    tick_activity_();
 
   bool changed = false;
   if (page_delta > 0) {
@@ -1087,12 +1117,15 @@ void ReaderScreen::save_position_() {
   FILE* f = std::fopen(pos_path_.c_str(), "w");
   if (!f)
     return;
-  std::fprintf(f, "%u %u %u %u %u %llu %u\n",
+  std::fprintf(f, "%u %u %u %u %u %llu %u %d %llu %u\n",
                static_cast<unsigned>(chapter_idx_), static_cast<unsigned>(page_pos_.paragraph),
                static_cast<unsigned>(page_pos_.offset), static_cast<unsigned>(page_pos_.text_offset),
                static_cast<unsigned>(times_opened_),
                static_cast<unsigned long long>(reading_ms_total_),
-               static_cast<unsigned>(page_turn_count_));
+               static_cast<unsigned>(page_turn_count_),
+               progress_pct(),
+               static_cast<unsigned long long>(estimated_time_left_ms()),
+               static_cast<unsigned>(chapter_count()));
   std::fclose(f);
 }
 
@@ -1124,9 +1157,11 @@ void ReaderScreen::load_position_() {
 
   if (!f)
     return;
-  unsigned ch = 0, para = 0, line = 0, to = 0, topen = 0, ptc = 0;
-  unsigned long long rms = 0;
-  int scanned = std::fscanf(f, "%u %u %u %u %u %llu %u", &ch, &para, &line, &to, &topen, &rms, &ptc);
+  unsigned ch = 0, para = 0, line = 0, to = 0, topen = 0, ptc = 0, cc = 0;
+  unsigned long long rms = 0, tl = 0;
+  int pp = 0;
+  int scanned = std::fscanf(f, "%u %u %u %u %u %llu %u %d %llu %u",
+                            &ch, &para, &line, &to, &topen, &rms, &ptc, &pp, &tl, &cc);
   std::fclose(f);
   if (scanned >= 3) {
     saved_chapter_idx_ = ch;
@@ -1142,7 +1177,7 @@ void ReaderScreen::load_position_() {
     if (migrating) {
       FILE* fw = std::fopen(pos_path_.c_str(), "w");
       if (fw) {
-        std::fprintf(fw, "%u %u %u %u %u %llu %u\n", ch, para, line, to, topen, rms, ptc);
+        std::fprintf(fw, "%u %u %u %u %u %llu %u %d %llu %u\n", ch, para, line, to, topen, rms, ptc, pp, tl, cc);
         std::fclose(fw);
       }
     }

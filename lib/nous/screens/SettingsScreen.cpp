@@ -57,7 +57,7 @@ static std::string get_list_format_label(BookListFormat fmt) {
 }
 
 static std::string get_rotate_menu_label(uint8_t v) {
-  return std::string("Menu: ") + rotation_label(v);
+  return std::string("Lists: ") + rotation_label(v);
 }
 
 static std::string get_rotate_reader_label(uint8_t v) {
@@ -75,6 +75,8 @@ static std::string get_sleep_image_label(const std::string& path) {
   std::string label = "Sleep Image: ";
   if (path == "auto:") {
     label += "Auto";
+  } else if (path == "book-stats:") {
+    label += "Book Stats";
   } else if (path == "book-cover:") {
     label += "Book Cover";
   } else if (path.rfind("embedded:", 0) == 0) {
@@ -260,6 +262,7 @@ void SettingsScreen::on_start() {
   sleep_images_.push_back("embedded:0");
   sleep_images_.push_back("auto:");
   sleep_images_.push_back("book-cover:");
+  sleep_images_.push_back("book-stats:");
   sleep_image_sel_idx_ = 0;
 #ifdef ESP_PLATFORM
   {
@@ -307,10 +310,9 @@ void SettingsScreen::on_start() {
   const uint8_t cur_theme = app_ ? app_->menu_theme() : 0;
   const bool is_lyra_theme = (cur_theme == static_cast<uint8_t>(MenuTheme::Lyra) ||
                                cur_theme == static_cast<uint8_t>(MenuTheme::LyraExt));
-  if (!is_lyra_theme) {
-    idx_rotate_display_ = count();
-    add_item(get_rotate_menu_label(app_ ? app_->rotate_display() : 0));
-  }
+
+  idx_rotate_display_ = count();
+  add_item(get_rotate_menu_label(app_ ? app_->rotate_display() : 0));
 
   idx_menu_font_ = count();
   add_item(get_menu_font_label(app_ ? app_->menu_font_size() : 0));
@@ -321,8 +323,10 @@ void SettingsScreen::on_start() {
   idx_sleep_text_ = count();
   add_item(get_sleep_text_label(app_ ? app_->show_sleep_text() : true));
 
-  idx_battery_display_ = count();
-  add_item(get_battery_display_label(app_ ? app_->battery_display() : 0));
+  if (!is_lyra_theme) {
+    idx_battery_display_ = count();
+    add_item(get_battery_display_label(app_ ? app_->battery_display() : 0));
+  }
 
   tab_end_[0] = count() - 1;
 
@@ -445,13 +449,18 @@ void SettingsScreen::on_back() {
 }
 
 int SettingsScreen::get_visible_count_(int H, int scroll_off) const {
-  // Before this tab's range starts, nothing is visible — forces ensure_visible_()
-  // to advance scroll_offset_ to tab_start_ before counting begins.
   if (scroll_off < tab_start_[active_tab_]) return 0;
-  const int list_top = 16
-      + (header_font_.valid() ? header_font_.y_advance() : ui_font_.y_advance())
-      + 7 + tab_bar_height_();
-  const int available_h = H - list_top;
+  const bool is_lyra = (theme_ == MenuTheme::Lyra || theme_ == MenuTheme::LyraExt);
+  const int hf_adv = header_font_.valid() ? header_font_.y_advance() : ui_font_.y_advance();
+  const int list_top = is_lyra
+      ? (10 + hf_adv + 8 + 1 + tab_bar_height_())
+      : (16 + hf_adv + 7 + tab_bar_height_());
+  int bot_h = 0;
+  if (is_lyra && section_font_.valid()) {
+    static constexpr int kBotPad = 5, kBotMargin = 10;
+    bot_h = 1 + kBotPad + section_font_.y_advance() + kBotPad + kBotMargin;
+  }
+  const int available_h = H - list_top - bot_h;
   int h = 0, cnt = 0;
   const int end = tab_end_[active_tab_];
   for (int i = scroll_off; i <= end; ++i) {
@@ -758,14 +767,14 @@ void SettingsScreen::on_select(int index) {
     return;
   }
   if (index == idx_rotate_display_) {
-    open_picker_("Menu Rotation", idx_rotate_display_,
-      {"Normal", "90\xC2\xB0", "180\xC2\xB0", "270\xC2\xB0"},
+    open_picker_("Lists Rotation", idx_rotate_display_,
+      {"Portrait", "Landscape", "Portrait Reversed", "Landscape Reversed"},
       app_ ? static_cast<int>(app_->rotate_display()) : 0);
     return;
   }
   if (index == idx_reader_rotate_display_) {
     open_picker_("Reader Rotation", idx_reader_rotate_display_,
-      {"Normal", "90\xC2\xB0", "180\xC2\xB0", "270\xC2\xB0"},
+      {"Portrait", "Landscape", "Portrait Reversed", "Landscape Reversed"},
       app_ ? static_cast<int>(app_->rotate_reader()) : 0);
     return;
   }
@@ -916,25 +925,55 @@ void SettingsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_p
 
   static constexpr int kLM = 14;
   static constexpr int kRM = 14;
-  int y = 16;
+
+  const bool is_lyra = (theme_ == MenuTheme::Lyra || theme_ == MenuTheme::LyraExt);
+  const int hf_adv = header_font_.valid() ? header_font_.y_advance() : ui_font_.y_advance();
+  int y;
 
   // ── Header ───────────────────────────────────────────────────────────────
-  if (header_font_.valid()) {
-    buf.draw_text_proportional(kLM, y + header_font_.baseline(), "Settings", header_font_, false);
-    if (!subtitle_.empty()) {
-      const BitmapFont& vfont = section_font_.valid() ? section_font_ : subtitle_font_;
-      const int vw = vfont.word_width(subtitle_.c_str(), subtitle_.size(), FontStyle::Regular);
-      const int vy = y + header_font_.y_advance() - vfont.y_advance() + vfont.baseline();
-      buf.draw_text_proportional(W - kRM - vw, vy, subtitle_.c_str(), subtitle_.size(), vfont, false);
+  if (is_lyra) {
+    // Lyra-style: "nous" brand on left, battery% on right, same row height as Lyra/LyraExt home.
+    y = 10;
+    const BitmapFont& brand_f = brand_font_.valid() ? brand_font_ : ui_font_;
+    const BitmapFont& bf = section_font_.valid() ? section_font_ : ui_font_;
+    const int nous_y = y + (hf_adv - brand_f.y_advance()) / 2 + brand_f.baseline();
+    buf.draw_text_proportional(kLM, nous_y, "nous", 4, brand_f, false);
+    {
+      const int nous_w = static_cast<int>(brand_f.word_width("nous", 4, FontStyle::Regular));
+      char dot_ver[48];
+      std::snprintf(dot_ver, sizeof(dot_ver), " \xc2\xb7 %s", MICROREADER_VERSION);
+      const int dv_y = y + (hf_adv - ui_font_.y_advance()) / 2 + ui_font_.baseline();
+      buf.draw_text_proportional(kLM + nous_w, dv_y, dot_ver, std::strlen(dot_ver), ui_font_, false);
     }
-    y += header_font_.y_advance();
+    if (battery_pct) {
+      char pbuf[8];
+      std::snprintf(pbuf, sizeof(pbuf), "%u%%", static_cast<unsigned>(*battery_pct));
+      const int pw = bf.word_width(pbuf, std::strlen(pbuf), FontStyle::Regular);
+      const int bat_y = y + (hf_adv - bf.y_advance()) / 2 + bf.baseline();
+      buf.draw_text_proportional(W - kRM - pw, bat_y, pbuf, std::strlen(pbuf), bf, false);
+    }
+    y += hf_adv + 8;
+    buf.fill_rect(0, y, W, 1, false);
+    y += 1;
   } else {
-    buf.draw_text_proportional(kLM, y + ui_font_.baseline(), "Settings", ui_font_, false);
-    y += ui_font_.y_advance();
+    y = 16;
+    if (header_font_.valid()) {
+      buf.draw_text_proportional(kLM, y + header_font_.baseline(), "Settings", header_font_, false);
+      if (!subtitle_.empty()) {
+        const BitmapFont& vfont = section_font_.valid() ? section_font_ : subtitle_font_;
+        const int vw = vfont.word_width(subtitle_.c_str(), subtitle_.size(), FontStyle::Regular);
+        const int vy = y + header_font_.y_advance() - vfont.y_advance() + vfont.baseline();
+        buf.draw_text_proportional(W - kRM - vw, vy, subtitle_.c_str(), subtitle_.size(), vfont, false);
+      }
+      y += header_font_.y_advance();
+    } else {
+      buf.draw_text_proportional(kLM, y + ui_font_.baseline(), "Settings", ui_font_, false);
+      y += ui_font_.y_advance();
+    }
+    y += 6;
+    buf.fill_rect(0, y, W, 1, false);
+    y += 1;
   }
-  y += 6;
-  buf.fill_rect(0, y, W, 1, false);
-  y += 1;
 
   // ── Tab bar ──────────────────────────────────────────────────────────────
   draw_tab_bar_(buf, y, W);
@@ -967,6 +1006,44 @@ void SettingsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_p
     }
 
     y += kRowH;
+  }
+
+  // ── Lyra bottom tooltips ─────────────────────────────────────────────────
+  if (is_lyra && section_font_.valid()) {
+    const BitmapFont& sf = section_font_;
+    const bool inv = app_ && app_->invert_menu_buttons();
+
+    static constexpr int kBotPad    = 5;
+    static constexpr int kBotMargin = 10;
+    static constexpr int kBoxLX     = 53;
+    static constexpr int kBoxW      = 176;
+    static constexpr int kBoxRX     = kBoxLX + kBoxW + 22;
+    static constexpr int kLDiv      = kBoxLX + kBoxW / 2;
+    static constexpr int kRDiv      = kBoxRX + kBoxW / 2;
+
+    const int box_h  = kBotPad + sf.y_advance() + kBotPad;
+    const int bot_h  = 1 + box_h + kBotMargin;
+    const int box_y  = H - bot_h;
+    const int text_y = box_y + kBotPad + sf.baseline();
+
+    auto draw_box = [&](int bx) {
+      buf.fill_rect(bx,             box_y,             kBoxW, 1,     false);
+      buf.fill_rect(bx,             box_y + box_h - 1, kBoxW, 1,     false);
+      buf.fill_rect(bx,             box_y,             1,     box_h, false);
+      buf.fill_rect(bx + kBoxW - 1, box_y,             1,     box_h, false);
+    };
+    draw_box(kBoxLX);
+    buf.fill_rect(kLDiv, box_y, 1, box_h, false);
+    draw_box(kBoxRX);
+    buf.fill_rect(kRDiv, box_y, 1, box_h, false);
+
+    const char* labels[4] = {"Back", "Select", inv ? "Up" : "Down", inv ? "Down" : "Up"};
+    const int centers[4]  = {kBoxLX + kBoxW / 4, kBoxLX + 3 * kBoxW / 4,
+                              kBoxRX + kBoxW / 4, kBoxRX + 3 * kBoxW / 4};
+    for (int i = 0; i < 4; ++i) {
+      const int tw = static_cast<int>(sf.word_width(labels[i], std::strlen(labels[i]), FontStyle::Regular));
+      buf.draw_text_proportional(centers[i] - tw / 2, text_y, labels[i], std::strlen(labels[i]), sf, false);
+    }
   }
 
   // ── Picker overlay ───────────────────────────────────────────────────────

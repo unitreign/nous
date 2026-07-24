@@ -76,8 +76,8 @@ class ReaderScreen final : public IScreen {
 
   void start(DrawBuffer& buf, IRuntime& runtime) override;
   void stop() override;
-  // pause(): keep mrb_ open while a child screen (options/chapter) is active.
-  void pause() override {}
+  // pause(): freeze session timer while a child screen (options/chapter) is active.
+  void pause() override;
   // resume(): return from a child screen — handle any pending navigation, then re-render.
   void resume(DrawBuffer& buf, IRuntime& runtime) override;
   void update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& runtime) override;
@@ -134,8 +134,11 @@ class ReaderScreen final : public IScreen {
 
   uint32_t times_opened_ = 0;
   uint64_t reading_ms_total_ = 0;
-  uint32_t session_start_ms_ = 0;
+  uint32_t last_activity_ms_ = 0;  // uptime of last page-turn; 0 = no activity yet
   uint32_t page_turn_count_ = 0;
+
+  // Time after the last page-turn within which elapsed time still counts as reading.
+  static constexpr uint32_t kActivityWindowMs = 3u * 60u * 1000u;
 
   // Navigation history: stack of positions pushed before following a hyperlink.
   struct NavHistoryEntry {
@@ -178,10 +181,13 @@ class ReaderScreen final : public IScreen {
   bool next_page_();
   bool prev_page_();
   void load_chapter_(size_t idx);
+  void tick_activity_();
   void save_position_();
   void load_position_();
 
  public:
+  bool is_open() const { return open_ok_; }
+
   // Stats accessors — valid while book is open or after stop() (values persist until next start()).
   std::string book_title() const { return mrb_.metadata().title; }
   uint32_t times_opened() const { return times_opened_; }

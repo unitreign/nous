@@ -130,6 +130,9 @@ class MainMenu final : public ListMenuScreen {
   // Inserted by populate_list_() for LastOpened sort ("Recents", "All Books").
   std::vector<std::pair<int, std::string>> separators_;
 
+  // Visual index of the pinned "Stats" item (0 for non-Lyra, -1 when absent).
+  int stats_item_idx_ = -1;
+
   // Number of separators with visual_index strictly less than v.
   int seps_before_(int v) const {
     int cnt = 0;
@@ -139,11 +142,12 @@ class MainMenu final : public ListMenuScreen {
   }
 
   int entries_index_for(int visual) const {
-    return visual - seps_before_(visual);
+    const int offset = (stats_item_idx_ >= 0) ? 1 : 0;
+    return visual - seps_before_(visual) - offset;
   }
 
   int visual_for_entries(int real) const {
-    int r = 0, v = 0;
+    int r = 0, v = (stats_item_idx_ >= 0) ? 1 : 0;
     while (true) {
       while (is_separator(v)) v++;
       if (r == real) return v;

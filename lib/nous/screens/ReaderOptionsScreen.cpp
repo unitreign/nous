@@ -23,8 +23,10 @@ constexpr const char* ReaderSettings::kFontSizeNames[];
 // ---------------------------------------------------------------------------
 
 void ReaderOptionsScreen::populate(const TableOfContents& toc, uint16_t current_chapter, uint16_t current_para,
-                                   const std::string& fallback_title, int book_progress_pct, int chapter_progress_pct) {
+                                   const std::string& fallback_title, int book_progress_pct, int chapter_progress_pct,
+                                   uint16_t chapter_count) {
   toc_ = &toc;
+  chapter_count_ = chapter_count;
   book_title_ = fallback_title;
   chapter_title_ = fallback_title;
   int best_match = -1;
@@ -40,8 +42,12 @@ void ReaderOptionsScreen::populate(const TableOfContents& toc, uint16_t current_
 
   book_progress_pct_ = book_progress_pct;
   chapter_progress_pct_ = chapter_progress_pct;
-  if (toc_ && !toc_->entries.empty() && app_) {
-    app_->chapter_select()->populate(*toc_, current_chapter, current_para);
+  if (app_) {
+    if (!toc_->entries.empty()) {
+      app_->chapter_select()->populate(*toc_, current_chapter, current_para);
+    } else if (chapter_count > 1) {
+      app_->chapter_select()->set_chapter_count(chapter_count, current_chapter);
+    }
     app_->chapter_select()->clear_pending();
   }
 }
@@ -83,6 +89,11 @@ void ReaderOptionsScreen::set_page_links(const std::vector<PageLink>& links,
 }
 
 void ReaderOptionsScreen::on_start() {
+  // Use the list/menu rotation rather than inheriting whatever rotation the
+  // reader view was using.
+  if (app_)
+    set_buf_rotation_(rotation_from_setting(app_->rotate_display()));
+
   title2_ = nullptr;
   book_title1_buf_.clear();
 
@@ -196,6 +207,8 @@ void ReaderOptionsScreen::on_start() {
   }
 
   // Compute cumulative read time and look up author in one BookIndex pass.
+  // reading_ms_total() already includes all historical sessions (loaded from .pos),
+  // so we must NOT add e.read_time_ms here — that would double-count prior sessions.
   subtitle3_ = "< 1m read";
   std::string_view author_sv;
   if (app_ && app_->reader()) {
@@ -203,7 +216,6 @@ void ReaderOptionsScreen::on_start() {
     const std::string cur_path = app_->reader()->get_path();
     for (const auto& e : BookIndex::instance().entries()) {
       if (e.path.view(BookIndex::instance().pool()) == cur_path) {
-        ms += e.read_time_ms;
         author_sv = e.author.view(BookIndex::instance().pool());
         break;
       }
@@ -239,11 +251,12 @@ void ReaderOptionsScreen::on_start() {
   add_item("Statistics");
 
   bool has_toc = toc_ && !toc_->entries.empty();
-  const bool has_nav = has_toc || !page_links_.empty();
+  bool has_chapters = has_toc || chapter_count_ > 1;
+  const bool has_nav = has_chapters || !page_links_.empty();
 
   if (has_nav) {
     add_separator("NAVIGATE");
-    if (app_ && has_toc) {
+    if (app_ && has_chapters) {
       idx_chapters_ = count();
       add_item("Chapters");
     }

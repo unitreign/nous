@@ -37,10 +37,18 @@ class StatsScreen final : public ListMenuScreen {
 
   const char* name() const override { return "Stats"; }
 
+  // Render stats layout (no tooltips), then full_refresh + deep_sleep.
+  // Call this from Application::do_sleep_ after populating via set_book_stats().
+  void draw_for_sleep(DrawBuffer& buf);
+
  protected:
   void on_start() override;
   void on_select(int /*index*/) override {}
   void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const override;
+
+ private:
+  void draw_content_(DrawBuffer& buf) const;
+  void load_cover_();
 
  private:
   // Book info

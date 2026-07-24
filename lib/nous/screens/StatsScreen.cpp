@@ -1,4 +1,5 @@
 #include "StatsScreen.h"
+#include "GlobalStatsScreen.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -6,8 +7,11 @@
 
 #include "../Application.h"
 #include "../content/Book.h"
+#include "../content/BookIndex.h"
 #include "../display/DrawBuffer.h"
-#include "../display/ui_font_large.h"    // 24px Inter (for title_font_)
+#include "../display/ui_font_header.h"
+#include "../display/ui_font_large.h"
+#include "../display/ui_font_small.h"
 
 namespace microreader {
 
@@ -71,6 +75,54 @@ static std::vector<std::string> wrap_text(const std::string& text, const BitmapF
   return lines;
 }
 
+void StatsScreen::load_cover_() {
+  cover_loaded_ = false;
+  cover_data_.clear();
+  cover_w_ = cover_h_ = 0;
+  if (book_path_.empty() || !app_ || !app_->data_dir_) return;
+  const std::string cpath = cover_bin_path(book_path_.c_str(), app_->data_dir_);
+  FILE* f = std::fopen(cpath.c_str(), "rb");
+  if (!f) return;
+  uint16_t hdr[2] = {};
+  if (std::fread(hdr, 2, 2, f) == 2) {
+    const int src_w = hdr[0], src_h = hdr[1];
+    if (src_w > 0 && src_h > 0) {
+      static constexpr int kThumbW = 80;
+      const int dst_w = std::min(src_w, kThumbW);
+      const int dst_h = dst_w * src_h / src_w;
+      const int src_stride = (src_w + 7) / 8;
+      const int dst_stride = (dst_w + 7) / 8;
+      cover_data_.assign(static_cast<size_t>(dst_stride) * dst_h, 0xFF);
+      std::vector<uint8_t> src_row(src_stride);
+      int prev_sy = -1;
+      bool ok = true;
+      for (int dy = 0; dy < dst_h; ++dy) {
+        const int sy = dy * src_h / dst_h;
+        if (sy != prev_sy) {
+          std::fseek(f, 4 + static_cast<long>(sy) * src_stride, SEEK_SET);
+          if (std::fread(src_row.data(), 1, src_stride, f) != static_cast<size_t>(src_stride))
+            { ok = false; break; }
+          prev_sy = sy;
+        }
+        uint8_t* dr = cover_data_.data() + static_cast<size_t>(dy) * dst_stride;
+        for (int dx = 0; dx < dst_w; ++dx) {
+          const int sx = dx * src_w / dst_w;
+          if (!((src_row[sx >> 3] >> (7 - (sx & 7))) & 1))
+            dr[dx >> 3] &= static_cast<uint8_t>(~(1u << (7 - (dx & 7))));
+        }
+      }
+      if (ok) {
+        cover_w_ = static_cast<uint16_t>(dst_w);
+        cover_h_ = static_cast<uint16_t>(dst_h);
+        cover_loaded_ = true;
+      } else {
+        cover_data_.clear();
+      }
+    }
+  }
+  std::fclose(f);
+}
+
 void StatsScreen::on_start() {
   // Portrait-only: clamp landscape to portrait.
   const Rotation rot = current_rotation_();
@@ -78,64 +130,13 @@ void StatsScreen::on_start() {
     set_buf_rotation_(Rotation::Deg90);
     if (app_) app_->set_rotate_display(0);
   }
-
-  // Init 24px title font.
   title_font_ = BitmapFont{};
   title_font_.init(kFontData_ui_large_mbf, kFontData_ui_large_mbf_size);
-
-  // Load cover from .bin cache, scaled to the thumbnail display width.
-  cover_loaded_ = false;
-  cover_data_.clear();
-  cover_w_ = cover_h_ = 0;
-  if (!book_path_.empty() && app_ && app_->data_dir_) {
-    const std::string cpath = cover_bin_path(book_path_.c_str(), app_->data_dir_);
-    FILE* f = std::fopen(cpath.c_str(), "rb");
-    if (f) {
-      uint16_t hdr[2] = {};
-      if (std::fread(hdr, 2, 2, f) == 2) {
-        const int src_w = hdr[0], src_h = hdr[1];
-        if (src_w > 0 && src_h > 0) {
-          static constexpr int kThumbW = 80;
-          const int dst_w = std::min(src_w, kThumbW);
-          const int dst_h = dst_w * src_h / src_w;
-          const int src_stride = (src_w + 7) / 8;
-          const int dst_stride = (dst_w + 7) / 8;
-          cover_data_.assign(static_cast<size_t>(dst_stride) * dst_h, 0xFF);
-          std::vector<uint8_t> src_row(src_stride);
-          int prev_sy = -1;
-          bool ok = true;
-          for (int dy = 0; dy < dst_h; ++dy) {
-            const int sy = dy * src_h / dst_h;
-            if (sy != prev_sy) {
-              std::fseek(f, 4 + static_cast<long>(sy) * src_stride, SEEK_SET);
-              if (std::fread(src_row.data(), 1, src_stride, f) != static_cast<size_t>(src_stride))
-                { ok = false; break; }
-              prev_sy = sy;
-            }
-            uint8_t* dr = cover_data_.data() + static_cast<size_t>(dy) * dst_stride;
-            for (int dx = 0; dx < dst_w; ++dx) {
-              const int sx = dx * src_w / dst_w;
-              if (!((src_row[sx >> 3] >> (7 - (sx & 7))) & 1))
-                dr[dx >> 3] &= static_cast<uint8_t>(~(1u << (7 - (dx & 7))));
-            }
-          }
-          if (ok) {
-            cover_w_ = static_cast<uint16_t>(dst_w);
-            cover_h_ = static_cast<uint16_t>(dst_h);
-            cover_loaded_ = true;
-          } else {
-            cover_data_.clear();
-          }
-        }
-      }
-      std::fclose(f);
-    }
-  }
+  load_cover_();
 }
 
-void StatsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t>) const {
+void StatsScreen::draw_content_(DrawBuffer& buf) const {
   const int W = buf.width();
-  const int H = buf.height();
   buf.fill(true);
 
   if (!subtitle_font_.valid()) return;
@@ -143,13 +144,10 @@ void StatsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t>) const {
   // Font tiers:
   //   hf32 = 32px  (header_font_) — big progress %
   //   tf24 = 24px  (title_font_)  — "Statistics", book title, author, KV values
-  //   vf18 = 18px  (ui_font_)     — chapter title, Ch.X of Y, "book complete",
-  //                                  chapter %, KV labels
-  //   sf14 = 14px  (subtitle_font_) — bottom tooltip labels only
+  //   vf18 = 18px  (ui_font_)     — chapter title, Ch.X of Y, "book complete", chapter %, KV labels
   const BitmapFont& hf32 = header_font_.valid() ? header_font_ : ui_font_;
   const BitmapFont& tf24 = title_font_.valid()  ? title_font_  : ui_font_;
   const BitmapFont& vf18 = ui_font_;
-  const BitmapFont& sf14 = subtitle_font_;
 
   static constexpr int kLM = 16;
   static constexpr int kRM = 16;
@@ -383,6 +381,13 @@ void StatsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t>) const {
     draw_kv(0, y, "Page Turns", pt_buf);
     draw_kv(1, y, "Pages/min",  ppm_buf);
   }
+}
+
+void StatsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t>) const {
+  draw_content_(buf);
+
+  const int H = buf.height();
+  const BitmapFont& sf14 = subtitle_font_;
 
   // ── Bottom tooltip boxes (Lyra-identical, no divider above) ─────────────
   {
@@ -407,6 +412,296 @@ void StatsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t>) const {
       buf.fill_rect(bx,              box_y + box_h - 1, kBoxW, 1,     false);
       buf.fill_rect(bx,              box_y,             1,     box_h, false);
       buf.fill_rect(bx + kBoxW - 1,  box_y,             1,     box_h, false);
+    };
+    draw_box(kBoxLX);
+    buf.fill_rect(kLDiv, box_y, 1, box_h, false);
+    draw_box(kBoxRX);
+    buf.fill_rect(kRDiv, box_y, 1, box_h, false);
+
+    const char* labels[4] = {"Back", "\xe2\x80\x94", inv ? "Up" : "Down", inv ? "Down" : "Up"};
+    const int   centers[4] = {kBoxLX + kBoxW / 4, kBoxLX + 3 * kBoxW / 4,
+                               kBoxRX + kBoxW / 4, kBoxRX + 3 * kBoxW / 4};
+    for (int i = 0; i < 4; ++i) {
+      const int tw = static_cast<int>(sf.word_width(labels[i], std::strlen(labels[i]), FontStyle::Regular));
+      buf.draw_text_proportional(centers[i] - tw / 2, text_y,
+                                 labels[i], std::strlen(labels[i]), sf, false);
+    }
+  }
+}
+
+void StatsScreen::draw_for_sleep(DrawBuffer& buf) {
+  // Init all fonts needed by draw_content_ (mirrors start() + on_start()).
+  ListMenuScreen::apply_ui_font(ui_font_);
+  if (!header_font_.valid())
+    header_font_.init(kFontData_ui_header_mbf, kFontData_ui_header_mbf_size);
+  subtitle_font_.init(kFontData_ui_small_mbf, kFontData_ui_small_mbf_size);
+  title_font_ = BitmapFont{};
+  title_font_.init(kFontData_ui_large_mbf, kFontData_ui_large_mbf_size);
+
+  load_cover_();
+
+  buf.set_rotation(Rotation::Deg90);
+  draw_content_(buf);
+  buf.full_refresh(RefreshMode::Full, /*turnOffScreen=*/true);
+  buf.deep_sleep();
+}
+
+// ── GlobalStatsScreen implementation ─────────────────────────────────────────
+
+void GlobalStatsScreen::on_start() {
+  const Rotation rot = current_rotation_();
+  if (rot == Rotation::Deg0 || rot == Rotation::Deg180) {
+    set_buf_rotation_(Rotation::Deg90);
+    if (app_) app_->set_rotate_display(0);
+  }
+
+  title_font_ = BitmapFont{};
+  title_font_.init(kFontData_ui_large_mbf, kFontData_ui_large_mbf_size);
+
+  if (app_ && app_->data_dir_) {
+    const std::string idx = std::string(app_->data_dir_) + "/book_index.dat";
+    BookIndex::instance().load(idx);
+  }
+
+  total_books_ = 0; started_books_ = 0; finished_books_ = 0;
+  total_read_ms_ = 0; total_page_turns_ = 0; total_sessions_ = 0;
+  most_read_title_.clear(); most_read_author_.clear();
+  most_read_ms_ = 0; most_read_opens_ = 0; most_read_pct_ = 0;
+
+  const StringPool& pool = BookIndex::instance().pool();
+  for (const auto& e : BookIndex::instance().entries()) {
+    total_books_++;
+    if (e.times_opened > 0) started_books_++;
+    if (e.progress_pct >= 100) finished_books_++;
+    total_read_ms_    += e.read_time_ms;
+    total_page_turns_ += e.page_turns;
+    total_sessions_   += e.times_opened;
+    if (e.read_time_ms > most_read_ms_) {
+      most_read_ms_    = e.read_time_ms;
+      most_read_opens_ = e.times_opened;
+      most_read_pct_   = e.progress_pct;
+      most_read_title_ = e.title.to_string(pool);
+      most_read_author_= e.author.to_string(pool);
+    }
+  }
+}
+
+void GlobalStatsScreen::on_back() {
+  if (app_) app_->pop_screen();
+}
+
+void GlobalStatsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) const {
+  if (!ui_font_.valid()) return;
+
+  const int W = buf.width();
+  const int H = buf.height();
+  buf.fill(true);
+
+  const BitmapFont& hf32 = header_font_.valid() ? header_font_ : ui_font_;
+  const BitmapFont& tf24 = title_font_.valid()  ? title_font_  : ui_font_;
+  const BitmapFont& vf18 = ui_font_;
+  const BitmapFont& sf14 = subtitle_font_.valid() ? subtitle_font_ : ui_font_;
+
+  static constexpr int kLM = 16;
+  static constexpr int kRM = 16;
+  const int inner_w = W - kLM - kRM;
+
+  const bool is_lyra = (theme_ == MenuTheme::Lyra || theme_ == MenuTheme::LyraExt);
+  int y;
+
+  if (is_lyra) {
+    // Lyra-style statusbar: "nous" brand + battery%, then rule — matching Lyra/LyraExt height.
+    const int hf_adv = header_font_.valid() ? header_font_.y_advance() : ui_font_.y_advance();
+    const BitmapFont& brand_f = brand_font_.valid() ? brand_font_ : ui_font_;
+    const BitmapFont& bf = section_font_.valid() ? section_font_ : ui_font_;
+    static constexpr int kPad = 12;
+
+    const int nous_y = 10 + (hf_adv - brand_f.y_advance()) / 2 + brand_f.baseline();
+    buf.draw_text_proportional(kPad, nous_y, "nous", 4, brand_f, false);
+
+    if (battery_pct) {
+      char pbuf[8];
+      std::snprintf(pbuf, sizeof(pbuf), "%u%%", static_cast<unsigned>(*battery_pct));
+      const int pw = static_cast<int>(bf.word_width(pbuf, std::strlen(pbuf), FontStyle::Regular));
+      const int bat_y = 10 + (hf_adv - bf.y_advance()) / 2 + bf.baseline();
+      buf.draw_text_proportional(W - kPad - pw, bat_y, pbuf, std::strlen(pbuf), bf, false);
+    }
+    const int rule_y = 10 + hf_adv + 8;
+    buf.fill_rect(0, rule_y, W, 1, false);
+    y = rule_y + 1 + 12;
+  } else {
+    y = 12;
+  }
+
+  // ── "Library" header + 2px divider ─────────────────────────────────────────
+  buf.draw_text_proportional(kLM, y + tf24.baseline(), "Library", tf24, false);
+  y += tf24.y_advance() + 3;
+  buf.fill_rect(0, y, W, 2, false);
+  y += 2 + 14;
+
+  // ── Big book count (hf32, centred) ─────────────────────────────────────────
+  {
+    char cnt[8];
+    std::snprintf(cnt, sizeof(cnt), "%d", total_books_);
+    const int cw = static_cast<int>(hf32.word_width(cnt, std::strlen(cnt), FontStyle::Regular));
+    buf.draw_text_proportional((W - cw) / 2, y + hf32.baseline(), cnt, std::strlen(cnt), hf32, false);
+    y += hf32.y_advance() + 4;
+  }
+  {
+    static const char kCaption[] = "books in library";
+    const int cw = static_cast<int>(vf18.word_width(kCaption, sizeof(kCaption) - 1, FontStyle::Regular));
+    buf.draw_text_proportional((W - cw) / 2, y + vf18.baseline(), kCaption, sizeof(kCaption) - 1, vf18, false);
+    y += vf18.y_advance() + 8;
+  }
+
+  // ── Started / Finished on one row ──────────────────────────────────────────
+  {
+    char lb[24], rb[24];
+    std::snprintf(lb, sizeof(lb), "Started %d", started_books_);
+    std::snprintf(rb, sizeof(rb), "Finished %d", finished_books_);
+    buf.draw_text_proportional(kLM, y + vf18.baseline(), lb, std::strlen(lb), vf18, false);
+    const int rw = static_cast<int>(vf18.word_width(rb, std::strlen(rb), FontStyle::Regular));
+    buf.draw_text_proportional(W - kRM - rw, y + vf18.baseline(), rb, std::strlen(rb), vf18, false);
+    y += vf18.y_advance() + 6;
+  }
+
+  // ── Library progress bar ────────────────────────────────────────────────────
+  {
+    static constexpr int kBarH = 6, kBarInner = kBarH - 2;
+    buf.fill_rect(kLM, y, inner_w, kBarH, false);
+    buf.fill_rect(kLM + 1, y + 1, inner_w - 2, kBarInner, true);
+    if (total_books_ > 0 && finished_books_ > 0) {
+      const int filled = (inner_w - 2) * finished_books_ / total_books_;
+      if (filled > 0) buf.fill_rect(kLM + 1, y + 1, filled, kBarInner, false);
+    }
+    y += kBarH + 6;
+  }
+
+  // ── % label under bar ──────────────────────────────────────────────────────
+  {
+    const int pct = total_books_ > 0 ? finished_books_ * 100 / total_books_ : 0;
+    char pb[16];
+    std::snprintf(pb, sizeof(pb), "%d%% finished", pct);
+    const int pw = static_cast<int>(sf14.word_width(pb, std::strlen(pb), FontStyle::Regular));
+    buf.draw_text_proportional((W - pw) / 2, y + sf14.baseline(), pb, std::strlen(pb), sf14, false);
+    y += sf14.y_advance() + 14;
+  }
+
+  // ── 1px divider ────────────────────────────────────────────────────────────
+  buf.fill_rect(kLM, y, inner_w, 1, false);
+  y += 14;
+
+  // ── KV rows ────────────────────────────────────────────────────────────────
+  {
+    const int col_w  = inner_w / 2;
+    const int row_h  = vf18.y_advance() + 3 + tf24.y_advance();
+    const int row_gap = 18;
+
+    auto fmt_time = [](uint64_t ms, char* out, int sz) {
+      const uint64_t mins = ms / 60000ULL;
+      const uint64_t hrs  = mins / 60ULL;
+      const uint64_t mn   = mins % 60ULL;
+      if (hrs > 0)
+        std::snprintf(out, sz, "%uh %02um", (unsigned)hrs, (unsigned)mn);
+      else
+        std::snprintf(out, sz, "%um", (unsigned)mins);
+    };
+
+    auto draw_kv = [&](int col, int top_y, const char* label, const char* value) {
+      const int x = kLM + col * col_w;
+      buf.draw_text_proportional(x, top_y + vf18.baseline(), label, std::strlen(label), vf18, false);
+      buf.draw_text_proportional(x, top_y + vf18.y_advance() + 3 + tf24.baseline(),
+                                 value, std::strlen(value), tf24, false);
+    };
+
+    char rt[24], avg[24], pt[16], pps[16], sess[16], fin[16];
+    fmt_time(total_read_ms_, rt, sizeof(rt));
+    if (total_sessions_ > 0)
+      fmt_time(total_read_ms_ / total_sessions_, avg, sizeof(avg));
+    else
+      std::snprintf(avg, sizeof(avg), "\xe2\x80\x94");
+
+    std::snprintf(pt,   sizeof(pt),   "%u", (unsigned)total_page_turns_);
+    if (total_sessions_ > 0)
+      std::snprintf(pps, sizeof(pps), "%u", (unsigned)(total_page_turns_ / total_sessions_));
+    else
+      std::snprintf(pps, sizeof(pps), "\xe2\x80\x94");
+
+    std::snprintf(sess, sizeof(sess), "%u", (unsigned)total_sessions_);
+    std::snprintf(fin,  sizeof(fin),  "%d books", finished_books_);
+
+    draw_kv(0, y, "Reading Time", rt);
+    draw_kv(1, y, "Avg. Session", avg);
+    y += row_h + row_gap;
+
+    draw_kv(0, y, "Page Turns",   pt);
+    draw_kv(1, y, "Pages/session", pps);
+    y += row_h + row_gap;
+
+    draw_kv(0, y, "Sessions",  sess);
+    draw_kv(1, y, "Finished",  fin);
+    y += row_h + 14;
+  }
+
+  // ── 1px divider ────────────────────────────────────────────────────────────
+  buf.fill_rect(kLM, y, inner_w, 1, false);
+  y += 10;
+
+  // ── Most Read ──────────────────────────────────────────────────────────────
+  if (!most_read_title_.empty()) {
+    {
+      static const char kLabel[] = "MOST READ";
+      buf.draw_text_proportional(kLM, y + sf14.baseline(), kLabel, sizeof(kLabel) - 1, sf14, false);
+      y += sf14.y_advance() + 6;
+    }
+    {
+      std::string uc = most_read_title_;
+      for (auto& c : uc) if (c >= 'a' && c <= 'z') c -= 32;
+      while (uc.size() > 3 &&
+             tf24.word_width(uc.c_str(), uc.size(), FontStyle::Regular) > (uint32_t)inner_w) {
+        uc.resize(uc.size() - 1);
+        uc.back() = '.';
+      }
+      buf.draw_text_proportional(kLM, y + tf24.baseline(), uc.c_str(), uc.size(), tf24, false);
+      y += tf24.y_advance() + 3;
+    }
+    {
+      char sub[48];
+      const uint64_t hrs = most_read_ms_ / 3600000ULL;
+      const uint64_t mn  = (most_read_ms_ % 3600000ULL) / 60000ULL;
+      if (hrs > 0)
+        std::snprintf(sub, sizeof(sub), "%uh %02um \xc2\xb7 %u opens \xc2\xb7 %u%% done",
+                      (unsigned)hrs, (unsigned)mn, (unsigned)most_read_opens_, (unsigned)most_read_pct_);
+      else
+        std::snprintf(sub, sizeof(sub), "%um \xc2\xb7 %u opens \xc2\xb7 %u%% done",
+                      (unsigned)mn, (unsigned)most_read_opens_, (unsigned)most_read_pct_);
+      buf.draw_text_proportional(kLM, y + vf18.baseline(), sub, std::strlen(sub), vf18, false);
+    }
+  }
+
+  // ── Bottom tooltip ──────────────────────────────────────────────────────────
+  {
+    const BitmapFont& sf = section_font_.valid() ? section_font_ : sf14;
+    const bool inv = app_ && app_->invert_menu_buttons();
+
+    static constexpr int kBotPad    = 5;
+    static constexpr int kBotMargin = 10;
+    static constexpr int kBoxLX     = 53;
+    static constexpr int kBoxW      = 176;
+    static constexpr int kBoxRX     = kBoxLX + kBoxW + 22;
+    static constexpr int kLDiv      = kBoxLX + kBoxW / 2;
+    static constexpr int kRDiv      = kBoxRX + kBoxW / 2;
+
+    const int sf_adv = sf.y_advance();
+    const int box_h  = kBotPad + sf_adv + kBotPad;
+    const int box_y  = H - (1 + kBotPad + sf_adv + kBotPad + kBotMargin);
+    const int text_y = box_y + kBotPad + sf.baseline();
+
+    auto draw_box = [&](int bx) {
+      buf.fill_rect(bx,             box_y,             kBoxW, 1,     false);
+      buf.fill_rect(bx,             box_y + box_h - 1, kBoxW, 1,     false);
+      buf.fill_rect(bx,             box_y,             1,     box_h, false);
+      buf.fill_rect(bx + kBoxW - 1, box_y,             1,     box_h, false);
     };
     draw_box(kBoxLX);
     buf.fill_rect(kLDiv, box_y, 1, box_h, false);

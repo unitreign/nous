@@ -116,6 +116,10 @@ void MainMenu::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& run
 }
 
 void MainMenu::on_select(int index) {
+  if (stats_item_idx_ >= 0 && index == stats_item_idx_) {
+    app_->push_screen(ScreenId::GlobalStats);
+    return;
+  }
   if (is_separator(index)) return;
   int real = entries_index_for(index);
   last_selected_path_ = entries_[real].path;
@@ -161,16 +165,19 @@ void MainMenu::scan_directory_(DrawBuffer& buf) {
 }
 
 int MainMenu::count() const {
-  return static_cast<int>(entries_.size()) + static_cast<int>(separators_.size());
+  return static_cast<int>(entries_.size()) + static_cast<int>(separators_.size())
+       + (stats_item_idx_ >= 0 ? 1 : 0);
 }
 
 bool MainMenu::is_separator(int index) const {
+  if (stats_item_idx_ >= 0 && index == stats_item_idx_) return false;
   for (const auto& s : separators_)
     if (s.first == index) return true;
   return false;
 }
 
 bool MainMenu::is_item_converted(int index) const {
+  if (stats_item_idx_ >= 0 && index == stats_item_idx_) return false;
   if (is_separator(index)) return false;
   const int real = entries_index_for(index);
   if (real < 0 || real >= static_cast<int>(entries_.size())) return false;
@@ -178,6 +185,7 @@ bool MainMenu::is_item_converted(int index) const {
 }
 
 std::string_view MainMenu::get_item_label(int index) const {
+  if (stats_item_idx_ >= 0 && index == stats_item_idx_) return "Stats";
   if (is_separator(index)) {
     for (const auto& s : separators_)
       if (s.first == index) return s.second;
@@ -219,6 +227,7 @@ std::string_view MainMenu::get_item_label(int index) const {
 }
 
 std::string_view MainMenu::get_item_subtitle(int index) const {
+  if (stats_item_idx_ >= 0 && index == stats_item_idx_) return {};
   if (is_separator(index)) return {};
   int real = entries_index_for(index);
   if (real < 0 || real >= static_cast<int>(entries_.size())) return {};
@@ -252,6 +261,7 @@ std::string MainMenu::nous_header_left() const {
 }
 
 std::string_view MainMenu::get_item_right(int index) const {
+  if (stats_item_idx_ >= 0 && index == stats_item_idx_) return {};
   if (is_separator(index)) return {};
   int real = entries_index_for(index);
   if (real < 0 || real >= static_cast<int>(entries_.size())) return {};
@@ -282,6 +292,9 @@ void MainMenu::populate_list_() {
   const bool is_stele = (ListMenuScreen::theme() == ListMenuScreen::MenuTheme::Stele);
   const bool is_lyra  = (ListMenuScreen::theme() == ListMenuScreen::MenuTheme::Lyra ||
                           ListMenuScreen::theme() == ListMenuScreen::MenuTheme::LyraExt);
+  // Stats pinned item at index 0 for non-Lyra themes (Lyra has its own home screen entry).
+  stats_item_idx_ = is_lyra ? -1 : 0;
+  const int sep_offset = (stats_item_idx_ >= 0) ? 1 : 0;
   force_chronicle_list_ = is_lyra;
   const bool check_mrb = app_ && app_->data_dir_ &&
       (app_->show_converted_indicator() || is_stele);
@@ -322,7 +335,7 @@ void MainMenu::populate_list_() {
     }
     if (split > 0 && split < static_cast<int>(entries_.size())) {
       // Anonymous divider line between recent and never-opened books
-      separators_.push_back({split, ""});
+      separators_.push_back({split + sep_offset, ""});
     }
   } else if (list_format_ == BookListFormat::Filename) {
     std::stable_sort(entries_.begin(), entries_.end(),
@@ -438,7 +451,7 @@ void MainMenu::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) co
   int library_num = 0;
   const int so = scroll_offset();
   for (int vi = (sep_vi >= 0 ? sep_vi + 1 : 0); vi < so; ++vi)
-    if (!is_separator(vi))
+    if (!is_separator(vi) && !(stats_item_idx_ >= 0 && vi == stats_item_idx_))
       ++library_num;
 
   // ── Item list ─────────────────────────────────────────────────────────────
@@ -447,6 +460,19 @@ void MainMenu::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) co
 
   for (int vi = so; vi < count() && item_y < H; ++vi) {
     if (is_separator(vi)) continue;
+
+    // Pinned Stats item — draw and advance before any book-entry logic.
+    if (stats_item_idx_ >= 0 && vi == stats_item_idx_) {
+      const bool sel = (vi == selected());
+      if (sel)
+        buf.fill_rect(0, item_y, W, slot_h - 1, false);
+      buf.draw_text_proportional(kLPad + kNumW + kNumGap,
+                                 item_y + kItemPadT + ui_font_.baseline(),
+                                 "Stats", 5, ui_font_, sel);
+      buf.fill_rect(0, item_y + slot_h - 1, W, 1, false);
+      item_y += slot_h;
+      continue;
+    }
 
     const bool is_recent = (sep_vi >= 0 && vi < sep_vi);
     if (!is_recent) ++library_num;

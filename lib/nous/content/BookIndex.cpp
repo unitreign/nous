@@ -47,7 +47,10 @@ bool BookIndex::is_book_path(const char* path) {
 }
 
 bool BookIndex::add_entry(std::string_view path, std::string_view title, std::string_view author,
-                          uint32_t last_open_order, uint64_t read_time_ms) {
+                          uint32_t last_open_order, uint64_t read_time_ms,
+                          uint32_t times_opened, uint32_t page_turns,
+                          uint16_t progress_pct, uint16_t chapter_count, uint64_t time_left_ms,
+                          uint32_t total_chars) {
   if (static_cast<int>(entries_.size()) >= MAX_BOOKS)
     return false;
   BookIndexEntry entry;
@@ -56,6 +59,12 @@ bool BookIndex::add_entry(std::string_view path, std::string_view title, std::st
   entry.author = pool_.add(author);
   entry.last_open_order = last_open_order;
   entry.read_time_ms = read_time_ms;
+  entry.times_opened = times_opened;
+  entry.page_turns = page_turns;
+  entry.progress_pct = progress_pct;
+  entry.chapter_count = chapter_count;
+  entry.time_left_ms = time_left_ms;
+  entry.total_chars = total_chars;
   entries_.push_back(entry);
   return true;
 }
@@ -105,9 +114,16 @@ bool BookIndex::load(const std::string& index_file) {
       continue;
     *sep2 = '\0';
 
-    // Optional 4th field: last_open_order; optional 5th: read_time_ms
+    // Optional fields 4-11: last_open_order, read_time_ms, times_opened, page_turns,
+    //                        progress_pct, chapter_count, time_left_ms, total_chars
     uint32_t order = 0;
     uint64_t read_time_ms = 0;
+    uint32_t times_opened = 0;
+    uint32_t page_turns = 0;
+    uint16_t progress_pct = 0;
+    uint16_t chapter_count = 0;
+    uint64_t time_left_ms = 0;
+    uint32_t total_chars = 0;
     char* sep3 = std::strchr(sep2 + 1, '|');
     if (sep3) {
       *sep3 = '\0';
@@ -116,9 +132,39 @@ bool BookIndex::load(const std::string& index_file) {
       if (sep4) {
         *sep4 = '\0';
         read_time_ms = static_cast<uint64_t>(std::strtoull(sep4 + 1, nullptr, 10));
+        char* sep5 = std::strchr(sep4 + 1, '|');
+        if (sep5) {
+          *sep5 = '\0';
+          times_opened = static_cast<uint32_t>(std::strtoul(sep5 + 1, nullptr, 10));
+          char* sep6 = std::strchr(sep5 + 1, '|');
+          if (sep6) {
+            *sep6 = '\0';
+            page_turns = static_cast<uint32_t>(std::strtoul(sep6 + 1, nullptr, 10));
+            char* sep7 = std::strchr(sep6 + 1, '|');
+            if (sep7) {
+              *sep7 = '\0';
+              progress_pct = static_cast<uint16_t>(std::strtoul(sep7 + 1, nullptr, 10));
+              char* sep8 = std::strchr(sep7 + 1, '|');
+              if (sep8) {
+                *sep8 = '\0';
+                chapter_count = static_cast<uint16_t>(std::strtoul(sep8 + 1, nullptr, 10));
+                char* sep9 = std::strchr(sep8 + 1, '|');
+                if (sep9) {
+                  *sep9 = '\0';
+                  time_left_ms = static_cast<uint64_t>(std::strtoull(sep9 + 1, nullptr, 10));
+                  char* sep10 = std::strchr(sep9 + 1, '|');
+                  if (sep10) {
+                    total_chars = static_cast<uint32_t>(std::strtoul(sep10 + 1, nullptr, 10));
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
-    add_entry(line, sep1 + 1, sep2 + 1, order, read_time_ms);
+    add_entry(line, sep1 + 1, sep2 + 1, order, read_time_ms, times_opened, page_turns,
+              progress_pct, chapter_count, time_left_ms, total_chars);
   }
 
   std::fclose(f);
@@ -138,12 +184,18 @@ bool BookIndex::save(const std::string& index_file) const {
     auto path_v = entry.path.view(pool_);
     auto title_v = entry.title.view(pool_);
     auto author_v = entry.author.view(pool_);
-    std::fprintf(f, "%.*s|%.*s|%.*s|%u|%llu\n",
+    std::fprintf(f, "%.*s|%.*s|%.*s|%u|%llu|%u|%u|%u|%u|%llu|%u\n",
                  static_cast<int>(path_v.size()), path_v.data(),
                  static_cast<int>(title_v.size()), title_v.data(),
                  static_cast<int>(author_v.size()), author_v.data(),
                  static_cast<unsigned>(entry.last_open_order),
-                 static_cast<unsigned long long>(entry.read_time_ms));
+                 static_cast<unsigned long long>(entry.read_time_ms),
+                 static_cast<unsigned>(entry.times_opened),
+                 static_cast<unsigned>(entry.page_turns),
+                 static_cast<unsigned>(entry.progress_pct),
+                 static_cast<unsigned>(entry.chapter_count),
+                 static_cast<unsigned long long>(entry.time_left_ms),
+                 static_cast<unsigned>(entry.total_chars));
   }
   std::fclose(f);
   return true;
@@ -223,11 +275,20 @@ void BookIndex::set_last_opened(std::string_view path, uint32_t order) {
   }
 }
 
-void BookIndex::update_read_time(std::string_view path, uint64_t ms, const std::string& index_path) {
+void BookIndex::update_reading_stats(std::string_view path, uint64_t read_time_ms,
+                                     uint32_t times_opened, uint32_t page_turns,
+                                     uint16_t progress_pct, uint16_t chapter_count, uint64_t time_left_ms,
+                                     const std::string& index_path, uint32_t total_chars) {
   ensure_loaded_(index_path);
   for (auto& e : entries_) {
     if (e.path.view(pool_) == path) {
-      e.read_time_ms = ms;
+      e.read_time_ms = read_time_ms;
+      e.times_opened = times_opened;
+      e.page_turns = page_turns;
+      e.progress_pct = progress_pct;
+      e.chapter_count = chapter_count;
+      e.time_left_ms = time_left_ms;
+      if (total_chars > 0) e.total_chars = total_chars;
       ++generation_;
       save(index_path);
       return;
@@ -236,12 +297,21 @@ void BookIndex::update_read_time(std::string_view path, uint64_t ms, const std::
 }
 
 void BookIndex::build_index(const std::string& root_dir, DrawBuffer& buf) {
-  struct OldStats { std::string key; uint32_t order; uint64_t read_time_ms; };
+  struct OldStats {
+    std::string key;
+    uint32_t order; uint64_t read_time_ms;
+    uint32_t times_opened; uint32_t page_turns;
+    uint16_t progress_pct; uint16_t chapter_count; uint64_t time_left_ms;
+    uint32_t total_chars;
+  };
   std::vector<OldStats> old_stats;
   for (const auto& e : entries_)
     if (e.last_open_order > 0 || e.read_time_ms > 0)
       old_stats.push_back({e.title.to_string(pool_) + '\x01' + e.author.to_string(pool_),
-                           e.last_open_order, e.read_time_ms});
+                           e.last_open_order, e.read_time_ms,
+                           e.times_opened, e.page_turns,
+                           e.progress_pct, e.chapter_count, e.time_left_ms,
+                           e.total_chars});
 
   entries_.clear();
   pool_.reset();
@@ -269,7 +339,13 @@ void BookIndex::build_index(const std::string& root_dir, DrawBuffer& buf) {
       for (const auto& old : old_stats) {
         if (old.key == key) {
           entries_.back().last_open_order = old.order;
-          entries_.back().read_time_ms = old.read_time_ms;
+          entries_.back().read_time_ms    = old.read_time_ms;
+          entries_.back().times_opened    = old.times_opened;
+          entries_.back().page_turns      = old.page_turns;
+          entries_.back().progress_pct    = old.progress_pct;
+          entries_.back().chapter_count   = old.chapter_count;
+          entries_.back().time_left_ms    = old.time_left_ms;
+          entries_.back().total_chars     = old.total_chars;
           break;
         }
       }

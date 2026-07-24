@@ -28,7 +28,7 @@ class SettingsScreen final : public ListMenuScreen {
   bool is_item_focusable(int index) const override;
   int get_visible_count_(int H, int scroll_off) const override;
 
-  static constexpr int kRowH = 28;
+  static constexpr int kRowH = 36;
 
  protected:
   void on_start() override;

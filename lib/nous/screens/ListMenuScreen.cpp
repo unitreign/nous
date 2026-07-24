@@ -119,6 +119,14 @@ int ListMenuScreen::nous_visible_from_(int scroll_off, int available_h) const {
 
 int ListMenuScreen::get_visible_count_(int H, int scroll_off) const {
   const int header_h = compute_header_h_();
+  if ((theme_ == MenuTheme::Lyra || theme_ == MenuTheme::LyraExt) && subtitle_font_.valid() && subtitle_.empty()) {
+    int bot_h = 0;
+    if (section_font_.valid()) {
+      static constexpr int kBotPad = 5, kBotMargin = 10;
+      bot_h = 1 + kBotPad + section_font_.y_advance() + kBotPad + kBotMargin;
+    }
+    return nous_visible_from_(scroll_off, H - header_h - bot_h);
+  }
   if ((theme_ == MenuTheme::Chronicle || force_chronicle_list_) && subtitle_font_.valid() && subtitle_.empty()) {
     const int bot = (theme_ == MenuTheme::Chronicle) ? 0 : kBottomAreaH;
     return nous_visible_from_(scroll_off, H - header_h - bot);
@@ -192,6 +200,11 @@ int ListMenuScreen::compute_header_h_() const {
       h += 1;  // bottom rule
     }
     return h;
+  }
+  if (theme_ == MenuTheme::Lyra || theme_ == MenuTheme::LyraExt) {
+    const int hf = header_font_.valid() ? header_font_.y_advance()
+                                        : (ui_font_.valid() ? ui_font_.y_advance() : 0);
+    return 10 + hf + 8 + 1;  // top pad + header row + gap + rule
   }
   if (theme_ == MenuTheme::Chronicle) {
     if (!ui_font_.valid()) return 0;
@@ -276,6 +289,36 @@ int ListMenuScreen::draw_header_(DrawBuffer& buf, int W, int H, std::optional<ui
       y += 1;
     }
     return y;
+  }
+  if (theme_ == MenuTheme::Lyra || theme_ == MenuTheme::LyraExt) {
+    if (!ui_font_.valid()) return 0;
+    const int hf_adv = header_font_.valid() ? header_font_.y_advance() : ui_font_.y_advance();
+    static constexpr int kPad = 12;
+    const BitmapFont& bf = section_font_.valid() ? section_font_ : ui_font_;
+
+    if (!lyra_header_override_.empty()) {
+      // Override (e.g. "secret") drawn in ui_font_, centred in the header row.
+      const int text_y = 10 + (hf_adv - ui_font_.y_advance()) / 2 + ui_font_.baseline();
+      buf.draw_text_proportional(kPad, text_y,
+                                 lyra_header_override_.c_str(), lyra_header_override_.size(),
+                                 ui_font_, false);
+    } else {
+      const BitmapFont& brand_f = brand_font_.valid() ? brand_font_ : ui_font_;
+      const int nous_y = 10 + (hf_adv - brand_f.y_advance()) / 2 + brand_f.baseline();
+      buf.draw_text_proportional(kPad, nous_y, "nous", 4, brand_f, false);
+    }
+
+    if (battery_pct) {
+      char pbuf[8];
+      std::snprintf(pbuf, sizeof(pbuf), "%u%%", static_cast<unsigned>(*battery_pct));
+      const int pw = bf.word_width(pbuf, std::strlen(pbuf), FontStyle::Regular);
+      const int bat_y = 10 + (hf_adv - bf.y_advance()) / 2 + bf.baseline();
+      buf.draw_text_proportional(W - kPad - pw, bat_y, pbuf, std::strlen(pbuf), bf, false);
+    }
+
+    const int rule_y = 10 + hf_adv + 8;
+    buf.fill_rect(0, rule_y, W, 1, false);
+    return rule_y + 1;
   }
   if (theme_ == MenuTheme::Chronicle) {
     if (!ui_font_.valid()) return 0;
@@ -411,6 +454,44 @@ int ListMenuScreen::draw_header_(DrawBuffer& buf, int W, int H, std::optional<ui
 //    Returns bottom_h = pixels reserved at the bottom (list must stay above).
 // ─────────────────────────────────────────────────────────────────────────────
 int ListMenuScreen::draw_bottom_(DrawBuffer& buf, int W, int H, std::optional<uint8_t> battery_pct) const {
+  if ((theme_ == MenuTheme::Lyra || theme_ == MenuTheme::LyraExt) && section_font_.valid()) {
+    const BitmapFont& sf = section_font_;
+    const bool inv = app_ && app_->invert_menu_buttons();
+
+    static constexpr int kBotPad    = 5;
+    static constexpr int kBotMargin = 10;
+    static constexpr int kBoxLX     = 53;
+    static constexpr int kBoxW      = 176;
+    static constexpr int kBoxRX     = kBoxLX + kBoxW + 22;
+    static constexpr int kLDiv      = kBoxLX + kBoxW / 2;
+    static constexpr int kRDiv      = kBoxRX + kBoxW / 2;
+
+    const int box_h  = kBotPad + sf.y_advance() + kBotPad;
+    const int bot_h  = 1 + box_h + kBotMargin;
+    const int box_y  = H - bot_h;
+    const int text_y = box_y + kBotPad + sf.baseline();
+
+    auto draw_box = [&](int bx) {
+      buf.fill_rect(bx,             box_y,             kBoxW, 1,     false);
+      buf.fill_rect(bx,             box_y + box_h - 1, kBoxW, 1,     false);
+      buf.fill_rect(bx,             box_y,             1,     box_h, false);
+      buf.fill_rect(bx + kBoxW - 1, box_y,             1,     box_h, false);
+    };
+    draw_box(kBoxLX);
+    buf.fill_rect(kLDiv, box_y, 1, box_h, false);
+    draw_box(kBoxRX);
+    buf.fill_rect(kRDiv, box_y, 1, box_h, false);
+
+    const char* labels[4] = {"Back", "Select", inv ? "Up" : "Down", inv ? "Down" : "Up"};
+    const int centers[4]  = {kBoxLX + kBoxW / 4, kBoxLX + 3 * kBoxW / 4,
+                              kBoxRX + kBoxW / 4, kBoxRX + 3 * kBoxW / 4};
+    for (int i = 0; i < 4; ++i) {
+      const int tw = static_cast<int>(sf.word_width(labels[i], std::strlen(labels[i]), FontStyle::Regular));
+      buf.draw_text_proportional(centers[i] - tw / 2, text_y, labels[i], std::strlen(labels[i]), sf, false);
+    }
+
+    return bot_h;
+  }
   if (theme_ == MenuTheme::Chronicle && subtitle_.empty()) return 0;
   if (theme_ == MenuTheme::Stele || !subtitle_.empty()) {
     if (!subtitle_font_.valid()) return 0;
@@ -494,8 +575,10 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
 
   // ── Chronicle theme ───────────────────────────────────────────────────────
   if ((theme_ == MenuTheme::Chronicle || force_chronicle_list_) && subtitle_font_.valid() && subtitle_.empty()) {
-    // Divider below header for Lyra sub-screens
-    if (force_chronicle_list_ && theme_ != MenuTheme::Chronicle)
+    // Divider below header for non-Chronicle, non-Lyra sub-screens
+    // (Lyra header already includes its own rule from draw_header_)
+    if (force_chronicle_list_ && theme_ != MenuTheme::Chronicle &&
+        theme_ != MenuTheme::Lyra && theme_ != MenuTheme::LyraExt)
       buf.fill_rect(0, header_h, W, 1, false);
 
     static constexpr int kPadT = 5, kGap = 3, kPadB = 6;

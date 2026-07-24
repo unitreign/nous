@@ -10,6 +10,7 @@
 #include "display/DrawBuffer.h"
 #include "screens/ChapterSelectScreen.h"
 #include "screens/ConvertAllScreen.h"
+#include "screens/GlobalStatsScreen.h"
 #include "screens/HiddenBooksMenu.h"
 #include "screens/IScreen.h"
 #include "screens/LinksScreen.h"
@@ -39,6 +40,7 @@ enum class ScreenId : uint8_t {
   ConvertAll,
   Stats,
   HiddenBooks,
+  GlobalStats,
   Lyra,
   LyraExt,
   RecentBooks,
@@ -61,8 +63,8 @@ inline Rotation rotation_from_setting(uint8_t v) {
 inline const char* rotation_label(uint8_t v) {
   switch (v) {
     case 1:  return "Landscape";
-    case 2:  return "Portrait (Flip)";
-    case 3:  return "Landscape (Flip)";
+    case 2:  return "Portrait Reversed";
+    case 3:  return "Landscape Reversed";
     default: return "Portrait";
   }
 }
@@ -191,7 +193,10 @@ class Application {
   uint8_t menu_theme() const { return menu_theme_; }
   void set_menu_theme(uint8_t v);
 
-  void update_book_read_time(const std::string& path, uint64_t ms);
+  void update_book_read_time(const std::string& path, uint64_t ms,
+                             uint32_t times_opened = 0, uint32_t page_turns = 0,
+                             int progress_pct = 0, uint64_t time_left_ms = 0,
+                             uint16_t chapter_count = 0, uint32_t total_chars = 0);
 
   uint8_t sleep_timeout_min() const { return sleep_timeout_min_; }
   void set_sleep_timeout_min(uint8_t v) { sleep_timeout_min_ = v; save_settings_(); }
@@ -370,6 +375,7 @@ class Application {
   LinksScreen links_screen_;
   ConvertAllScreen convert_all_;
   StatsScreen stats_;
+  GlobalStatsScreen global_stats_;
   HiddenBooksMenu hidden_books_;
   WhatsNewScreen whats_new_;
 
@@ -388,6 +394,7 @@ class Application {
   std::function<void()> invalidate_font_fn_;
 
   IScreen* screen_for_(ScreenId id);
+  void prepare_book_stats_for_sleep_();
 };
 
 }  // namespace microreader

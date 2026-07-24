@@ -122,9 +122,11 @@ class ReaderOptionsScreen final : public ListMenuScreen {
     settings_ = s;
   }
 
-  // Populate before pushing. Pass toc (may be empty — "Chapters" hidden when empty).
+  // Populate before pushing. Pass toc (may be empty) and chapter_count from MRB.
+  // "Chapters" shows when toc has entries OR chapter_count > 1 (numbered fallback).
   void populate(const TableOfContents& toc, uint16_t current_chapter, uint16_t current_para,
-                const std::string& fallback_title, int book_progress_pct, int chapter_progress_pct);
+                const std::string& fallback_title, int book_progress_pct, int chapter_progress_pct,
+                uint16_t chapter_count = 0);
 
   // Set links found on the current reader page (called after populate).
   // spine_files maps chapter index → base filename for href resolution.
@@ -196,6 +198,7 @@ class ReaderOptionsScreen final : public ListMenuScreen {
 
   int book_progress_pct_ = 0;
   int chapter_progress_pct_ = 0;
+  uint16_t chapter_count_ = 0;
 
   const TableOfContents* toc_ = nullptr;
 };

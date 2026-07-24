@@ -33,10 +33,11 @@ class LyraScreen final : public ListMenuScreen {
   std::string recent_author_;
   std::string recent_path_;
 
-  int idx_recent_      = -1;
-  int idx_all_books_   = -1;
+  int idx_recent_       = -1;
+  int idx_all_books_    = -1;
   int idx_recent_books_ = -1;
-  int idx_settings_    = -1;
+  int idx_stats_        = -1;
+  int idx_settings_     = -1;
 
   static constexpr int kHiddenHoldFrames = 15;
   int back_hold_frames_ = 0;

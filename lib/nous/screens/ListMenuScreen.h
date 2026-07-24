@@ -60,6 +60,10 @@ class ListMenuScreen : public IScreen {
 
   bool force_chronicle_list_ = false;  // use Chronicle-style rows regardless of global theme
 
+  // When non-empty and theme is Lyra/LyraExt: used in place of "nous" in the header,
+  // drawn with ui_font_ instead of brand_font_. Leave empty for the normal "nous" logo.
+  std::string lyra_header_override_;
+
   // 0 = center (default), 1 = left, 2 = right
   void set_list_align(uint8_t align) {
     list_align_ = align;

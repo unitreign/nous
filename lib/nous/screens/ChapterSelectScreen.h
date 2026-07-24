@@ -20,6 +20,10 @@ class ChapterSelectScreen final : public ListMenuScreen {
   // current_chapter/current_para select the closest TOC entry to the reading position.
   void populate(const TableOfContents& toc, uint16_t current_chapter = 0, uint16_t current_para = 0);
 
+  // Fallback: populate by spine chapter count when no TOC entries are available.
+  // Generates numbered labels ("Chapter 1", "Chapter 2", …).
+  void set_chapter_count(uint16_t count, uint16_t current_chapter = 0);
+
   const char* name() const override {
     return "Chapters";
   }
@@ -53,6 +57,7 @@ class ChapterSelectScreen final : public ListMenuScreen {
  private:
   const TableOfContents* toc_ = nullptr;
   int initial_selected_ = 0;
+  uint16_t fallback_chapter_count_ = 0;  // used when toc_ has no entries
 
   uint16_t pending_chapter_ = 0;
   uint16_t pending_para_index_ = 0;

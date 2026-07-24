@@ -159,6 +159,7 @@ void LyraExtScreen::on_start() {
 
   idx_all_books_    = item_idx++; add_item("All Books");
   idx_recent_books_ = item_idx++; add_item("Recent Books");
+  idx_stats_        = item_idx++; add_item("Stats");
   idx_settings_     = item_idx++; add_item("Settings");
 
   // Load or flag covers.
@@ -188,8 +189,9 @@ void LyraExtScreen::on_select(int index) {
       return;
     }
   }
-  if (index == idx_all_books_)    app_->push_screen(ScreenId::MainMenu);
+  if (index == idx_all_books_)         app_->push_screen(ScreenId::MainMenu);
   else if (index == idx_recent_books_) app_->push_screen(ScreenId::RecentBooks);
+  else if (index == idx_stats_)        app_->push_screen(ScreenId::GlobalStats);
   else if (index == idx_settings_)     app_->push_screen(ScreenId::Settings);
 }
 
@@ -238,7 +240,7 @@ void LyraExtScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pc
   static constexpr int kTopGap      = 36;
   static constexpr int kSlotGap     = 8;    // gap between the 3 cover slots
   static constexpr int kCoverTitleGap = 4;
-  static constexpr int kCardNavGap  = 24;
+  static constexpr int kCardNavGap  = 10;
   static constexpr int kNavPadV     = 32;
   static constexpr int kBotPad      = 5;
   static constexpr int kBotMargin   = 10;
@@ -251,15 +253,18 @@ void LyraExtScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pc
   int y = 10;
   {
     const BitmapFont& brand_f = brand_font_.valid() ? brand_font_ : ui_font_;
-    buf.draw_text_proportional(kPad, y + brand_f.baseline(), "nous", brand_f, false);
-  }
-
-  if (battery_pct) {
-    char pbuf[8];
-    std::snprintf(pbuf, sizeof(pbuf), "%u%%", static_cast<unsigned>(*battery_pct));
     const BitmapFont& bf = section_font_.valid() ? section_font_ : ui_font_;
-    const int pw = bf.word_width(pbuf, std::strlen(pbuf), FontStyle::Regular);
-    buf.draw_text_proportional(W - kPad - pw, y + bf.baseline(), pbuf, bf, false);
+    // Centre both texts in hf_adv so they share the same visual baseline row.
+    const int nous_y = y + (hf_adv - brand_f.y_advance()) / 2 + brand_f.baseline();
+    buf.draw_text_proportional(kPad, nous_y, "nous", 4, brand_f, false);
+
+    if (battery_pct) {
+      char pbuf[8];
+      std::snprintf(pbuf, sizeof(pbuf), "%u%%", static_cast<unsigned>(*battery_pct));
+      const int pw = bf.word_width(pbuf, std::strlen(pbuf), FontStyle::Regular);
+      const int bat_y = y + (hf_adv - bf.y_advance()) / 2 + bf.baseline();
+      buf.draw_text_proportional(W - kPad - pw, bat_y, pbuf, bf, false);
+    }
   }
   y += hf_adv + 8;
   buf.fill_rect(0, y, W, 1, false);
@@ -336,6 +341,7 @@ void LyraExtScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pc
   const NavItem nav[] = {
     {idx_all_books_,    "All Books"},
     {idx_recent_books_, "Recent Books"},
+    {idx_stats_,        "Stats"},
     {idx_settings_,     "Settings"},
   };
   for (const auto& item : nav) {
