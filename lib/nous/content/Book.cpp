@@ -125,9 +125,10 @@ bool Book::write_cover_bin(const char* cover_path, int max_w, int max_h,
   if (!f)
     return false;
   uint16_t le[2] = {img.width, img.height};
-  std::fwrite(le, 2, 2, f);
-  std::fwrite(img.data.data(), 1, img.data.size(), f);
+  const bool ok = (std::fwrite(le, 2, 2, f) == 2) &&
+                  (std::fwrite(img.data.data(), 1, img.data.size(), f) == img.data.size());
   std::fclose(f);
+  if (!ok) { std::remove(cover_path); return false; }
   return true;
 }
 

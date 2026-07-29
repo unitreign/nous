@@ -196,7 +196,7 @@ void StatsScreen::draw_content_(DrawBuffer& buf) const {
       }
       return out;
     };
-    const std::string auth    = truncate(author_,        vf18, FontStyle::Regular);
+    const auto auth_lines     = wrap_text(author_,        vf18, text_max_w, FontStyle::Regular);
     const std::string chtitle = truncate(chapter_title_, vf18, FontStyle::Italic);
 
     // Chapter label: "Chapter title  ·  Ch. X of Y"
@@ -208,7 +208,7 @@ void StatsScreen::draw_content_(DrawBuffer& buf) const {
 
     // Measure text block height
     int text_block_h = n_title * tf24.y_advance();
-    if (!auth.empty())    text_block_h += kLineGap + vf18.y_advance();
+    if (!auth_lines.empty()) text_block_h += (kLineGap + vf18.y_advance()) * static_cast<int>(auth_lines.size());
     if (!chtitle.empty()) text_block_h += kLineGap + vf18.y_advance();
     text_block_h += kLineGap + vf18.y_advance();  // Ch. X of Y always shown
 
@@ -233,11 +233,11 @@ void StatsScreen::draw_content_(DrawBuffer& buf) const {
                                  title_lines[li].c_str(), title_lines[li].size(), tf24, false);
       ty += tf24.y_advance();
     }
-    if (!auth.empty()) {
+    for (const auto& al : auth_lines) {
       ty += kLineGap;
-      buf.draw_text_proportional(text_x, ty + tf24.baseline(),
-                                 auth.c_str(), auth.size(), tf24, false);
-      ty += tf24.y_advance();
+      buf.draw_text_proportional(text_x, ty + vf18.baseline(),
+                                 al.c_str(), al.size(), vf18, false);
+      ty += vf18.y_advance();
     }
     if (!chtitle.empty()) {
       ty += kLineGap;

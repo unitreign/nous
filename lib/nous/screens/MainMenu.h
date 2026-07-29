@@ -148,11 +148,13 @@ class MainMenu final : public ListMenuScreen {
 
   int visual_for_entries(int real) const {
     int r = 0, v = (stats_item_idx_ >= 0) ? 1 : 0;
-    while (true) {
-      while (is_separator(v)) v++;
+    while (v < count()) {
+      while (v < count() && is_separator(v)) v++;
+      if (v >= count()) break;
       if (r == real) return v;
       r++; v++;
     }
+    return count() - 1;
   }
 
   void scan_directory_(DrawBuffer& buf);

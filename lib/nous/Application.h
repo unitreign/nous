@@ -22,6 +22,7 @@
 #include "screens/ReaderScreen.h"
 #include "screens/SettingsScreen.h"
 #include "screens/StatsScreen.h"
+#include "screens/AlertScreen.h"
 #include "screens/WhatsNewScreen.h"
 #include "screens/demo/BouncingBallDemo.h"
 #include "screens/demo/GrayscaleDemo.h"
@@ -47,6 +48,7 @@ enum class ScreenId : uint8_t {
   WhatsNew,
   BouncingBall,
   GrayscaleDemo,
+  Alert,
 };
 
 // Maps the rotate_display / rotate_reader setting value (0-3) to the DrawBuffer Rotation enum.
@@ -378,6 +380,8 @@ class Application {
   GlobalStatsScreen global_stats_;
   HiddenBooksMenu hidden_books_;
   WhatsNewScreen whats_new_;
+  AlertScreen alert_;
+  bool font_warning_shown_ = false;
 
 #ifdef MICROREADER_ENABLE_DEMOS
   BouncingBallDemo bouncing_ball_;

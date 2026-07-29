@@ -21,6 +21,10 @@ bool MrbReader::open(const char* path) {
   }
 
   // Read chapter table (16 bytes per entry in v2)
+  if (header_.chapter_count > 2048 || header_.image_count > 4096) {
+    close();
+    return false;
+  }
   chapters_.resize(header_.chapter_count);
   if (header_.chapter_count > 0) {
     fseek(f_, static_cast<long>(header_.chapter_offset), SEEK_SET);
@@ -187,6 +191,8 @@ MrbReader::LoadResult MrbReader::load_paragraph(uint32_t file_offset, Paragraph&
 
   uint8_t type = hdr[0];
   uint32_t data_size = mrb_read_u32(hdr + 1);
+  if (data_size > 65536)
+    return result;
 
   // Read body
   std::vector<uint8_t> body(data_size);

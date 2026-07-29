@@ -174,7 +174,8 @@ class MrbChapterSource : public IParagraphSource {
     // Not in window — find a free slot or evict the furthest entry
     size_t slot = find_slot_(index);
     slot_index_[slot] = static_cast<uint32_t>(index);
-    reader_.load_paragraph(offsets_[index], slots_[slot]);
+    if (!reader_.load_paragraph(offsets_[index], slots_[slot]).ok)
+      slots_[slot] = Paragraph{};
     return slots_[slot];
   }
 

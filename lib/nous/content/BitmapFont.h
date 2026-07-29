@@ -203,13 +203,23 @@ class BitmapFont : public IFont {
     const uint8_t* lsb = nullptr;
     const uint8_t* msb = nullptr;
     if (g.bitmap_width > 0 && g.bitmap_height > 0) {
-      bits = bitmaps_ + g.bitmap_offset;
-      if (gray_lsb_bitmaps_)
-        lsb = gray_lsb_bitmaps_ + g.bitmap_offset;
-      if (gray_msb_bitmaps_)
-        msb = gray_msb_bitmaps_ + g.bitmap_offset;
+      const size_t row_bytes = static_cast<size_t>((g.bitmap_width + 7) / 8);
+      const size_t needed = row_bytes * static_cast<size_t>(g.bitmap_height);
+      if (bitmaps_ && g.bitmap_offset + needed <= size_) {
+        bits = bitmaps_ + g.bitmap_offset;
+        if (gray_lsb_bitmaps_)
+          lsb = gray_lsb_bitmaps_ + g.bitmap_offset;
+        if (gray_msb_bitmaps_)
+          msb = gray_msb_bitmaps_ + g.bitmap_offset;
+      } else {
+        corrupt_ = true;
+      }
     }
     return {bits, lsb, msb, g.bitmap_width, g.bitmap_height, g.advance_width, g.x_offset, g.y_offset};
+  }
+
+  bool is_corrupt() const {
+    return corrupt_;
   }
 
   bool has_style(FontStyle style) const {
@@ -253,6 +263,7 @@ class BitmapFont : public IFont {
   const uint8_t* gray_lsb_bitmaps_ = nullptr;
   const uint8_t* gray_msb_bitmaps_ = nullptr;
   StyleData styles_[4] = {};  // indexed by FontStyle enum value
+  mutable bool corrupt_ = false;
 
   // Resolve a FontStyle to its StyleData, falling back to Regular.
   const StyleData& resolve_style_(FontStyle style) const {

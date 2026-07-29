@@ -17,7 +17,7 @@ class ScreenManager {
   // Push a new screen. Pauses the current top, starts the new one.
   // The new screen draws into buf; caller handles the actual refresh.
   void push(IScreen* screen, DrawBuffer& buf, IRuntime& runtime) {
-    if (depth_ >= kMaxDepth)
+    if (!screen || depth_ >= kMaxDepth)
       return;
     if (depth_ > 0)
       stack_[depth_ - 1]->pause();

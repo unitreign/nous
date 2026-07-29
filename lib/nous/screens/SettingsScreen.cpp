@@ -893,9 +893,9 @@ void SettingsScreen::on_select(int index) {
         }
         free(work);
         buf_->show_loading("Done!", 100);
+        esp_restart();
       }
     }
-    esp_restart();
   }
 #endif
 }

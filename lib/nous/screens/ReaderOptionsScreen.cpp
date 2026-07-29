@@ -242,8 +242,8 @@ void ReaderOptionsScreen::on_start() {
   // subtitle3_ stays as the read time string
 
   clear_items();
-  idx_justify_ = idx_padding_h_ = idx_padding_v_ = idx_line_spacing_ = idx_progress_ = idx_progress_scope_ =
-      idx_chapters_ = idx_pub_fonts_ = idx_hyphenation_ = idx_rotate_display_ = idx_reader_images_ = idx_links_ = idx_stats_ = -1;
+  idx_justify_ = idx_padding_h_ = idx_padding_v_ = idx_line_spacing_ = idx_font_size_ = idx_progress_ = idx_progress_scope_ =
+      idx_chapters_ = idx_pub_fonts_ = idx_hyphenation_ = idx_rotate_display_ = idx_reader_rotate_display_ = idx_reader_images_ = idx_links_ = idx_stats_ = -1;
 
   char tmp[40];
 

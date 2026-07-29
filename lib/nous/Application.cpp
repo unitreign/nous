@@ -418,6 +418,15 @@ void Application::update(const ButtonState& buttons, uint32_t dt_ms, DrawBuffer&
   if (top) {
     top->update(buttons_, buf, runtime);
 
+    if (!font_warning_shown_ && font_manager_ && font_manager_->any_corrupt()) {
+      font_warning_shown_ = true;
+      alert_.set_message("Font Error",
+                         "One or more font glyphs are out of bounds. "
+                         "The font file may be corrupt. "
+                         "Some characters may not display correctly.");
+      pending_push_ = ScreenId::Alert;
+    }
+
     // Process pending navigation (queued by screens via push_screen/replace_screen).
     if (pending_replace_ != ScreenId::None) {
       ScreenId id = pending_replace_;
@@ -471,6 +480,8 @@ IScreen* microreader::Application::screen_for_(ScreenId id) {
       return &recent_books_;
     case ScreenId::WhatsNew:
       return &whats_new_;
+    case ScreenId::Alert:
+      return &alert_;
 
 #ifdef MICROREADER_ENABLE_DEMOS
     case ScreenId::BouncingBall:
@@ -486,7 +497,8 @@ IScreen* microreader::Application::screen_for_(ScreenId id) {
 void microreader::Application::save_settings_() {
   if (settings_path_.empty())
     return;
-  FILE* f = std::fopen(settings_path_.c_str(), "w");
+  const std::string tmp_path = settings_path_ + ".tmp";
+  FILE* f = std::fopen(tmp_path.c_str(), "w");
   if (!f)
     return;
 
@@ -560,7 +572,18 @@ void microreader::Application::save_settings_() {
   if (!last_seen_version_.empty())
     std::fprintf(f, "last_version=%s\n", last_seen_version_.c_str());
 
-  std::fclose(f);
+  if (std::fclose(f) != 0) {
+    std::remove(tmp_path.c_str());
+    return;
+  }
+
+  static constexpr int kMaxBackups = 5;
+  std::remove((settings_path_ + ".bak." + std::to_string(kMaxBackups)).c_str());
+  for (int i = kMaxBackups - 1; i >= 1; --i)
+    std::rename((settings_path_ + ".bak." + std::to_string(i)).c_str(),
+                (settings_path_ + ".bak." + std::to_string(i + 1)).c_str());
+  std::rename(settings_path_.c_str(), (settings_path_ + ".bak.1").c_str());
+  std::rename(tmp_path.c_str(), settings_path_.c_str());
 }
 
 void microreader::Application::set_menu_theme(uint8_t v) {

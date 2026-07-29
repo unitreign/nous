@@ -55,6 +55,13 @@ class FontManager {
     return font_set_.valid();
   }
 
+  bool any_corrupt() const {
+    for (int i = 0; i < num_fonts_; ++i)
+      if (prop_fonts_[i].is_corrupt())
+        return true;
+    return false;
+  }
+
   // No provisioning needed on desktop.
   virtual void ensure_ready(DrawBuffer&) {}
 
