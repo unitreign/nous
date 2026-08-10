@@ -122,9 +122,6 @@ static std::string get_sleep_timeout_label(uint8_t min) {
   return buf;
 }
 
-static std::string get_show_whats_new_label(bool on) {
-  return std::string("Show on Update: ") + (on ? "On" : "Off");
-}
 
 static std::string get_font_label(const std::string& font_path) {
   std::string label = "Font: ";
@@ -219,7 +216,6 @@ void SettingsScreen::on_start() {
   idx_rotate_display_ = idx_reader_rotate_display_ = idx_menu_font_ = -1;
   idx_font_ = idx_sleep_image_ = idx_sleep_text_ = idx_reader_images_ = -1;
   idx_battery_display_ = idx_sleep_timeout_ = idx_convert_all_ = idx_theme_ = -1;
-  idx_whats_new_ = idx_show_whats_new_ = -1;
 #ifdef MICROREADER_ENABLE_DEMOS
   idx_bouncing_ball_ = idx_grayscale_demo_ = -1;
 #endif
@@ -385,11 +381,6 @@ void SettingsScreen::on_start() {
   idx_convert_all_ = count();
   add_item("Convert All Books");
 
-  idx_whats_new_ = count();
-  add_item("What's New");
-
-  idx_show_whats_new_ = count();
-  add_item(get_show_whats_new_label(app_ ? app_->show_whats_new_on_update() : true));
 
 #ifdef ESP_PLATFORM
   if (app_ && app_->has_invalidate_font_fn()) {
@@ -708,18 +699,6 @@ void SettingsScreen::on_select(int index) {
   }
   if (index == idx_convert_all_) {
     if (app_) app_->push_screen(ScreenId::ConvertAll);
-    return;
-  }
-  if (index == idx_whats_new_) {
-    if (app_) app_->push_screen(ScreenId::WhatsNew);
-    return;
-  }
-  if (index == idx_show_whats_new_) {
-    if (app_) {
-      bool v = !app_->show_whats_new_on_update();
-      app_->set_show_whats_new_on_update(v);
-      set_item_label(idx_show_whats_new_, get_show_whats_new_label(v));
-    }
     return;
   }
   if (index == idx_sort_order_) {

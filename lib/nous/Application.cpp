@@ -113,11 +113,10 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   }
   pending_screen_.clear();
 
-  // Show What's New on first boot after a version update.
-  if (show_whats_new_on_update_ && last_seen_version_ != MICROREADER_VERSION) {
+  // Update last seen version silently (What's New screen removed).
+  if (last_seen_version_ != MICROREADER_VERSION) {
     last_seen_version_ = MICROREADER_VERSION;
     save_settings_();
-    screen_mgr_.push(&whats_new_, buf, runtime);
   }
 
   buf.full_refresh();
@@ -568,7 +567,6 @@ void microreader::Application::save_settings_() {
   std::fprintf(f, "sleep_timeout_min=%u\n", static_cast<unsigned>(sleep_timeout_min_));
   std::fprintf(f, "menu_theme=%u\n", static_cast<unsigned>(menu_theme_));
   std::fprintf(f, "sleep_text=%u\n", show_sleep_text_ ? 1u : 0u);
-  std::fprintf(f, "show_whats_new=%u\n", show_whats_new_on_update_ ? 1u : 0u);
   if (!last_seen_version_.empty())
     std::fprintf(f, "last_version=%s\n", last_seen_version_.c_str());
 
@@ -754,8 +752,6 @@ void microreader::Application::load_settings_() {
       menu_theme_ = static_cast<uint8_t>(uval <= 5 ? uval : 0);
     else if (std::sscanf(line, "sleep_text=%u", &uval) == 1)
       show_sleep_text_ = (uval != 0);
-    else if (std::sscanf(line, "show_whats_new=%u", &uval) == 1)
-      show_whats_new_on_update_ = (uval != 0);
     else if (std::sscanf(line, "last_version=%511[^\n]", sval) == 1)
       last_seen_version_ = sval;
   }
