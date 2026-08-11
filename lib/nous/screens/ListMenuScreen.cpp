@@ -102,7 +102,8 @@ void ListMenuScreen::start(DrawBuffer& buf, IRuntime& runtime) {
 int ListMenuScreen::nous_slot_h_() const {
   static constexpr int kPadT = 5, kGap = 3, kPadB = 6;
   if (!subtitle_font_.valid()) return ui_font_.y_advance() + kItemSpacing;
-  return kPadT + ui_font_.y_advance() + kGap + subtitle_font_.y_advance() + kPadB + 1;
+  const int sub_h = section_font_.valid() ? section_font_.y_advance() : subtitle_font_.y_advance();
+  return kPadT + ui_font_.y_advance() + kGap + sub_h + kPadB + 1;
 }
 
 int ListMenuScreen::nous_visible_from_(int scroll_off, int available_h) const {
@@ -585,7 +586,8 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
     static constexpr int kLM = 14, kRM = 12;
     static constexpr int kSepH = 8;
     const int title_h = ui_font_.y_advance();
-    const int sub_h = subtitle_font_.y_advance();
+    const BitmapFont& sub_font = section_font_.valid() ? section_font_ : subtitle_font_;
+    const int sub_h = sub_font.y_advance();
     const int slot_h = kPadT + title_h + kGap + sub_h + kPadB + 1;
     const int available_h = H - header_h - bottom_h;
 
@@ -661,27 +663,27 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
 
       // Subtitle line (author, setting value)
       if (!sub.empty()) {
-        const int sub_y = y + kPadT + title_h + kGap + subtitle_font_.baseline();
+        const int sub_y = y + kPadT + title_h + kGap + sub_font.baseline();
         const int max_sw = W - kLM - kRM - sb_reserved;
-        int sw = subtitle_font_.word_width(sub.data(), sub.size(), FontStyle::Regular);
+        int sw = sub_font.word_width(sub.data(), sub.size(), FontStyle::Regular);
         if (sw > max_sw) {
-          const int sel_ell_w = subtitle_font_.word_width(kEll, 3, FontStyle::Regular);
+          const int sel_ell_w = sub_font.word_width(kEll, 3, FontStyle::Regular);
           const int budget = max_sw - sel_ell_w;
           size_t fit = 0;
           const char* p = sub.data();
           while (*p) {
             const uint8_t b = static_cast<uint8_t>(*p);
             const size_t cb = b < 0x80 ? 1u : b < 0xE0 ? 2u : b < 0xF0 ? 3u : 4u;
-            if (subtitle_font_.word_width(sub.data(), fit + cb, FontStyle::Regular) > budget) break;
+            if (sub_font.word_width(sub.data(), fit + cb, FontStyle::Regular) > budget) break;
             fit += cb; p += cb;
           }
           const size_t cp = fit < 256 ? fit : 256;
           std::memcpy(trunc_buf, sub.data(), cp);
           std::memcpy(trunc_buf + cp, kEll, 3);
           trunc_buf[cp + 3] = '\0';
-          buf.draw_text_proportional(kLM, sub_y, trunc_buf, cp + 3, subtitle_font_, sel);
+          buf.draw_text_proportional(kLM, sub_y, trunc_buf, cp + 3, sub_font, sel);
         } else {
-          buf.draw_text_proportional(kLM, sub_y, sub.data(), sub.size(), subtitle_font_, sel);
+          buf.draw_text_proportional(kLM, sub_y, sub.data(), sub.size(), sub_font, sel);
         }
       }
 

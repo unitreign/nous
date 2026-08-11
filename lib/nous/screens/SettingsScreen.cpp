@@ -214,7 +214,7 @@ void SettingsScreen::on_start() {
   idx_switch_ota_ = idx_invalidate_font_ = idx_spiffs_ = -1;
   idx_invert_menu_ = idx_invert_bottom_paging_ = idx_invert_side_ = -1;
   idx_rotate_display_ = idx_reader_rotate_display_ = idx_menu_font_ = -1;
-  idx_font_ = idx_sleep_image_ = idx_sleep_text_ = idx_reader_images_ = -1;
+  idx_font_ = idx_sleep_image_ = idx_sleep_text_ = idx_reader_images_ = idx_sunlight_fading_ = -1;
   idx_battery_display_ = idx_sleep_timeout_ = idx_convert_all_ = idx_theme_ = -1;
 #ifdef MICROREADER_ENABLE_DEMOS
   idx_bouncing_ball_ = idx_grayscale_demo_ = -1;
@@ -318,6 +318,9 @@ void SettingsScreen::on_start() {
 
   idx_sleep_text_ = count();
   add_item(get_sleep_text_label(app_ ? app_->show_sleep_text() : true));
+
+  idx_sunlight_fading_ = count();
+  add_item(std::string("Sunlight Fading Fix: ") + (app_ && app_->sunlight_fading_fix() ? "On" : "Off"));
 
   if (!is_lyra_theme) {
     idx_battery_display_ = count();
@@ -675,6 +678,14 @@ void SettingsScreen::on_select(int index) {
       bool v = !app_->show_sleep_text();
       app_->set_show_sleep_text(v);
       set_item_label(idx_sleep_text_, get_sleep_text_label(v));
+    }
+    return;
+  }
+  if (index == idx_sunlight_fading_) {
+    if (app_) {
+      bool v = !app_->sunlight_fading_fix();
+      app_->set_sunlight_fading_fix(v);
+      set_item_label(idx_sunlight_fading_, std::string("Sunlight Fading Fix: ") + (v ? "On" : "Off"));
     }
     return;
   }

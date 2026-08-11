@@ -186,6 +186,9 @@ class Application {
   bool show_converted_indicator() const { return show_converted_indicator_; }
   void set_show_converted_indicator(bool v) { show_converted_indicator_ = v; save_settings_(); }
 
+  bool sunlight_fading_fix() const { return sunlight_fading_fix_; }
+  void set_sunlight_fading_fix(bool v) { sunlight_fading_fix_ = v; save_settings_(); }
+
   uint8_t battery_display() const { return battery_display_; }
   void set_battery_display(uint8_t v) { battery_display_ = v <= 2 ? v : 0; save_settings_(); }
 
@@ -358,6 +361,7 @@ class Application {
   bool show_converted_indicator_ = true;
   bool show_reader_images_ = true;
   bool show_sleep_text_ = true;
+  bool sunlight_fading_fix_ = false;
   uint8_t battery_display_ = 0;  // 0=icon, 1=number, 2=both
   uint8_t list_align_ = 0;       // 0=center, 1=left, 2=right
   uint8_t sleep_timeout_min_ = 10;  // 0=off, else minutes until auto-sleep

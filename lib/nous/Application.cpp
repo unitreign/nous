@@ -392,6 +392,7 @@ void Application::update(const ButtonState& buttons, uint32_t dt_ms, DrawBuffer&
   ++ticks_;
   uptime_ms_ += dt_ms;
   buttons_ = buttons;
+  buf.set_sunlight_fading_fix(sunlight_fading_fix_);
 
   // Inactivity / auto-sleep tracking
   if (buttons_.current != 0 || buttons_.pressed_latch != 0) {
@@ -561,6 +562,7 @@ void microreader::Application::save_settings_() {
   std::fprintf(f, "sleep_image_idx=%d\n", sleep_image_idx_);
   std::fprintf(f, "show_nav_arrows=%u\n", show_nav_arrows_ ? 1u : 0u);
   std::fprintf(f, "show_conv_ind=%u\n", show_converted_indicator_ ? 1u : 0u);
+  std::fprintf(f, "sunlight_fix=%u\n", sunlight_fading_fix_ ? 1u : 0u);
   std::fprintf(f, "show_reader_images=%u\n", show_reader_images_ ? 1u : 0u);
   std::fprintf(f, "battery_display=%u\n", static_cast<unsigned>(battery_display_));
   std::fprintf(f, "list_align=%u\n", static_cast<unsigned>(list_align_));
@@ -740,6 +742,8 @@ void microreader::Application::load_settings_() {
       show_nav_arrows_ = (uval != 0);
     else if (std::sscanf(line, "show_conv_ind=%u", &uval) == 1)
       show_converted_indicator_ = (uval != 0);
+    else if (std::sscanf(line, "sunlight_fix=%u", &uval) == 1)
+      sunlight_fading_fix_ = (uval != 0);
     else if (std::sscanf(line, "show_reader_images=%u", &uval) == 1)
       show_reader_images_ = (uval != 0);
     else if (std::sscanf(line, "battery_display=%u", &uval) == 1)

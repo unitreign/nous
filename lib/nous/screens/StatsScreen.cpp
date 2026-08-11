@@ -363,10 +363,12 @@ void StatsScreen::draw_content_(DrawBuffer& buf) const {
     }
 
     auto draw_kv = [&](int col, int top_y, const char* label, const char* value) {
-      const int x = kLM + col * col_w;
-      buf.draw_text_proportional(x, top_y + vf18.baseline(),
+      const int cx = kLM + col * col_w + col_w / 2;
+      const int lw = static_cast<int>(vf18.word_width(label, std::strlen(label), FontStyle::Regular));
+      const int vw = static_cast<int>(tf24.word_width(value, std::strlen(value), FontStyle::Regular));
+      buf.draw_text_proportional(cx - lw / 2, top_y + vf18.baseline(),
                                  label, std::strlen(label), vf18, false);
-      buf.draw_text_proportional(x, top_y + vf18.y_advance() + 3 + tf24.baseline(),
+      buf.draw_text_proportional(cx - vw / 2, top_y + vf18.y_advance() + 3 + tf24.baseline(),
                                  value, std::strlen(value), tf24, false);
     };
 
@@ -608,9 +610,11 @@ void GlobalStatsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> batter
     };
 
     auto draw_kv = [&](int col, int top_y, const char* label, const char* value) {
-      const int x = kLM + col * col_w;
-      buf.draw_text_proportional(x, top_y + vf18.baseline(), label, std::strlen(label), vf18, false);
-      buf.draw_text_proportional(x, top_y + vf18.y_advance() + 3 + tf24.baseline(),
+      const int cx = kLM + col * col_w + col_w / 2;
+      const int lw = static_cast<int>(vf18.word_width(label, std::strlen(label), FontStyle::Regular));
+      const int vw = static_cast<int>(tf24.word_width(value, std::strlen(value), FontStyle::Regular));
+      buf.draw_text_proportional(cx - lw / 2, top_y + vf18.baseline(), label, std::strlen(label), vf18, false);
+      buf.draw_text_proportional(cx - vw / 2, top_y + vf18.y_advance() + 3 + tf24.baseline(),
                                  value, std::strlen(value), tf24, false);
     };
 

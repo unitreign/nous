@@ -483,9 +483,12 @@ class DrawBuffer {
     display_.write_ram_red(inactive_());
   }
 
+  void set_sunlight_fading_fix(bool v) { sunlight_fading_fix_ = v; }
+  bool sunlight_fading_fix() const { return sunlight_fading_fix_; }
+
   // Trigger grayscale refresh (assumes BW/RED RAM already written).
   void grayscale_refresh(bool turnOffScreen = false) {
-    display_.grayscale_refresh(turnOffScreen);
+    display_.grayscale_refresh(turnOffScreen || sunlight_fading_fix_);
   }
 
   // Revert grayscale using the active (displayed) buffer as prev_pixels.
@@ -510,7 +513,7 @@ class DrawBuffer {
 
   // Call full hardware refresh using the current inactive buffer, then sync both.
   void full_refresh(RefreshMode mode = RefreshMode::Half, bool turnOffScreen = false) {
-    display_.full_refresh(inactive_(), mode, turnOffScreen);
+    display_.full_refresh(inactive_(), mode, turnOffScreen || sunlight_fading_fix_);
     memcpy(bufs_[active_idx_], bufs_[1 - active_idx_], kBufSize);
     active_idx_ = 1 - active_idx_;
     active_valid_ = true;
@@ -858,6 +861,7 @@ class DrawBuffer {
   int active_idx_ = 0;
   bool active_valid_ = true;  // false after reset_after_scratch(); restored by refresh()/full_refresh()
   Rotation rotation_ = Rotation::Deg90;
+  bool sunlight_fading_fix_ = false;
 
   uint8_t* inactive_() {
     return bufs_[1 - active_idx_];
