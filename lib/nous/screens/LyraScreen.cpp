@@ -61,16 +61,18 @@ void LyraScreen::on_start() {
   recent_title_.clear();
   recent_author_.clear();
   recent_path_.clear();
+  recent_progress_pct_ = 0;
 
   const StringPool& pool = BookIndex::instance().pool();
   uint32_t best_order = 0;
   for (const auto& e : BookIndex::instance().entries()) {
     if (e.last_open_order > best_order) {
       best_order = e.last_open_order;
-      recent_path_   = e.path.to_string(pool);
-      recent_title_  = std::string(e.title.view(pool));
-      recent_author_ = std::string(e.author.view(pool));
-      has_recent_    = true;
+      recent_path_          = e.path.to_string(pool);
+      recent_title_         = std::string(e.title.view(pool));
+      recent_author_        = std::string(e.author.view(pool));
+      recent_progress_pct_  = e.progress_pct;
+      has_recent_           = true;
     }
   }
 
@@ -83,6 +85,7 @@ void LyraScreen::on_start() {
     idx_recent_ = -1;
   }
   idx_all_books_    = i++; add_item("All Books");
+  idx_series_       = i++; add_item("Series");
   idx_recent_books_ = i++; add_item("Recent Books");
   idx_stats_        = i++; add_item("Stats");
   idx_settings_     = i++; add_item("Settings");
@@ -157,7 +160,7 @@ void LyraScreen::on_select(int index) {
     app_->ensure_cover_bin(recent_path_);
     app_->reader()->set_path(recent_path_.c_str());
     app_->push_screen(ScreenId::Reader);
-  } else if (index == idx_all_books_) {
+  } else if (index == idx_all_books_ || index == idx_series_) {
     app_->push_screen(ScreenId::MainMenu);
   } else if (index == idx_recent_books_) {
     app_->push_screen(ScreenId::RecentBooks);
@@ -290,7 +293,9 @@ void LyraScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) 
     const int text_max_w  = W - text_x - kPad;
 
     // Wrap title into lines, bold if supported.
-    const auto title_lines = wrap_text(recent_title_, ui_font_, text_max_w, FontStyle::Bold);
+    const std::string display_title = (recent_progress_pct_ >= 100)
+        ? recent_title_ + " (fin)" : recent_title_;
+    const auto title_lines = wrap_text(display_title, ui_font_, text_max_w, FontStyle::Bold);
     const int n_title = static_cast<int>(title_lines.size());
 
     // Text group height: all title lines + gap + author.
@@ -337,9 +342,23 @@ void LyraScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) 
 
   // ── Nav items (no dividers in Lyra theme) ────────────────────────────────
   const int nav_row_h = kNavPadV + ui_adv + kNavPadV;
+  const int text_y_off = kNavPadV + ui_font_.baseline();
+
+  // All Books | Series — split row
+  {
+    const int half = W / 2;
+    const bool sel_all    = (selected() == idx_all_books_);
+    const bool sel_series = (selected() == idx_series_);
+    if (sel_all)    buf.fill_rect(0,    y, half, nav_row_h, false);
+    if (sel_series) buf.fill_rect(half, y, half, nav_row_h, false);
+    buf.draw_text_proportional(kPad, y + text_y_off, "All Books", ui_font_, sel_all);
+    buf.draw_text_proportional(half + kPad, y + text_y_off, "Series", ui_font_, sel_series);
+    buf.fill_rect(half, y, 1, nav_row_h, false);  // divider
+    y += nav_row_h;
+  }
+
   struct NavItem { int idx; const char* label; };
   const NavItem nav[] = {
-    {idx_all_books_,    "All Books"},
     {idx_recent_books_, "Recent Books"},
     {idx_stats_,        "Stats"},
     {idx_settings_,     "Settings"},
@@ -349,7 +368,7 @@ void LyraScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) 
     const bool sel = (selected() == item.idx);
     if (sel)
       buf.fill_rect(0, y, W, nav_row_h, false);
-    buf.draw_text_proportional(kPad, y + kNavPadV + ui_font_.baseline(), item.label, ui_font_, sel);
+    buf.draw_text_proportional(kPad, y + text_y_off, item.label, ui_font_, sel);
     y += nav_row_h;
   }
 

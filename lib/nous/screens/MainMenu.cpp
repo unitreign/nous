@@ -203,21 +203,23 @@ std::string_view MainMenu::get_item_label(int index) const {
 
   auto title_sv  = e.title_ref.view(pool);
   auto fname_sv  = filename_sv(e.path);
+  const bool finished = (e.progress_pct >= 100);
+  const std::string fin_suffix = finished ? " (fin)" : "";
 
   if (list_format_ == BookListFormat::TitleOnly) {
-    if (!star) return title_sv;
-    if (stele) { label_buf_ = "\xc2\xb7 " + std::string(title_sv) + " \xc2\xb7"; return label_buf_; }
-    label_buf_ = chronicle ? std::string(title_sv) + " \xc2\xb7"
-                           : "* " + std::string(title_sv);
+    if (!star && !finished) return title_sv;
+    if (stele) { label_buf_ = "\xc2\xb7 " + std::string(title_sv) + fin_suffix + " \xc2\xb7"; return label_buf_; }
+    label_buf_ = chronicle ? std::string(title_sv) + fin_suffix + " \xc2\xb7"
+                           : "* " + std::string(title_sv) + fin_suffix;
     return label_buf_;
   } else if (list_format_ == BookListFormat::Filename) {
-    if (!star) return fname_sv;
-    if (stele) { label_buf_ = "\xc2\xb7 " + std::string(fname_sv) + " \xc2\xb7"; return label_buf_; }
-    label_buf_ = chronicle ? std::string(fname_sv) + " \xc2\xb7"
-                           : "* " + std::string(fname_sv);
+    if (!star && !finished) return fname_sv;
+    if (stele) { label_buf_ = "\xc2\xb7 " + std::string(fname_sv) + fin_suffix + " \xc2\xb7"; return label_buf_; }
+    label_buf_ = chronicle ? std::string(fname_sv) + fin_suffix + " \xc2\xb7"
+                           : "* " + std::string(fname_sv) + fin_suffix;
     return label_buf_;
   } else {
-    label_buf_ = std::string(title_sv) + " - " + std::string(e.author_ref.view(pool));
+    label_buf_ = std::string(title_sv) + fin_suffix + " - " + std::string(e.author_ref.view(pool));
     if (star) {
       if (stele) label_buf_ = "\xc2\xb7 " + label_buf_ + " \xc2\xb7";
       else if (!chronicle) label_buf_ = "* " + label_buf_;
@@ -305,6 +307,7 @@ void MainMenu::populate_list_() {
     e.author_ref = idx.author;
     e.last_open_order = idx.last_open_order;
     e.read_time_ms = idx.read_time_ms;
+    e.progress_pct = idx.progress_pct;
     if (check_mrb) {
       const char* name = e.path.c_str();
       const char* sep = std::strrchr(name, '/');
@@ -322,27 +325,34 @@ void MainMenu::populate_list_() {
     const auto fmt = list_format_;
     std::stable_sort(entries_.begin(), entries_.end(),
                      [&bpool, fmt](const BookEntry& a, const BookEntry& b) {
+                      const bool af = (a.progress_pct >= 100), bf = (b.progress_pct >= 100);
+                      if (af != bf) return !af;  // unfinished first
                       if (a.last_open_order != b.last_open_order)
                         return a.last_open_order > b.last_open_order;
                       if (fmt == BookListFormat::Filename)
                         return ci_less(filename_sv(a.path), filename_sv(b.path));
                       return ci_less(a.title_ref.view(bpool), b.title_ref.view(bpool));
                      });
-    // Find where recent books end (first entry never opened)
+    // Find where recent books end (first entry never opened or finished)
     int split = static_cast<int>(entries_.size());
     for (int i = 0; i < static_cast<int>(entries_.size()); ++i) {
-      if (entries_[i].last_open_order == 0) { split = i; break; }
+      if (entries_[i].last_open_order == 0 || entries_[i].progress_pct >= 100) { split = i; break; }
     }
     if (split > 0 && split < static_cast<int>(entries_.size())) {
-      // Anonymous divider line between recent and never-opened books
       separators_.push_back({split + sep_offset, ""});
     }
   } else if (list_format_ == BookListFormat::Filename) {
     std::stable_sort(entries_.begin(), entries_.end(),
-                      [](const BookEntry& a, const BookEntry& b) { return ci_less(filename_sv(a.path), filename_sv(b.path)); });
+                      [](const BookEntry& a, const BookEntry& b) {
+                        const bool af = (a.progress_pct >= 100), bf = (b.progress_pct >= 100);
+                        if (af != bf) return !af;
+                        return ci_less(filename_sv(a.path), filename_sv(b.path));
+                      });
   } else {
     std::stable_sort(entries_.begin(), entries_.end(),
                      [&bpool](const BookEntry& a, const BookEntry& b) {
+                        const bool af = (a.progress_pct >= 100), bf = (b.progress_pct >= 100);
+                        if (af != bf) return !af;
                         return ci_less(a.title_ref.view(bpool), b.title_ref.view(bpool));
                      });
   }

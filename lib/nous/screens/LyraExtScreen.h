@@ -45,6 +45,7 @@ class LyraExtScreen final : public ListMenuScreen {
 
   int idx_books_[kMaxBooks]  = {-1, -1, -1};
   int idx_all_books_         = -1;
+  int idx_series_            = -1;
   int idx_recent_books_      = -1;
   int idx_stats_             = -1;
   int idx_settings_          = -1;

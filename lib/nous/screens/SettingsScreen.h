@@ -59,9 +59,11 @@ class SettingsScreen final : public ListMenuScreen {
   int idx_switch_ota_ = -1;
   int idx_invalidate_font_ = -1;
   int idx_spiffs_ = -1;
-  int idx_invert_menu_ = -1;
-  int idx_invert_bottom_paging_ = -1;
+  int idx_invert_front_ = -1;
+  int idx_invert_front_reader_ = -1;
   int idx_invert_side_ = -1;
+  int idx_invert_side_reader_ = -1;
+  int idx_power_short_ = -1;
   int idx_rotate_display_ = -1;
   int idx_reader_rotate_display_ = -1;
   int idx_menu_font_ = -1;
@@ -88,7 +90,9 @@ class SettingsScreen final : public ListMenuScreen {
   // Generic popup picker for any multi-choice setting.
   bool picker_open_   = false;
   int  picker_sel_    = 0;
+  mutable int picker_scroll_ = 0;
   int  picker_target_ = -1;
+  mutable int picker_max_visible_ = 6;
   std::string picker_title_;
   std::vector<std::string> picker_options_;
 

@@ -409,9 +409,23 @@ void Application::update(const ButtonState& buttons, uint32_t dt_ms, DrawBuffer&
     }
   }
 
-  if (buttons_.is_pressed(Button::Power)) {
-    do_sleep_(buf);
-    return;
+  if (power_short_press_ == PowerShortPress::Disabled) {
+    if (buttons_.is_down(Button::Power)) {
+      power_held_ms_ += dt_ms;
+      if (!power_long_triggered_ && power_held_ms_ >= 800u) {
+        power_long_triggered_ = true;
+        do_sleep_(buf);
+        return;
+      }
+    } else {
+      power_held_ms_ = 0;
+      power_long_triggered_ = false;
+    }
+  } else {
+    if (buttons_.is_pressed(Button::Power)) {
+      do_sleep_(buf);
+      return;
+    }
   }
 
   IScreen* top = screen_mgr_.top();
@@ -549,6 +563,8 @@ void microreader::Application::save_settings_() {
   std::fprintf(f, "inv_menu=%u\n", invert_menu_buttons_ ? 1u : 0u);
   std::fprintf(f, "inv_bpage=%u\n", invert_bottom_paging_ ? 1u : 0u);
   std::fprintf(f, "inv_side=%u\n", invert_side_buttons_ ? 1u : 0u);
+  std::fprintf(f, "inv_side_menu=%u\n", invert_side_menu_ ? 1u : 0u);
+  std::fprintf(f, "pwr_short=%u\n", static_cast<unsigned>(power_short_press_));
   std::fprintf(f, "rotate_display=%u\n", static_cast<unsigned>(rotate_display_));
   std::fprintf(f, "rotate_reader=%u\n", static_cast<unsigned>(rotate_reader_));
   std::fprintf(f, "menu_font_size=%d\n", menu_font_size_);
@@ -724,6 +740,10 @@ void microreader::Application::load_settings_() {
       invert_bottom_paging_ = (uval != 0);
     else if (std::sscanf(line, "inv_side=%u", &uval) == 1)
       invert_side_buttons_ = (uval != 0);
+    else if (std::sscanf(line, "inv_side_menu=%u", &uval) == 1)
+      invert_side_menu_ = (uval != 0);
+    else if (std::sscanf(line, "pwr_short=%u", &uval) == 1)
+      power_short_press_ = (uval == 1) ? PowerShortPress::Disabled : PowerShortPress::TurnOff;
     else if (std::sscanf(line, "rotate_display=%u", &uval) == 1)
       rotate_display_ = static_cast<uint8_t>(uval <= 3 ? uval : 0);
     else if (std::sscanf(line, "rotate_reader=%u", &uval) == 1)

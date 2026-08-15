@@ -491,6 +491,11 @@ class DrawBuffer {
     display_.grayscale_refresh(turnOffScreen || sunlight_fading_fix_);
   }
 
+  // Trigger a one-pass grayscale refresh using the factory-quality LUT.
+  void grayscale_refresh_1pass(bool turnOffScreen = false) {
+    display_.grayscale_refresh_1pass(turnOffScreen || sunlight_fading_fix_);
+  }
+
   // Revert grayscale using the active (displayed) buffer as prev_pixels.
   void revert_grayscale() {
     display_.revert_grayscale(active_());

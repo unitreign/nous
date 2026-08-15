@@ -114,6 +114,8 @@ class ReaderScreen final : public IScreen {
   BitmapFontSet font_set_;                       // owned set (for single-font set_font() path)
   const BitmapFontSet* ext_font_set_ = nullptr;  // external set (from set_fonts())
   BitmapFont hint_font_;                         // UI font for nav-history button hints
+  BitmapFont dialog_font_;                       // UI large font for the Book Complete dialog title/body
+  BitmapFont dialog_hint_font_;                  // UI medium font for the Book Complete dialog hints
   std::string path_;
   std::string data_dir_;
   std::string book_cache_dir_;
@@ -160,6 +162,10 @@ class ReaderScreen final : public IScreen {
   bool grayscale_pending_ = false;
   bool grayscale_active_ = false;
   std::vector<PageLink> page_links_;
+  bool show_finished_dialog_ = false;
+  bool show_reopen_dialog_ = false;
+  int reopen_selected_ = 1;   // 0 = Start from beginning, 1 = Continue
+  int saved_progress_pct_ = 0;
 
   // Returns the filename stem of path_ (no directory, no extension).
   std::string book_stem_() const;
@@ -181,6 +187,11 @@ class ReaderScreen final : public IScreen {
   bool next_page_();
   bool prev_page_();
   void load_chapter_(size_t idx);
+  void handle_finished_dialog_(const ButtonState& buttons, DrawBuffer& buf);
+  void draw_finished_dialog_(DrawBuffer& buf);
+  void mark_book_finished_();
+  void handle_reopen_dialog_(const ButtonState& buttons, DrawBuffer& buf);
+  void draw_reopen_dialog_(DrawBuffer& buf);
   void tick_activity_();
   void save_position_();
   void load_position_();

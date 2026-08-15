@@ -119,6 +119,7 @@ class MainMenu final : public ListMenuScreen {
     StringRef author_ref;
     uint32_t last_open_order = 0;
     uint64_t read_time_ms = 0;
+    uint16_t progress_pct = 0;
     bool mrb_exists = false;
   };
   std::vector<BookEntry> entries_;

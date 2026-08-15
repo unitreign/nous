@@ -51,6 +51,9 @@ enum class ScreenId : uint8_t {
   Alert,
 };
 
+// Short-press power button action.
+enum class PowerShortPress : uint8_t { TurnOff = 0, Disabled = 1 };
+
 // Maps the rotate_display / rotate_reader setting value (0-3) to the DrawBuffer Rotation enum.
 // 0=Portrait(Deg90), 1=Landscape(Deg0), 2=Portrait-Flip(Deg270), 3=Landscape-Flip(Deg180)
 inline Rotation rotation_from_setting(uint8_t v) {
@@ -206,26 +209,20 @@ class Application {
   uint8_t sleep_timeout_min() const { return sleep_timeout_min_; }
   void set_sleep_timeout_min(uint8_t v) { sleep_timeout_min_ = v; save_settings_(); }
 
-  bool invert_menu_buttons() const {
-    return invert_menu_buttons_;
-  }
-  void set_invert_menu_buttons(bool v) {
-    invert_menu_buttons_ = v;
-  }
+  PowerShortPress power_short_press() const { return power_short_press_; }
+  void set_power_short_press(PowerShortPress v) { power_short_press_ = v; save_settings_(); }
 
-  bool invert_bottom_paging() const {
-    return invert_bottom_paging_;
-  }
-  void set_invert_bottom_paging(bool v) {
-    invert_bottom_paging_ = v;
-  }
+  bool invert_menu_buttons() const { return invert_menu_buttons_; }
+  void set_invert_menu_buttons(bool v) { invert_menu_buttons_ = v; save_settings_(); }
 
-  bool invert_side_buttons() const {
-    return invert_side_buttons_;
-  }
-  void set_invert_side_buttons(bool v) {
-    invert_side_buttons_ = v;
-  }
+  bool invert_bottom_paging() const { return invert_bottom_paging_; }
+  void set_invert_bottom_paging(bool v) { invert_bottom_paging_ = v; save_settings_(); }
+
+  bool invert_side_menu() const { return invert_side_menu_; }
+  void set_invert_side_menu(bool v) { invert_side_menu_ = v; save_settings_(); }
+
+  bool invert_side_buttons() const { return invert_side_buttons_; }
+  void set_invert_side_buttons(bool v) { invert_side_buttons_ = v; save_settings_(); }
 
   uint8_t rotate_display() const {
     return rotate_display_;
@@ -341,8 +338,13 @@ class Application {
 
   uint32_t inactivity_ms_ = 0;
 
+  PowerShortPress power_short_press_ = PowerShortPress::TurnOff;
+  uint32_t power_held_ms_ = 0;
+  bool power_long_triggered_ = false;
+
   bool invert_menu_buttons_ = false;
   bool invert_bottom_paging_ = true;
+  bool invert_side_menu_ = false;
   bool invert_side_buttons_ = false;
   uint8_t rotate_display_ = 0;  // 0=Portrait(Deg90), 1=Landscape(Deg0), 2=Portrait-Flip(Deg270), 3=Landscape-Flip(Deg180)
   uint8_t rotate_reader_ = 0;   // independent reader rotation, same encoding

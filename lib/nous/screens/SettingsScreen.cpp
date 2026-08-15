@@ -32,16 +32,20 @@ static constexpr const char* kTabNames[4] = {"Look", "Reader", "Control", "Syste
 // Label helpers
 // ---------------------------------------------------------------------------
 
-static std::string get_menu_nav_label(bool inverted) {
-  return std::string("Menu Nav: ") + (inverted ? "Right=Down" : "Right=Up");
+static std::string get_front_label(bool inv) {
+  return std::string("Front Buttons: ") + (inv ? "Inverted" : "Normal");
 }
-
-static std::string get_bottom_paging_label(bool inverted) {
-  return std::string("Bottom Paging: ") + (inverted ? "Right=Prev" : "Right=Next");
+static std::string get_front_reader_label(bool inv) {
+  return std::string("Front (Reader): ") + (inv ? "Inverted" : "Normal");
 }
-
-static std::string get_side_paging_label(bool inverted) {
-  return std::string("Side Paging: ") + (inverted ? "Top=Prev" : "Top=Next");
+static std::string get_side_label(bool inv) {
+  return std::string("Side Buttons: ") + (inv ? "Inverted" : "Normal");
+}
+static std::string get_side_reader_label(bool inv) {
+  return std::string("Side (Reader): ") + (inv ? "Inverted" : "Normal");
+}
+static std::string get_power_short_label(PowerShortPress v) {
+  return std::string("Power Button Short Press: ") + (v == PowerShortPress::TurnOff ? "Turn Off" : "Disabled");
 }
 
 static std::string get_sort_order_label(BookSortOrder order) {
@@ -107,12 +111,12 @@ static std::string get_battery_display_label(uint8_t mode) {
 }
 
 static std::string get_theme_label(uint8_t theme) {
-  if (theme == 0) return "Theme: Chronicle";
-  if (theme == 2) return "Theme: Stele";
-  if (theme == 3) return "Theme: Codex";
+  if (theme == 0) return "Theme: Chronicle (deprecated)";
+  if (theme == 2) return "Theme: Stele (deprecated)";
+  if (theme == 3) return "Theme: Codex (deprecated)";
   if (theme == 4) return "Theme: Lyra Like";
   if (theme == 5) return "Theme: Lyra Extended Like";
-  return "Theme: Minimal";
+  return "Theme: Minimal (deprecated)";
 }
 
 static std::string get_sleep_timeout_label(uint8_t min) {
@@ -212,7 +216,8 @@ void SettingsScreen::on_start() {
   // Reset all idx
   idx_clear_cache_ = idx_rebuild_index_ = idx_list_format_ = idx_sort_order_ = -1;
   idx_switch_ota_ = idx_invalidate_font_ = idx_spiffs_ = -1;
-  idx_invert_menu_ = idx_invert_bottom_paging_ = idx_invert_side_ = -1;
+  idx_invert_front_ = idx_invert_front_reader_ = -1;
+  idx_invert_side_ = idx_invert_side_reader_ = idx_power_short_ = -1;
   idx_rotate_display_ = idx_reader_rotate_display_ = idx_menu_font_ = -1;
   idx_font_ = idx_sleep_image_ = idx_sleep_text_ = idx_reader_images_ = idx_sunlight_fading_ = -1;
   idx_battery_display_ = idx_sleep_timeout_ = idx_convert_all_ = idx_theme_ = -1;
@@ -359,14 +364,20 @@ void SettingsScreen::on_start() {
   // ── Tab 2: Control ───────────────────────────────────────────────────────
   tab_start_[2] = count();
 
+  idx_invert_front_ = count();
+  add_item(get_front_label(app_ ? app_->invert_menu_buttons() : false));
+
+  idx_invert_front_reader_ = count();
+  add_item(get_front_reader_label(app_ ? app_->invert_bottom_paging() : true));
+
   idx_invert_side_ = count();
-  add_item(get_side_paging_label(app_ ? app_->invert_side_buttons() : false));
+  add_item(get_side_label(app_ ? app_->invert_side_menu() : false));
 
-  idx_invert_bottom_paging_ = count();
-  add_item(get_bottom_paging_label(app_ ? app_->invert_bottom_paging() : true));
+  idx_invert_side_reader_ = count();
+  add_item(get_side_reader_label(app_ ? app_->invert_side_buttons() : false));
 
-  idx_invert_menu_ = count();
-  add_item(get_menu_nav_label(app_ ? app_->invert_menu_buttons() : false));
+  idx_power_short_ = count();
+  add_item(get_power_short_label(app_ ? app_->power_short_press() : PowerShortPress::TurnOff));
 
   tab_end_[2] = count() - 1;
 
@@ -501,9 +512,13 @@ void SettingsScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntim
     while (buttons.next_press(btn)) {
       if (btn == btn_up || btn == Button::Up) {
         picker_sel_ = (picker_sel_ - 1 + n) % n;
+        if (picker_sel_ < picker_scroll_) picker_scroll_ = picker_sel_;
+        else if (picker_sel_ == n - 1) picker_scroll_ = std::max(0, n - picker_max_visible_);
         redraw = true;
       } else if (btn == btn_down || btn == Button::Down) {
         picker_sel_ = (picker_sel_ + 1) % n;
+        if (picker_sel_ == 0) picker_scroll_ = 0;
+        else if (picker_sel_ >= picker_scroll_ + picker_max_visible_) picker_scroll_ = picker_sel_ - picker_max_visible_ + 1;
         redraw = true;
       } else if (btn == Button::Button1) {
         apply_picker_(picker_sel_);
@@ -565,6 +580,7 @@ void SettingsScreen::open_picker_(const char* title, int target_idx, std::vector
   picker_target_  = target_idx;
   picker_options_ = std::move(opts);
   picker_sel_     = cur_sel;
+  picker_scroll_  = std::max(0, cur_sel - (picker_max_visible_ - 1));
   picker_open_    = true;
   request_redraw();
 }
@@ -634,6 +650,10 @@ void SettingsScreen::apply_picker_(int sel) {
       app_->set_custom_font_path(sd_fonts_[sel]);
       set_item_label(idx_font_, get_font_label(sd_fonts_[sel]));
     }
+  } else if (picker_target_ == idx_power_short_) {
+    auto v = (sel == 1) ? PowerShortPress::Disabled : PowerShortPress::TurnOff;
+    if (app_) app_->set_power_short_press(v);
+    set_item_label(idx_power_short_, get_power_short_label(v));
   } else if (picker_target_ == idx_sleep_image_) {
     if (sel >= 0 && sel < (int)sleep_images_.size()) {
       sleep_image_sel_idx_ = sel;
@@ -661,7 +681,8 @@ void SettingsScreen::on_select(int index) {
         if (kThemeOrder[i] == cur) { cur_sel = i; break; }
     }
     open_picker_("Select Theme", idx_theme_,
-      {"Minimal", "Chronicle", "Stele", "Codex", "Lyra Like", "Lyra Extended Like"},
+      {"Minimal (deprecated)", "Chronicle (deprecated)", "Stele (deprecated)",
+       "Codex (deprecated)", "Lyra Like", "Lyra Extended Like"},
       cur_sel);
     return;
   }
@@ -732,28 +753,41 @@ void SettingsScreen::on_select(int index) {
       {"Title Only", "Filename", "Title & Author"}, cur);
     return;
   }
-  if (index == idx_invert_menu_) {
+  if (index == idx_invert_front_) {
     if (app_) {
       bool v = !app_->invert_menu_buttons();
       app_->set_invert_menu_buttons(v);
-      set_item_label(idx_invert_menu_, get_menu_nav_label(v));
+      set_item_label(idx_invert_front_, get_front_label(v));
     }
     return;
   }
-  if (index == idx_invert_bottom_paging_) {
+  if (index == idx_invert_front_reader_) {
     if (app_) {
       bool v = !app_->invert_bottom_paging();
       app_->set_invert_bottom_paging(v);
-      set_item_label(idx_invert_bottom_paging_, get_bottom_paging_label(v));
+      set_item_label(idx_invert_front_reader_, get_front_reader_label(v));
     }
     return;
   }
   if (index == idx_invert_side_) {
     if (app_) {
+      bool v = !app_->invert_side_menu();
+      app_->set_invert_side_menu(v);
+      set_item_label(idx_invert_side_, get_side_label(v));
+    }
+    return;
+  }
+  if (index == idx_invert_side_reader_) {
+    if (app_) {
       bool v = !app_->invert_side_buttons();
       app_->set_invert_side_buttons(v);
-      set_item_label(idx_invert_side_, get_side_paging_label(v));
+      set_item_label(idx_invert_side_reader_, get_side_reader_label(v));
     }
+    return;
+  }
+  if (index == idx_power_short_) {
+    const int cur = static_cast<int>(app_ ? app_->power_short_press() : PowerShortPress::TurnOff);
+    open_picker_("Power Button", idx_power_short_, {"Turn Off", "Disabled"}, cur);
     return;
   }
   if (index == idx_rotate_display_) {
@@ -1052,22 +1086,40 @@ void SettingsScreen::draw_picker_(DrawBuffer& buf) const {
   const int n = static_cast<int>(picker_options_.size());
 
   static constexpr int kPickerPadH = 20;
+  static constexpr int kPickerPadV = 40;
   static constexpr int kRowPad     = 8;
   static constexpr int kTitlePad   = 8;
+  static constexpr int kScrollBarW = 6;
   const int row_h   = kRowPad + ui_font_.y_advance() + kRowPad;
   const int title_h = kTitlePad + ui_font_.y_advance() + kTitlePad;
-  const int popup_h = 1 + title_h + 1 + n * row_h + 1;
+
+  // Cap popup height to screen, derive max visible rows
+  const int max_popup_h = H - 2 * kPickerPadV;
+  const int max_vis = std::max(1, (max_popup_h - 1 - title_h - 1 - 1) / row_h);
+  picker_max_visible_ = max_vis;
+
+  // Clamp scroll so picker_sel_ stays in view
+  if (picker_sel_ < picker_scroll_) picker_scroll_ = picker_sel_;
+  if (picker_sel_ >= picker_scroll_ + max_vis) picker_scroll_ = picker_sel_ - max_vis + 1;
+  if (picker_scroll_ > n - max_vis) picker_scroll_ = std::max(0, n - max_vis);
+
+  const int vis     = std::min(max_vis, n - picker_scroll_);
+  const bool need_scroll = (n > max_vis);
+
+  const int popup_h = 1 + title_h + 1 + vis * row_h + 1;
   const int popup_x = kPickerPadH;
   const int popup_w = W - 2 * kPickerPadH;
   const int popup_y = std::max(0, (H - popup_h) / 2);
   const int text_x  = popup_x + 1 + 10;
 
+  // Background + border
   buf.fill_rect(popup_x, popup_y, popup_w, popup_h, true);
   buf.fill_rect(popup_x, popup_y, popup_w, 1, false);
   buf.fill_rect(popup_x, popup_y + popup_h - 1, popup_w, 1, false);
   buf.fill_rect(popup_x, popup_y, 1, popup_h, false);
   buf.fill_rect(popup_x + popup_w - 1, popup_y, 1, popup_h, false);
 
+  // Title
   int py = popup_y + 1;
   buf.draw_text_proportional(text_x, py + kTitlePad + ui_font_.baseline(),
                              picker_title_.c_str(), picker_title_.size(), ui_font_, false);
@@ -1075,15 +1127,27 @@ void SettingsScreen::draw_picker_(DrawBuffer& buf) const {
   buf.fill_rect(popup_x + 1, py, popup_w - 2, 1, false);
   py += 1;
 
-  for (int i = 0; i < n; ++i) {
-    const bool sel = (i == picker_sel_);
+  // Visible rows
+  for (int i = 0; i < vis; ++i) {
+    const int idx = picker_scroll_ + i;
+    const bool sel = (idx == picker_sel_);
     if (sel)
       buf.fill_rect(popup_x + 1, py, popup_w - 2, row_h, false);
     buf.draw_text_proportional(text_x, py + kRowPad + ui_font_.baseline(),
-                               picker_options_[i].c_str(), picker_options_[i].size(), ui_font_, sel);
+                               picker_options_[idx].c_str(), picker_options_[idx].size(), ui_font_, sel);
     py += row_h;
   }
-  buf.fill_rect(popup_x, popup_y + popup_h - 1, popup_w, 1, false);
+
+  // Scrollbar thumb on right edge
+  if (need_scroll) {
+    const int track_x = popup_x + popup_w - 1 - kScrollBarW;
+    const int track_y = popup_y + 1 + title_h + 1;
+    const int track_h = vis * row_h;
+    const int thumb_h = std::max(4, track_h * max_vis / n);
+    const int thumb_y = track_y + (track_h - thumb_h) * picker_scroll_ / std::max(1, n - max_vis);
+    buf.fill_rect(track_x, track_y, kScrollBarW, track_h, true);  // clear track
+    buf.fill_rect(track_x, thumb_y, kScrollBarW, thumb_h, false); // thumb
+  }
 }
 
 // ---------------------------------------------------------------------------

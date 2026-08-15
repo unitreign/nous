@@ -158,6 +158,7 @@ void LyraExtScreen::on_start() {
   // Fill remaining book indices with -1 (already set above).
 
   idx_all_books_    = item_idx++; add_item("All Books");
+  idx_series_       = item_idx++; add_item("Series");
   idx_recent_books_ = item_idx++; add_item("Recent Books");
   idx_stats_        = item_idx++; add_item("Stats");
   idx_settings_     = item_idx++; add_item("Settings");
@@ -189,7 +190,7 @@ void LyraExtScreen::on_select(int index) {
       return;
     }
   }
-  if (index == idx_all_books_)         app_->push_screen(ScreenId::MainMenu);
+  if (index == idx_all_books_ || index == idx_series_) app_->push_screen(ScreenId::MainMenu);
   else if (index == idx_recent_books_) app_->push_screen(ScreenId::RecentBooks);
   else if (index == idx_stats_)        app_->push_screen(ScreenId::GlobalStats);
   else if (index == idx_settings_)     app_->push_screen(ScreenId::Settings);
@@ -337,9 +338,23 @@ void LyraExtScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pc
 
   // ── Nav items ────────────────────────────────────────────────────────────
   const int nav_row_h = kNavPadV + ui_adv + kNavPadV;
+  const int text_y_off = kNavPadV + ui_font_.baseline();
+
+  // All Books | Series — split row
+  {
+    const int half = W / 2;
+    const bool sel_all    = (selected() == idx_all_books_);
+    const bool sel_series = (selected() == idx_series_);
+    if (sel_all)    buf.fill_rect(0,    y, half, nav_row_h, false);
+    if (sel_series) buf.fill_rect(half, y, half, nav_row_h, false);
+    buf.draw_text_proportional(kPad, y + text_y_off, "All Books", ui_font_, sel_all);
+    buf.draw_text_proportional(half + kPad, y + text_y_off, "Series", ui_font_, sel_series);
+    buf.fill_rect(half, y, 1, nav_row_h, false);  // divider
+    y += nav_row_h;
+  }
+
   struct NavItem { int idx; const char* label; };
   const NavItem nav[] = {
-    {idx_all_books_,    "All Books"},
     {idx_recent_books_, "Recent Books"},
     {idx_stats_,        "Stats"},
     {idx_settings_,     "Settings"},
@@ -349,7 +364,7 @@ void LyraExtScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pc
     const bool sel = (selected() == item.idx);
     if (sel)
       buf.fill_rect(0, y, W, nav_row_h, false);
-    buf.draw_text_proportional(kPad, y + kNavPadV + ui_font_.baseline(), item.label, ui_font_, sel);
+    buf.draw_text_proportional(kPad, y + text_y_off, item.label, ui_font_, sel);
     y += nav_row_h;
   }
 
