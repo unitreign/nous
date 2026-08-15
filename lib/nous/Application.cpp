@@ -565,6 +565,7 @@ void microreader::Application::save_settings_() {
   std::fprintf(f, "inv_side=%u\n", invert_side_buttons_ ? 1u : 0u);
   std::fprintf(f, "inv_side_menu=%u\n", invert_side_menu_ ? 1u : 0u);
   std::fprintf(f, "pwr_short=%u\n", static_cast<unsigned>(power_short_press_));
+  std::fprintf(f, "series_view=%u\n", series_view_enabled_ ? 1u : 0u);
   std::fprintf(f, "rotate_display=%u\n", static_cast<unsigned>(rotate_display_));
   std::fprintf(f, "rotate_reader=%u\n", static_cast<unsigned>(rotate_reader_));
   std::fprintf(f, "menu_font_size=%d\n", menu_font_size_);
@@ -744,6 +745,8 @@ void microreader::Application::load_settings_() {
       invert_side_menu_ = (uval != 0);
     else if (std::sscanf(line, "pwr_short=%u", &uval) == 1)
       power_short_press_ = (uval == 1) ? PowerShortPress::Disabled : PowerShortPress::TurnOff;
+    else if (std::sscanf(line, "series_view=%u", &uval) == 1)
+      series_view_enabled_ = (uval != 0);
     else if (std::sscanf(line, "rotate_display=%u", &uval) == 1)
       rotate_display_ = static_cast<uint8_t>(uval <= 3 ? uval : 0);
     else if (std::sscanf(line, "rotate_reader=%u", &uval) == 1)

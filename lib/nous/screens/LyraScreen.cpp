@@ -84,8 +84,12 @@ void LyraScreen::on_start() {
   } else {
     idx_recent_ = -1;
   }
-  idx_all_books_    = i++; add_item("All Books");
-  idx_series_       = i++; add_item("Series");
+  idx_all_books_ = i++; add_item("All Books");
+  if (app_ && app_->series_view_enabled()) {
+    idx_series_ = i++; add_item("Series");
+  } else {
+    idx_series_ = -1;
+  }
   idx_recent_books_ = i++; add_item("Recent Books");
   idx_stats_        = i++; add_item("Stats");
   idx_settings_     = i++; add_item("Settings");
@@ -344,16 +348,21 @@ void LyraScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) 
   const int nav_row_h = kNavPadV + ui_adv + kNavPadV;
   const int text_y_off = kNavPadV + ui_font_.baseline();
 
-  // All Books | Series — split row
+  // All Books row — split 50/50 with Series if enabled, else full width
   {
-    const int half = W / 2;
-    const bool sel_all    = (selected() == idx_all_books_);
-    const bool sel_series = (selected() == idx_series_);
-    if (sel_all)    buf.fill_rect(0,    y, half, nav_row_h, false);
-    if (sel_series) buf.fill_rect(half, y, half, nav_row_h, false);
-    buf.draw_text_proportional(kPad, y + text_y_off, "All Books", ui_font_, sel_all);
-    buf.draw_text_proportional(half + kPad, y + text_y_off, "Series", ui_font_, sel_series);
-    buf.fill_rect(half, y, 1, nav_row_h, false);  // divider
+    const bool sel_all = (selected() == idx_all_books_);
+    if (idx_series_ >= 0) {
+      const int half = W / 2;
+      const bool sel_series = (selected() == idx_series_);
+      if (sel_all)    buf.fill_rect(0,    y, half, nav_row_h, false);
+      if (sel_series) buf.fill_rect(half, y, half, nav_row_h, false);
+      buf.draw_text_proportional(kPad, y + text_y_off, "All Books", ui_font_, sel_all);
+      buf.draw_text_proportional(half + kPad, y + text_y_off, "Series", ui_font_, sel_series);
+      buf.fill_rect(half, y, 1, nav_row_h, false);
+    } else {
+      if (sel_all) buf.fill_rect(0, y, W, nav_row_h, false);
+      buf.draw_text_proportional(kPad, y + text_y_off, "All Books", ui_font_, sel_all);
+    }
     y += nav_row_h;
   }
 

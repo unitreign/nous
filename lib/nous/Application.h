@@ -212,6 +212,9 @@ class Application {
   PowerShortPress power_short_press() const { return power_short_press_; }
   void set_power_short_press(PowerShortPress v) { power_short_press_ = v; save_settings_(); }
 
+  bool series_view_enabled() const { return series_view_enabled_; }
+  void set_series_view_enabled(bool v) { series_view_enabled_ = v; save_settings_(); }
+
   bool invert_menu_buttons() const { return invert_menu_buttons_; }
   void set_invert_menu_buttons(bool v) { invert_menu_buttons_ = v; save_settings_(); }
 
@@ -341,6 +344,7 @@ class Application {
   PowerShortPress power_short_press_ = PowerShortPress::TurnOff;
   uint32_t power_held_ms_ = 0;
   bool power_long_triggered_ = false;
+  bool series_view_enabled_ = false;
 
   bool invert_menu_buttons_ = false;
   bool invert_bottom_paging_ = true;

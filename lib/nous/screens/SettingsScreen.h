@@ -64,6 +64,7 @@ class SettingsScreen final : public ListMenuScreen {
   int idx_invert_side_ = -1;
   int idx_invert_side_reader_ = -1;
   int idx_power_short_ = -1;
+  int idx_series_view_ = -1;
   int idx_rotate_display_ = -1;
   int idx_reader_rotate_display_ = -1;
   int idx_menu_font_ = -1;

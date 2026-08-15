@@ -110,6 +110,10 @@ static std::string get_battery_display_label(uint8_t mode) {
   return "Battery: Icon";
 }
 
+static std::string get_series_view_label(bool v) {
+  return std::string("Series View: ") + (v ? "Enabled" : "Disabled");
+}
+
 static std::string get_theme_label(uint8_t theme) {
   if (theme == 0) return "Theme: Chronicle (deprecated)";
   if (theme == 2) return "Theme: Stele (deprecated)";
@@ -218,7 +222,7 @@ void SettingsScreen::on_start() {
   idx_switch_ota_ = idx_invalidate_font_ = idx_spiffs_ = -1;
   idx_invert_front_ = idx_invert_front_reader_ = -1;
   idx_invert_side_ = idx_invert_side_reader_ = idx_power_short_ = -1;
-  idx_rotate_display_ = idx_reader_rotate_display_ = idx_menu_font_ = -1;
+  idx_series_view_ = idx_rotate_display_ = idx_reader_rotate_display_ = idx_menu_font_ = -1;
   idx_font_ = idx_sleep_image_ = idx_sleep_text_ = idx_reader_images_ = idx_sunlight_fading_ = -1;
   idx_battery_display_ = idx_sleep_timeout_ = idx_convert_all_ = idx_theme_ = -1;
 #ifdef MICROREADER_ENABLE_DEMOS
@@ -311,6 +315,11 @@ void SettingsScreen::on_start() {
   const uint8_t cur_theme = app_ ? app_->menu_theme() : 0;
   const bool is_lyra_theme = (cur_theme == static_cast<uint8_t>(MenuTheme::Lyra) ||
                                cur_theme == static_cast<uint8_t>(MenuTheme::LyraExt));
+
+  if (is_lyra_theme) {
+    idx_series_view_ = count();
+    add_item(get_series_view_label(app_ ? app_->series_view_enabled() : false));
+  }
 
   idx_rotate_display_ = count();
   add_item(get_rotate_menu_label(app_ ? app_->rotate_display() : 0));
@@ -671,6 +680,14 @@ void SettingsScreen::apply_picker_(int sel) {
 // ---------------------------------------------------------------------------
 
 void SettingsScreen::on_select(int index) {
+  if (index == idx_series_view_) {
+    if (app_) {
+      bool v = !app_->series_view_enabled();
+      app_->set_series_view_enabled(v);
+      set_item_label(idx_series_view_, get_series_view_label(v));
+    }
+    return;
+  }
   if (index == idx_theme_) {
     // Picker order: Minimal(1), Chronicle(0), Stele(2), Codex(3), Lyra(4), LyraExt(5)
     static constexpr uint8_t kThemeOrder[] = {1, 0, 2, 3, 4, 5};
