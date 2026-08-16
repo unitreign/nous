@@ -14,6 +14,8 @@ struct BookIndexEntry {
   StringRef path{};
   StringRef title{};
   StringRef author{};
+  StringRef series{};            // calibre:series name; empty = not yet scanned or no series
+  float series_index = 0.0f;    // calibre:series_index volume number (0 = unknown)
   uint32_t last_open_order = 0;  // 0 = never opened; higher = more recently opened
   uint64_t read_time_ms = 0;     // cumulative reading time in milliseconds
   uint32_t times_opened = 0;     // total times the book was opened
@@ -42,6 +44,13 @@ class BookIndex {
 
   const std::vector<BookIndexEntry>& entries() const { return entries_; }
   const StringPool& pool() const { return pool_; }
+
+  // Number of entries whose series field has been scanned (0 = needs full scan).
+  uint32_t scanned_count() const { return scanned_count_; }
+
+  // Scan unscanned entries for calibre:series metadata and save the index.
+  // show_progress=true shows a fullscreen loading bar; false keeps the caller's UI intact.
+  void scan_series(const std::string& index_path, DrawBuffer& buf, bool show_progress = true);
 
   // Bumped on every logical mutation (index_file / remove_path / rename_in_place /
   // build_index). MainMenu caches this to detect external changes. load() does not
@@ -85,6 +94,7 @@ class BookIndex {
   std::vector<BookIndexEntry> entries_;
   StringPool pool_;
   uint64_t generation_ = 0;
+  uint32_t scanned_count_ = 0;
   BookIndex() = default;
 
   // Loads from index_path if entries_ is empty, preventing .dat truncation

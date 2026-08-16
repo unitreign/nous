@@ -24,6 +24,7 @@ class SettingsScreen final : public ListMenuScreen {
   void update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& runtime) override;
 
   std::string_view get_item_subtitle(int index) const override;
+  bool uses_label_value_split() const override { return true; }
   void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const override;
   bool is_item_focusable(int index) const override;
   int get_visible_count_(int H, int scroll_off) const override;

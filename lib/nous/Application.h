@@ -23,6 +23,8 @@
 #include "screens/SettingsScreen.h"
 #include "screens/StatsScreen.h"
 #include "screens/AlertScreen.h"
+#include "screens/SeriesBookListScreen.h"
+#include "screens/SeriesListScreen.h"
 #include "screens/WhatsNewScreen.h"
 #include "screens/demo/BouncingBallDemo.h"
 #include "screens/demo/GrayscaleDemo.h"
@@ -49,6 +51,8 @@ enum class ScreenId : uint8_t {
   BouncingBall,
   GrayscaleDemo,
   Alert,
+  SeriesList,
+  SeriesBookList,
 };
 
 // Short-press power button action.
@@ -169,6 +173,12 @@ class Application {
   }
   ConvertAllScreen* convert_all_screen() {
     return &convert_all_;
+  }
+  SeriesListScreen* series_list_screen() {
+    return &series_list_;
+  }
+  SeriesBookListScreen* series_book_list_screen() {
+    return &series_book_list_;
   }
   StatsScreen* stats_screen() {
     return &stats_;
@@ -389,6 +399,8 @@ class Application {
   StatsScreen stats_;
   GlobalStatsScreen global_stats_;
   HiddenBooksMenu hidden_books_;
+  SeriesListScreen series_list_;
+  SeriesBookListScreen series_book_list_;
   WhatsNewScreen whats_new_;
   AlertScreen alert_;
   bool font_warning_shown_ = false;

@@ -159,6 +159,8 @@ struct EpubMetadata {
   std::optional<std::string> author;
   std::optional<std::string> language;
   std::optional<std::string> cover_id;
+  std::optional<std::string> series;
+  std::optional<float> series_index;  // calibre:series_index (volume number)
 };
 
 // ---------------------------------------------------------------------------

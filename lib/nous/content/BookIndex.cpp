@@ -76,6 +76,7 @@ bool BookIndex::load(const std::string& index_file) {
 
   entries_.clear();
   pool_.reset();
+  scanned_count_ = 0;
 
   char line[1024];
   bool first_line = true;
@@ -87,6 +88,8 @@ bool BookIndex::load(const std::string& index_file) {
         uint32_t v = static_cast<uint32_t>(std::strtoul(line + 20, nullptr, 10));
         if (v != INDEX_FORMAT_VERSION)
           needs_rebuild = true;
+        const char* sc = std::strstr(line, " scanned=");
+        if (sc) scanned_count_ = static_cast<uint32_t>(std::strtoul(sc + 9, nullptr, 10));
         continue;
       } else {
         needs_rebuild = true;
@@ -114,8 +117,8 @@ bool BookIndex::load(const std::string& index_file) {
       continue;
     *sep2 = '\0';
 
-    // Optional fields 4-11: last_open_order, read_time_ms, times_opened, page_turns,
-    //                        progress_pct, chapter_count, time_left_ms, total_chars
+    // Optional fields 4-12: last_open_order, read_time_ms, times_opened, page_turns,
+    //                        progress_pct, chapter_count, time_left_ms, total_chars, series
     uint32_t order = 0;
     uint64_t read_time_ms = 0;
     uint32_t times_opened = 0;
@@ -124,6 +127,8 @@ bool BookIndex::load(const std::string& index_file) {
     uint16_t chapter_count = 0;
     uint64_t time_left_ms = 0;
     uint32_t total_chars = 0;
+    const char* series_str = nullptr;
+    float series_index_val = 0.0f;
     char* sep3 = std::strchr(sep2 + 1, '|');
     if (sep3) {
       *sep3 = '\0';
@@ -154,7 +159,14 @@ bool BookIndex::load(const std::string& index_file) {
                   time_left_ms = static_cast<uint64_t>(std::strtoull(sep9 + 1, nullptr, 10));
                   char* sep10 = std::strchr(sep9 + 1, '|');
                   if (sep10) {
+                    *sep10 = '\0';
                     total_chars = static_cast<uint32_t>(std::strtoul(sep10 + 1, nullptr, 10));
+                    char* sep11 = std::strchr(sep10 + 1, '|');
+                    if (sep11) {
+                      series_str = sep11 + 1;
+                      char* sep12 = std::strchr(sep11 + 1, '|');
+                      if (sep12) series_index_val = std::strtof(sep12 + 1, nullptr);
+                    }
                   }
                 }
               }
@@ -165,6 +177,9 @@ bool BookIndex::load(const std::string& index_file) {
     }
     add_entry(line, sep1 + 1, sep2 + 1, order, read_time_ms, times_opened, page_turns,
               progress_pct, chapter_count, time_left_ms, total_chars);
+    if (series_str && series_str[0] != '\0')
+      entries_.back().series = pool_.add(std::string_view(series_str));
+    entries_.back().series_index = series_index_val;
   }
 
   std::fclose(f);
@@ -179,13 +194,15 @@ bool BookIndex::save(const std::string& index_file) const {
   if (!f)
     return false;
 
-  std::fprintf(f, "#microreader-index v%lu\n", (unsigned long)INDEX_FORMAT_VERSION);
+  std::fprintf(f, "#microreader-index v%lu scanned=%lu\n",
+               (unsigned long)INDEX_FORMAT_VERSION, (unsigned long)scanned_count_);
 
   for (const auto& entry : entries_) {
-    auto path_v = entry.path.view(pool_);
-    auto title_v = entry.title.view(pool_);
+    auto path_v   = entry.path.view(pool_);
+    auto title_v  = entry.title.view(pool_);
     auto author_v = entry.author.view(pool_);
-    std::fprintf(f, "%.*s|%.*s|%.*s|%u|%llu|%u|%u|%u|%u|%llu|%u\n",
+    auto series_v = entry.series.view(pool_);
+    std::fprintf(f, "%.*s|%.*s|%.*s|%u|%llu|%u|%u|%u|%u|%llu|%u|%.*s|%.6g\n",
                  static_cast<int>(path_v.size()), path_v.data(),
                  static_cast<int>(title_v.size()), title_v.data(),
                  static_cast<int>(author_v.size()), author_v.data(),
@@ -196,7 +213,9 @@ bool BookIndex::save(const std::string& index_file) const {
                  static_cast<unsigned>(entry.progress_pct),
                  static_cast<unsigned>(entry.chapter_count),
                  static_cast<unsigned long long>(entry.time_left_ms),
-                 static_cast<unsigned>(entry.total_chars));
+                 static_cast<unsigned>(entry.total_chars),
+                 static_cast<int>(series_v.size()), series_v.data(),
+                 static_cast<double>(entry.series_index));
   }
 
   if (std::fclose(f) != 0) {
@@ -219,6 +238,7 @@ void BookIndex::clear_entries() {
   { std::vector<BookIndexEntry> tmp; entries_.swap(tmp); }
   pool_.reset();
   generation_ = 0;
+  scanned_count_ = 0;
 }
 
 void BookIndex::ensure_loaded_(const std::string& index_path) {
@@ -329,6 +349,7 @@ void BookIndex::build_index(const std::string& root_dir, DrawBuffer& buf) {
 
   entries_.clear();
   pool_.reset();
+  scanned_count_ = 0;
   buf.show_loading("Scanning...", 0);
   // Process epub files as we find them to avoid storing all paths in memory.
   int done = 0;
@@ -349,6 +370,8 @@ void BookIndex::build_index(const std::string& root_dir, DrawBuffer& buf) {
       auto meta = book.metadata();
       const std::string author = meta.author.value_or("");
       add_entry(path, meta.title, author);
+      if (meta.series_index.has_value())
+        entries_.back().series_index = *meta.series_index;
       const std::string key = std::string(meta.title) + '\x01' + author;
       for (const auto& old : old_stats) {
         if (old.key == key) {
@@ -425,6 +448,34 @@ void BookIndex::build_index(const std::string& root_dir, DrawBuffer& buf) {
 
   if (done > 0)
     buf.show_loading("Indexing...", 100);
+}
+
+void BookIndex::scan_series(const std::string& index_path, DrawBuffer& buf, bool show_progress) {
+  const uint32_t total = static_cast<uint32_t>(entries_.size());
+  if (scanned_count_ >= total) return;
+
+  Book book;
+  for (uint32_t i = scanned_count_; i < total; ++i) {
+    if (show_progress) {
+      const int pct = total > 0 ? static_cast<int>(i * 100 / total) : 0;
+      buf.show_loading("Reading series info...", pct);
+    }
+
+    const std::string path = entries_[i].path.to_string(pool_);
+    book.close();
+    if (book.open(path.c_str(), buf.scratch_buf1(), buf.scratch_buf2(), false) == EpubError::Ok) {
+      auto meta = book.metadata();
+      if (meta.series.has_value() && !meta.series->empty())
+        entries_[i].series = pool_.add(std::string_view(*meta.series));
+      if (meta.series_index.has_value())
+        entries_[i].series_index = *meta.series_index;
+    }
+    book.close();
+    ++scanned_count_;
+  }
+
+  ++generation_;
+  save(index_path);
 }
 
 }  // namespace microreader

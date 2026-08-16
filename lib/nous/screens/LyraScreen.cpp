@@ -164,8 +164,10 @@ void LyraScreen::on_select(int index) {
     app_->ensure_cover_bin(recent_path_);
     app_->reader()->set_path(recent_path_.c_str());
     app_->push_screen(ScreenId::Reader);
-  } else if (index == idx_all_books_ || index == idx_series_) {
+  } else if (index == idx_all_books_) {
     app_->push_screen(ScreenId::MainMenu);
+  } else if (index == idx_series_) {
+    app_->push_screen(ScreenId::SeriesList);
   } else if (index == idx_recent_books_) {
     app_->push_screen(ScreenId::RecentBooks);
   } else if (index == idx_stats_) {

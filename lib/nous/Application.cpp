@@ -57,6 +57,8 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   stats_.set_app(this);
   global_stats_.set_app(this);
   hidden_books_.set_app(this);
+  series_list_.set_app(this);
+  series_book_list_.set_app(this);
   whats_new_.set_app(this);
 
 #ifdef MICROREADER_ENABLE_DEMOS
@@ -496,6 +498,10 @@ IScreen* microreader::Application::screen_for_(ScreenId id) {
       return &whats_new_;
     case ScreenId::Alert:
       return &alert_;
+    case ScreenId::SeriesList:
+      return &series_list_;
+    case ScreenId::SeriesBookList:
+      return &series_book_list_;
 
 #ifdef MICROREADER_ENABLE_DEMOS
     case ScreenId::BouncingBall:

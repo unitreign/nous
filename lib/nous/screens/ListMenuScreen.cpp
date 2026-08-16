@@ -619,9 +619,11 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
       const std::string_view sub = get_item_subtitle(i);
       const std::string_view right_txt = get_item_right(i);
 
-      // For settings screens: strip ": value" from label (shown in subtitle)
+      // Settings screens store "Key: Value" as the label; strip the value part
+      // so only the key is shown as the title (value appears in the subtitle).
+      // Book-list screens must NOT do this — book titles may contain ": ".
       std::string_view display_label = label;
-      if (!sub.empty()) {
+      if (!sub.empty() && uses_label_value_split()) {
         const auto pos = label.find(": ");
         if (pos != std::string_view::npos)
           display_label = label.substr(0, pos);
@@ -743,9 +745,9 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
       std::string_view label = get_item_label(i);
       const std::string_view sub = get_item_subtitle(i);
 
-      // For settings screens: strip ": value" portion
+      // Settings screens only: strip ": value" from label (shown in subtitle).
       std::string_view display_label = label;
-      if (!sub.empty()) {
+      if (!sub.empty() && uses_label_value_split()) {
         const auto pos = label.find(": ");
         if (pos != std::string_view::npos)
           display_label = label.substr(0, pos);

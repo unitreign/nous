@@ -146,6 +146,11 @@ class ListMenuScreen : public IScreen {
   // Default returns empty (no subtitle). Override per screen.
   virtual std::string_view get_item_subtitle(int index) const { return {}; }
 
+  // Settings screens store "Key: Value" as the label and show the value as the
+  // subtitle. Override to true so the draw code strips ": Value" from the display
+  // label. Book-list screens must NOT override this (their titles contain ":").
+  virtual bool uses_label_value_split() const { return false; }
+
   // Chronicle theme: right-aligned text on the title line (e.g. read time, "–").
   // Default returns empty (no right column). Override per screen.
   virtual std::string_view get_item_right(int index) const { return {}; }

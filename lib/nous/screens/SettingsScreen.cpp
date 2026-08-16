@@ -854,7 +854,10 @@ void SettingsScreen::on_select(int index) {
       buf_->sync_bw_ram();
       BookIndex::instance().load(index_path);
       BookIndex::instance().build_index(root_dir, *buf_);
-      BookIndex::instance().save(index_path);
+      if (app_->series_view_enabled())
+        BookIndex::instance().scan_series(index_path, *buf_);
+      else
+        BookIndex::instance().save(index_path);
       buf_->reset_after_scratch(true);
       app_->pop_screen();
     }

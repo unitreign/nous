@@ -485,29 +485,53 @@ EpubError Epub::parse_opf(IZipFile& file, const std::string& opf_path, uint8_t* 
       // Handle elements per section
       if (section == Section::Metadata) {
         if (sv_eq(ev.name, "dc:title") || sv_eq(ev.name, "title")) {
+          std::string accum;
           XmlEvent text;
-          if (reader.next_event(text) == XmlError::Ok && text.type == XmlEventType::Text) {
-            if (metadata_.title.empty())
-              metadata_.title = normalize_whitespace(sv_to_string(text.content));
-          }
+          while (reader.next_event(text) == XmlError::Ok && text.type == XmlEventType::Text)
+            accum += sv_to_string(text.content);
+          if (metadata_.title.empty() && !accum.empty())
+            metadata_.title = normalize_whitespace(accum);
         } else if (sv_eq(ev.name, "dc:creator") || sv_eq(ev.name, "creator")) {
+          std::string accum;
           XmlEvent text;
-          if (reader.next_event(text) == XmlError::Ok && text.type == XmlEventType::Text) {
-            if (!metadata_.author.has_value())
-              metadata_.author = normalize_whitespace(sv_to_string(text.content));
-          }
+          while (reader.next_event(text) == XmlError::Ok && text.type == XmlEventType::Text)
+            accum += sv_to_string(text.content);
+          if (!metadata_.author.has_value() && !accum.empty())
+            metadata_.author = normalize_whitespace(accum);
         } else if (sv_eq(ev.name, "dc:language") || sv_eq(ev.name, "language")) {
+          std::string accum;
           XmlEvent text;
-          if (reader.next_event(text) == XmlError::Ok && text.type == XmlEventType::Text) {
-            if (!metadata_.language.has_value())
-              metadata_.language = normalize_whitespace(sv_to_string(text.content));
-          }
+          while (reader.next_event(text) == XmlError::Ok && text.type == XmlEventType::Text)
+            accum += sv_to_string(text.content);
+          if (!metadata_.language.has_value() && !accum.empty())
+            metadata_.language = normalize_whitespace(accum);
         } else if (sv_eq(ev.name, "meta")) {
           auto name = ev.attrs.get("name");
+          auto content = ev.attrs.get("content");
+          auto property = ev.attrs.get("property");
           if (sv_eq(name, "cover")) {
-            auto content = ev.attrs.get("content");
-            if (!content.empty()) {
+            if (!content.empty())
               metadata_.cover_id = sv_to_string(content);
+          } else if (sv_eq(name, "calibre:series")) {
+            if (!content.empty() && !metadata_.series.has_value())
+              metadata_.series = sv_to_string(content);
+          } else if (sv_eq(name, "calibre:series_index")) {
+            if (!content.empty() && !metadata_.series_index.has_value()) {
+              const std::string s = sv_to_string(content);
+              char* end;
+              const float val = std::strtof(s.c_str(), &end);
+              if (end != s.c_str())
+                metadata_.series_index = val;
+            }
+          } else if (sv_eq(property, "belongs-to-collection")) {
+            // EPUB3 series name is in the text content of this element.
+            if (!metadata_.series.has_value()) {
+              std::string accum;
+              XmlEvent text;
+              while (reader.next_event(text) == XmlError::Ok && text.type == XmlEventType::Text)
+                accum += sv_to_string(text.content);
+              if (!accum.empty())
+                metadata_.series = normalize_whitespace(accum);
             }
           }
         }
