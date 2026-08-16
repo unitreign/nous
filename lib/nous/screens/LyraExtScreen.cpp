@@ -176,6 +176,10 @@ void LyraExtScreen::on_start() {
       if (chk) {
         std::fclose(chk);
         load_cover_(i);
+        const std::string sleep_path = cover_sleep_bin_path(s.path.c_str(), app_->data_dir_);
+        FILE* schk = std::fopen(sleep_path.c_str(), "rb");
+        if (schk) std::fclose(schk);
+        else s.cover_needs_extract = true;
       } else {
         s.cover_needs_extract = true;
       }
@@ -206,7 +210,7 @@ void LyraExtScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime
   for (int i = 0; i < num_books_; ++i) {
     if (slots_[i].cover_needs_extract) {
       slots_[i].cover_needs_extract = false;
-      if (app_) app_->ensure_cover_bin(slots_[i].path);
+      if (app_) app_->ensure_cover_bin(slots_[i].path, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize);
       load_cover_(i);
       request_redraw();
       return;
