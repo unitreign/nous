@@ -166,20 +166,14 @@ function buildNewOtaSector(existing, newSeq) {
 // --- Firmware download ---
 
 export async function fetchNousFirmware(onStatus) {
-  if (onStatus) onStatus('Fetching latest release info…');
-  const meta = await fetch('https://api.github.com/repos/unitreign/nous/releases/latest').then(r => {
-    if (!r.ok) throw new Error(`GitHub API error: ${r.status}`);
-    return r.json();
-  });
-  const asset = meta.assets?.find(a => a.name.endsWith('.bin'));
-  if (!asset) throw new Error('No .bin file found in the latest release.');
-  if (onStatus) onStatus(`Downloading ${asset.name} (${(asset.size / 1024).toFixed(0)} KB)…`);
-  // Use the asset API endpoint with Accept: application/octet-stream — this has
-  // proper CORS headers, unlike the github.com/releases/download redirect URL.
-  const res = await fetch(`https://api.github.com/repos/unitreign/nous/releases/assets/${asset.id}`, {
-    headers: { 'Accept': 'application/octet-stream' },
-  });
+  if (onStatus) onStatus('Downloading firmware…');
+  // /api/firmware is a Vercel serverless function that proxies the GitHub
+  // release download server-side, bypassing GitHub's missing CORS headers.
+  const res = await fetch('/api/firmware');
   if (!res.ok) throw new Error(`Firmware download failed: ${res.status}`);
+  const name = res.headers.get('X-Firmware-Name') || 'nous.bin';
+  const version = res.headers.get('X-Firmware-Version') || '';
+  if (onStatus) onStatus(`Downloaded ${name}${version ? ` (${version})` : ''}…`);
   return new Uint8Array(await res.arrayBuffer());
 }
 

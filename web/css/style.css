@@ -374,6 +374,8 @@ footer {
   line-height: 1.7;
   margin-bottom: 16px;
 }
+.modal-body a { color: var(--ink); border-bottom: 1px solid var(--ink); padding-bottom: 1px; }
+.modal-body a:hover { color: var(--brown); border-color: var(--brown); }
 .modal-body code {
   background: var(--soft);
   padding: 1px 5px;
