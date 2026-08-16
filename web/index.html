@@ -101,6 +101,34 @@
   .feature-name { font-size: 15px; }
   .feature-description { font-family: "DM Mono", monospace; font-size: 11px; color: var(--muted); line-height: 1.6; }
 
+  /* ── Also section ── */
+  .also-section {
+    border-top: 1px solid var(--line);
+    padding: 22px 0 0;
+    margin-top: 0;
+  }
+  .also-label {
+    font-family: "DM Mono", monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .09em;
+    margin-bottom: 14px;
+  }
+  .also-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .also-grid span {
+    font-family: "DM Mono", monospace;
+    font-size: 10px;
+    color: var(--muted);
+    background: var(--soft);
+    padding: 5px 10px;
+    border: 1px solid var(--line);
+  }
+
   /* ── Mid ── */
   .mid {
     max-width: 980px;
@@ -316,48 +344,76 @@
   <section class="feature-section" id="features">
     <div class="section-top">
       <div class="section-title">Features</div>
-      <div class="section-number">8 included</div>
     </div>
     <div class="features">
       <div class="feature">
         <div class="feature-no">01</div>
         <div class="feature-name">Fast start</div>
-        <div class="feature-description">Powers on and opens to your library in under 1.5 seconds.</div>
+        <div class="feature-description">Powers on and opens to your library in under 1.5 seconds. No splash screen.</div>
       </div>
       <div class="feature">
         <div class="feature-no">02</div>
+        <div class="feature-name">Near-instant pages</div>
+        <div class="feature-description">Page turns and book opens happen in under a second. Refresh is tuned to keep the gap as short as possible.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-no">03</div>
         <div class="feature-name">Flat library</div>
         <div class="feature-description">Drop books anywhere on the SD card. No folder structure required.</div>
       </div>
       <div class="feature">
-        <div class="feature-no">03</div>
+        <div class="feature-no">04</div>
         <div class="feature-name">Series view</div>
         <div class="feature-description">Groups books by series automatically. Navigate volumes in order.</div>
       </div>
       <div class="feature">
-        <div class="feature-no">04</div>
-        <div class="feature-name">Quick pages</div>
-        <div class="feature-description">Display refresh tuned to keep the gap between pages as short as possible.</div>
-      </div>
-      <div class="feature">
         <div class="feature-no">05</div>
-        <div class="feature-name">Button remapping</div>
-        <div class="feature-description">Assign any action to any button. Fully configurable from settings.</div>
+        <div class="feature-name">Button controls</div>
+        <div class="feature-description">Front and side button directions toggle independently for menus and while reading. Power button behaviour is also configurable.</div>
       </div>
       <div class="feature">
         <div class="feature-no">06</div>
-        <div class="feature-name">Hidden shelf</div>
-        <div class="feature-description">Hold back for three seconds to open a private library. Books live in <span style="font-family:'DM Mono',monospace;font-size:7px">.hidden</span> on the SD card.</div>
+        <div class="feature-name">Stats</div>
+        <div class="feature-description">Per-book and library-wide stats: reading time, time remaining, pages per minute, session count, and more.</div>
       </div>
       <div class="feature">
         <div class="feature-no">07</div>
+        <div class="feature-name">Hidden shelf</div>
+        <div class="feature-description">Hold back for three seconds to open a private library. Books live in <span style="font-family:'DM Mono',monospace;font-size:10px">.hidden</span> on the SD card.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-no">08</div>
         <div class="feature-name">EPUB reader</div>
         <div class="feature-description">Custom fonts, margins, and line spacing. Handles varied EPUB formatting.</div>
       </div>
       <div class="feature">
-        <div class="feature-no">08</div>
+        <div class="feature-no">09</div>
+        <div class="feature-name">Picks up where you left off</div>
+        <div class="feature-description">Turn off while reading and the device returns to that exact page next time.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-no">10</div>
+        <div class="feature-name">Custom sleep screen</div>
+        <div class="feature-description">Set your own image as the screen shown when the device is asleep.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-no">11</div>
         <div class="feature-name">Stripped down</div>
         <div class="feature-description">No wireless, no telemetry. Fewer moving parts means fewer things to slow it down.</div>
+      </div>
+    </div>
+
+    <div class="also-section">
+      <div class="also-label">Also includes</div>
+      <div class="also-grid">
+        <span>Finished book tracking</span>
+        <span>Book complete dialog</span>
+        <span>Finished books sorted to bottom</span>
+        <span>Sunlight fading fix</span>
+        <span>Atomic save for settings &amp; index</span>
+        <span>Corrupt file protection</span>
+        <span>SD card index backups</span>
+        <span>Font scaling in book lists</span>
       </div>
     </div>
   </section>
@@ -509,7 +565,7 @@
     <div class="status-bar" id="flash-prog-status" style="margin-top:8px"></div>
     <div id="flash-success" style="display:none;margin-top:18px">
       <div class="status-bar status-ok" style="margin-bottom:14px">
-        Flash complete. Unplug and replug the USB cable to restart your device.
+        Flash complete. Unplug and replug the USB cable to restart — or unplug, press the reset button, then hold the power button for a few seconds.
       </div>
       <button class="btn-primary" id="flash-close-btn">Close</button>
     </div>
