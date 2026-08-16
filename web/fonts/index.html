@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nous — Font Converter</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<header class="top">
+  <a href="/" class="wordmark">NOUS</a>
+  <nav class="top-nav">
+    <a href="/manager">Manager</a>
+    <a href="/fonts" class="active">Fonts</a>
+  </nav>
+  <div class="top-right">
+    <span>CFW</span>
+    <span id="version">—</span>
+  </div>
+</header>
+
+<div class="frame">
+<div class="tool-wrap">
+
+  <div class="tiny-label">Tool / 02</div>
+  <h1 class="tool-heading">Font Converter</h1>
+  <p class="tool-sub">Convert TTF or OTF files into the .mfb format Nous reads from the SD card</p>
+
+  <!-- File inputs -->
+  <div class="fonts-grid" style="margin-top:32px">
+
+    <div class="fonts-panel">
+      <div class="panel-label">Font files</div>
+
+      <div style="margin-bottom:14px">
+        <button class="btn-secondary" id="btn-browse-folder" style="width:100%">Browse folder…</button>
+        <input type="file" id="file-folder" webkitdirectory multiple accept=".ttf,.otf" style="display:none">
+        <p style="font-family:'DM Mono',monospace;font-size:7px;color:var(--muted);margin:6px 0 0;line-height:1.6">
+          Open a font folder and Nous will match styles automatically.
+        </p>
+      </div>
+
+      <hr class="section-divider">
+
+      <div class="font-name-row">
+        <span class="font-name-label">Font name</span>
+        <input class="field-input" id="input-font-name" placeholder="e.g. Bookerly" style="flex:1">
+      </div>
+
+      <div class="font-file-row">
+        <span class="font-style-label">Regular</span>
+        <button class="font-file-btn" data-style="regular" id="btn-regular">
+          <span id="name-regular" class="empty">Choose .ttf or .otf…</span>
+        </button>
+        <input type="file" id="file-regular" accept=".ttf,.otf" style="display:none">
+      </div>
+      <div class="font-file-row">
+        <span class="font-style-label">Bold</span>
+        <button class="font-file-btn" data-style="bold" id="btn-bold">
+          <span id="name-bold" class="empty">Optional</span>
+        </button>
+        <input type="file" id="file-bold" accept=".ttf,.otf" style="display:none">
+      </div>
+      <div class="font-file-row">
+        <span class="font-style-label">Italic</span>
+        <button class="font-file-btn" data-style="italic" id="btn-italic">
+          <span id="name-italic" class="empty">Optional</span>
+        </button>
+        <input type="file" id="file-italic" accept=".ttf,.otf" style="display:none">
+      </div>
+      <div class="font-file-row">
+        <span class="font-style-label">Bold Italic</span>
+        <button class="font-file-btn" data-style="bold-italic" id="btn-bold-italic">
+          <span id="name-bold-italic" class="empty">Optional</span>
+        </button>
+        <input type="file" id="file-bold-italic" accept=".ttf,.otf" style="display:none">
+      </div>
+
+      <hr class="section-divider">
+
+      <div class="font-file-row" style="margin-bottom:0">
+        <span class="font-style-label">Fallback</span>
+        <button class="font-file-btn" id="btn-fallback">
+          <span id="name-fallback" class="empty">Optional — for missing glyphs</span>
+        </button>
+        <input type="file" id="file-fallback" accept=".ttf,.otf" style="display:none">
+      </div>
+
+      <hr class="section-divider">
+
+      <label class="cb-row">
+        <input type="checkbox" id="cb-bw-only">
+        B&W only (smaller file, no greyscale anti-aliasing)
+      </label>
+    </div>
+
+    <div class="fonts-panel">
+      <div class="panel-label">Sizes</div>
+      <div class="preset-row">
+        <button class="preset-btn size-preset-btn" data-preset="small">Small</button>
+        <button class="preset-btn size-preset-btn active" data-preset="normal">Normal</button>
+        <button class="preset-btn size-preset-btn" data-preset="big">Big</button>
+      </div>
+      <div class="chip-row" id="size-chips"></div>
+      <div class="size-add-row">
+        <input class="field-input" id="size-input" type="number" min="8" max="64" placeholder="px (8–64)" style="width:130px">
+        <button class="btn-secondary" id="size-add-btn">Add</button>
+      </div>
+
+      <hr class="section-divider">
+
+      <div class="panel-label">Character ranges</div>
+      <div class="preset-row">
+        <button class="preset-btn range-preset-btn active" data-range-preset="western">Western</button>
+        <button class="preset-btn range-preset-btn" data-range-preset="greek">Greek</button>
+        <button class="preset-btn range-preset-btn" data-range-preset="cyrillic">Cyrillic</button>
+        <button class="preset-btn range-preset-btn" data-range-preset="japanese">Japanese</button>
+      </div>
+      <div class="preset-row">
+        <button class="preset-btn range-preset-btn" data-range-preset="all">All</button>
+        <button class="preset-btn range-preset-btn" data-range-preset="clear">Clear</button>
+      </div>
+
+      <div id="range-grid"></div>
+      <div class="range-meta" id="range-meta"></div>
+
+      <hr class="section-divider">
+
+      <div class="panel-label">Custom ranges (optional)</div>
+      <div id="manual-range-rows"></div>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button class="btn-secondary" id="manual-ranges-add" style="font-size:7px;padding:5px 10px">+ Row</button>
+        <button class="btn-secondary" id="manual-ranges-apply" style="font-size:7px;padding:5px 10px">Apply</button>
+        <button class="btn-secondary" id="manual-ranges-clear" style="font-size:7px;padding:5px 10px">Clear</button>
+      </div>
+      <div class="manual-ranges-status" id="manual-ranges-status"></div>
+    </div>
+
+  </div><!-- /fonts-grid -->
+
+  <!-- Preview text -->
+  <div class="preview-text-wrap">
+    <div class="preview-text-label">Preview text</div>
+    <textarea class="preview-text" id="preview-text"></textarea>
+  </div>
+
+  <!-- Actions -->
+  <div class="fonts-actions">
+    <button class="btn-primary" id="btn-generate" disabled>Generate .mfb</button>
+    <button class="btn-secondary" id="btn-download" style="display:none">Download</button>
+    <div class="progress-wrap" id="progress-wrap" style="flex:1;margin-top:0">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+  </div>
+  <div class="status-bar" id="status-bar" style="margin-top:8px"></div>
+  <div class="progress-label" id="progress-label"></div>
+
+  <!-- Live preview -->
+  <div class="preview-wrap">
+    <div class="preview-label-row">Live preview</div>
+    <div id="device-preview-empty">Upload a Regular font file to see a live preview.</div>
+    <div id="device-preview-grid" style="display:none"></div>
+  </div>
+
+  <!-- Log -->
+  <div class="log-section" style="margin-top:32px">
+    <div class="log-label">Log</div>
+    <pre class="log-box" id="log-box"></pre>
+  </div>
+
+</div>
+</div>
+
+<footer>
+  <div>NOUS / FONT CONVERTER · 2026</div>
+  <div class="fork">Converts TTF/OTF to the .mfb bitmap font format.<br>Processing runs entirely in your browser.</div>
+</footer>
+
+<script type="module">
+// Version
+fetch('https://api.github.com/repos/unitreign/nous/releases/latest')
+  .then(r => r.ok ? r.json() : null)
+  .then(d => { if (d?.tag_name) document.getElementById('version').textContent = d.tag_name; })
+  .catch(() => {});
+
+// ── State ──
+let worker = null;
+let fallbackFile = null;
+const fontFiles = {};
+let previewSeq = 0;
+let previewTimer = null;
+let workerRequestId = 1;
+const pendingWorkerRequests = new Map();
+const DEFAULT_PREVIEW_TEXT = `The quick brown fox jumps over the lazy dog.\nPack my box with five dozen liquor jugs.\nHow vexingly quick daft zebras jump!\nIt was the best of times, it was the worst of times.`;
+const PREVIEW_STYLE_LABELS = ['Regular', 'Bold', 'Italic', 'Bold-Italic'];
+const SIZE_PRESETS = {
+  small:  [12, 14, 16, 18, 20, 22, 24],
+  normal: [20, 22, 24, 26, 28, 30, 32],
+  big:    [28, 30, 32, 34, 36],
+};
+const selectedSizes = new Set(SIZE_PRESETS.normal);
+
+// ── Size chips ──
+const sizeChipsEl = document.getElementById('size-chips');
+function arraysEqual(a, b) { return a.length === b.length && a.every((v, i) => v === b[i]); }
+function updateSizePresetButtons() {
+  const current = [...selectedSizes].sort((a, b) => a - b);
+  document.querySelectorAll('.size-preset-btn').forEach(btn => {
+    btn.classList.toggle('active', arraysEqual(current, SIZE_PRESETS[btn.dataset.preset] ?? []));
+  });
+}
+function renderSizeChips() {
+  sizeChipsEl.innerHTML = '';
+  for (const s of [...selectedSizes].sort((a, b) => a - b)) {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = `${s}px <button class="chip-remove" data-size="${s}">×</button>`;
+    chip.querySelector('.chip-remove').addEventListener('click', () => { selectedSizes.delete(s); renderSizeChips(); });
+    sizeChipsEl.appendChild(chip);
+  }
+  updateSizePresetButtons();
+  scheduleLivePreview();
+}
+function addSize(val) {
+  const n = parseInt(val, 10);
+  if (!n || n < 8 || n > 64) return;
+  if (selectedSizes.size >= 8) { alert('Maximum 8 sizes per bundle. Remove one first.'); return; }
+  selectedSizes.add(n);
+  renderSizeChips();
+}
+document.getElementById('size-add-btn').addEventListener('click', () => {
+  const inp = document.getElementById('size-input');
+  addSize(inp.value); inp.value = ''; inp.focus();
+});
+document.getElementById('size-input').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('size-add-btn').click(); });
+document.querySelectorAll('.size-preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    selectedSizes.clear();
+    (SIZE_PRESETS[btn.dataset.preset] ?? []).forEach(s => selectedSizes.add(s));
+    renderSizeChips();
+  });
+});
+
+// ── Range presets ──
+const RANGE_LABELS = [
+  ['ascii','ASCII'],['latin1','Latin-1'],['latin-ext-a','Latin Extended-A'],['latin-ext-b','Latin Extended-B'],
+  ['latin-ext-add','Latin Extended Additional'],['combining','Combining Diacritics'],['spacing-mod','Spacing Modifiers'],
+  ['general-punct','General Punctuation'],['currency','Currency Symbols'],['super-sub','Superscripts/Subscripts'],
+  ['greek','Greek'],['cyrillic','Cyrillic'],['specials','Replacement/Specials'],
+  ['hiragana','Hiragana'],['katakana','Katakana'],['cjk-punct','CJK Punctuation'],['cjk','CJK Unified'],
+];
+const DEFAULT_ON_RANGES = new Set(['ascii','latin1','latin-ext-a','general-punct','currency','super-sub','specials']);
+const RANGE_PRESET_SETS = {
+  western:  ['ascii','latin1','latin-ext-a','general-punct','currency','super-sub','specials'],
+  greek:    ['ascii','latin1','latin-ext-a','general-punct','currency','super-sub','specials','greek'],
+  cyrillic: ['ascii','latin1','general-punct','currency','super-sub','specials','cyrillic'],
+  japanese: ['ascii','latin1','general-punct','specials','hiragana','katakana','cjk-punct','cjk'],
+};
+RANGE_PRESET_SETS.all  = RANGE_LABELS.map(([id]) => id);
+RANGE_PRESET_SETS.clear = [];
+const RANGE_PRESETS = {
+  'ascii':[[0x0020,0x007E]],'latin1':[[0x00A0,0x00FF]],'latin-ext-a':[[0x0100,0x017F]],
+  'latin-ext-b':[[0x0180,0x024F]],'latin-ext-add':[[0x1E00,0x1EFF]],'combining':[[0x0300,0x036F]],
+  'spacing-mod':[[0x02B0,0x02FF]],'greek':[[0x0370,0x03FF]],'cyrillic':[[0x0400,0x04FF]],
+  'general-punct':[[0x2000,0x206F]],'super-sub':[[0x2070,0x209F]],'currency':[[0x20A0,0x20CF]],
+  'specials':[[0xFFF0,0xFFFF]],'hiragana':[[0x3040,0x309F]],'katakana':[[0x30A0,0x30FF]],
+  'cjk-punct':[[0x3000,0x303F]],'cjk':[[0x4E00,0x9FFF]],
+};
+const RANGE_GROUPS = [
+  { title: 'Languages & Scripts', ids: ['ascii','latin1','latin-ext-a','latin-ext-b','latin-ext-add','greek','cyrillic','hiragana','katakana','cjk-punct','cjk'] },
+  { title: 'Reading & Symbols', ids: ['combining','spacing-mod','general-punct','currency','super-sub','specials'] },
+];
+const rangeGrid = document.getElementById('range-grid');
+const rangeLabelMap = new Map(RANGE_LABELS);
+let manualRangePairs = null;
+
+for (const groupDef of RANGE_GROUPS) {
+  const section = document.createElement('section');
+  section.className = 'range-group';
+  const title = document.createElement('div');
+  title.className = 'range-group-title'; title.textContent = groupDef.title;
+  section.appendChild(title);
+  const groupGrid = document.createElement('div');
+  groupGrid.className = 'range-grid';
+  for (const id of groupDef.ids) {
+    const label = rangeLabelMap.get(id); if (!label) continue;
+    const item = document.createElement('label');
+    item.className = 'range-item';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.id = 'range-' + id; cb.checked = DEFAULT_ON_RANGES.has(id);
+    cb.addEventListener('change', () => { if (manualRangePairs) disableManualRanges(false); updateRangePresetButtons(); updateRangeMeta(); scheduleLivePreview(); });
+    item.appendChild(cb); item.appendChild(document.createTextNode(' ' + label));
+    groupGrid.appendChild(item);
+  }
+  section.appendChild(groupGrid);
+  rangeGrid.appendChild(section);
+}
+
+function mergeRangePairs(raw) {
+  const sorted = [...raw].sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  for (const [s, e] of sorted) {
+    if (merged.length && s <= merged[merged.length - 1][1] + 1) merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], e);
+    else merged.push([s, e]);
+  }
+  return merged;
+}
+function getSelectedRanges() {
+  if (manualRangePairs) return manualRangePairs.map(([s, e]) => [s, e]);
+  const raw = [];
+  for (const [id] of RANGE_LABELS)
+    if (document.getElementById('range-' + id)?.checked) raw.push(...(RANGE_PRESETS[id] ?? []));
+  return mergeRangePairs(raw);
+}
+function countRangeCodepoints(ranges) { return ranges.reduce((t, [s, e]) => t + e - s + 1, 0); }
+function updateRangePresetButtons() {
+  if (manualRangePairs) { document.querySelectorAll('.range-preset-btn').forEach(b => b.classList.remove('active')); return; }
+  const current = RANGE_LABELS.map(([id]) => id).filter(id => document.getElementById('range-' + id)?.checked);
+  document.querySelectorAll('.range-preset-btn').forEach(btn => {
+    const preset = RANGE_LABELS.map(([id]) => id).filter(id => new Set(RANGE_PRESET_SETS[btn.dataset.rangePreset] ?? []).has(id));
+    btn.classList.toggle('active', arraysEqual(current, preset));
+  });
+}
+function updateRangeMeta() {
+  const ranges = getSelectedRanges();
+  const mode = manualRangePairs ? 'Custom' : 'Checkbox';
+  document.getElementById('range-meta').textContent = `${mode} · ${ranges.length} block${ranges.length === 1 ? '' : 's'} · ${countRangeCodepoints(ranges)} codepoints`;
+}
+function disableManualRanges(clearText = false) {
+  manualRangePairs = null;
+  if (clearText) { document.getElementById('manual-range-rows').innerHTML = ''; addManualRangeRow(); }
+  document.getElementById('manual-ranges-status').textContent = clearText ? '' : 'Custom range mode disabled.';
+}
+function parseHexCodepoint(value) {
+  const cleaned = value.trim().replace(/^U\+/i, '').replace(/[^0-9A-Fa-f]/g, '');
+  if (!cleaned) return null;
+  const cp = parseInt(cleaned, 16);
+  return (Number.isNaN(cp) || cp < 0 || cp > 0x10FFFF) ? NaN : cp;
+}
+function addManualRangeRow(fromValue = '', toValue = '') {
+  const el = document.getElementById('manual-range-rows');
+  const row = document.createElement('div');
+  row.className = 'manual-range-row';
+  row.innerHTML = `
+    <div class="manual-range-field"><span class="manual-range-prefix">From U+</span><input type="text" class="field-input manual-range-input manual-range-from" placeholder="0020" value="${fromValue}" style="width:80px"></div>
+    <div class="manual-range-field"><span class="manual-range-prefix">To U+</span><input type="text" class="field-input manual-range-input manual-range-to" placeholder="007E" value="${toValue}" style="width:80px"></div>
+    <div class="manual-range-preview"></div>
+    <button class="manual-range-remove">Remove</button>`;
+  const fromInp = row.querySelector('.manual-range-from');
+  const toInp   = row.querySelector('.manual-range-to');
+  const preview = row.querySelector('.manual-range-preview');
+  const updatePreview = () => {
+    const f = parseHexCodepoint(fromInp.value), t = parseHexCodepoint(toInp.value);
+    if (!fromInp.value.trim() && !toInp.value.trim()) { preview.textContent = 'Empty'; return; }
+    if (Number.isNaN(f) || Number.isNaN(t)) { preview.textContent = 'Invalid hex'; preview.classList.add('invalid'); return; }
+    if (f === null) { preview.textContent = 'Need From'; return; }
+    const end = t === null ? f : t;
+    preview.textContent = end === f ? `U+${f.toString(16).toUpperCase().padStart(4,'0')}` : `U+${f.toString(16).toUpperCase().padStart(4,'0')}–U+${end.toString(16).toUpperCase().padStart(4,'0')} (${end-f+1})`;
+    preview.classList.remove('invalid');
+  };
+  fromInp.addEventListener('input', updatePreview);
+  toInp.addEventListener('input', updatePreview);
+  row.querySelector('.manual-range-remove').addEventListener('click', () => {
+    row.remove();
+    if (!el.children.length) addManualRangeRow();
+  });
+  el.appendChild(row);
+  updatePreview();
+  return fromInp;
+}
+function collectManualRangePairs() {
+  const ranges = [];
+  for (const row of document.getElementById('manual-range-rows').querySelectorAll('.manual-range-row')) {
+    const f = parseHexCodepoint(row.querySelector('.manual-range-from').value);
+    const t = parseHexCodepoint(row.querySelector('.manual-range-to').value);
+    const fv = row.querySelector('.manual-range-from').value.trim();
+    const tv = row.querySelector('.manual-range-to').value.trim();
+    if (!fv && !tv) continue;
+    if (Number.isNaN(f) || Number.isNaN(t)) throw new Error('Invalid hex in custom ranges.');
+    if (f === null) throw new Error('Each row needs a From value.');
+    const end = t === null ? f : t;
+    if (end < f) throw new Error('To must be >= From.');
+    ranges.push([f, end]);
+  }
+  if (!ranges.length) throw new Error('Enter at least one range.');
+  return mergeRangePairs(ranges);
+}
+
+document.querySelectorAll('.range-preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const preset = new Set(RANGE_PRESET_SETS[btn.dataset.rangePreset] ?? []);
+    disableManualRanges(false);
+    RANGE_LABELS.forEach(([id]) => { const cb = document.getElementById('range-' + id); if (cb) cb.checked = preset.has(id); });
+    updateRangePresetButtons(); updateRangeMeta(); scheduleLivePreview();
+  });
+});
+document.getElementById('manual-ranges-add').addEventListener('click', () => addManualRangeRow().focus());
+document.getElementById('manual-ranges-apply').addEventListener('click', () => {
+  try {
+    const parsed = collectManualRangePairs();
+    manualRangePairs = parsed;
+    RANGE_LABELS.forEach(([id]) => { const cb = document.getElementById('range-' + id); if (cb) cb.checked = false; });
+    updateRangePresetButtons(); updateRangeMeta();
+    document.getElementById('manual-ranges-status').textContent = `Applied · ${countRangeCodepoints(parsed)} codepoints`;
+    scheduleLivePreview();
+  } catch (err) {
+    const el = document.getElementById('manual-ranges-status');
+    el.textContent = err.message;
+    el.classList.add('range-error');
+  }
+});
+document.getElementById('manual-ranges-clear').addEventListener('click', () => {
+  disableManualRanges(true);
+  const preset = new Set(RANGE_PRESET_SETS.western);
+  RANGE_LABELS.forEach(([id]) => { const cb = document.getElementById('range-' + id); if (cb) cb.checked = preset.has(id); });
+  updateRangePresetButtons(); updateRangeMeta(); scheduleLivePreview();
+});
+
+// ── Font file inputs ──
+const STYLES = ['regular', 'bold', 'italic', 'bold-italic'];
+function assignFontFile(style, file) {
+  fontFiles[style] = file;
+  const btn = document.getElementById('btn-' + style);
+  const nameEl = document.getElementById('name-' + style);
+  nameEl.textContent = file.name;
+  nameEl.classList.remove('empty');
+  btn.classList.add('has-file');
+  scheduleLivePreview();
+}
+document.getElementById('btn-browse-folder').addEventListener('click', () => document.getElementById('file-folder').click());
+document.getElementById('file-folder').addEventListener('change', function () {
+  const files = [...this.files].filter(f => /\.(ttf|otf)$/i.test(f.name));
+  if (!files.length) return;
+  function score(name, style) {
+    const n = name.toLowerCase().replace(/[-_ ]/g, '');
+    const isBold = /bold/.test(n), isItalic = /italic|oblique/.test(n);
+    if (style === 'regular')     return (!isBold && !isItalic) ? 2 : (/regular|normal/.test(n) ? 1 : 0);
+    if (style === 'bold')        return (isBold && !isItalic) ? 2 : 0;
+    if (style === 'italic')      return (!isBold && isItalic) ? 2 : 0;
+    if (style === 'bold-italic') return (isBold && isItalic) ? 2 : 0;
+    return 0;
+  }
+  const used = new Set();
+  for (const slot of STYLES) {
+    let best = null, bestScore = -1;
+    for (const file of files) {
+      if (used.has(file)) continue;
+      const s = score(file.name, slot);
+      if (s > bestScore) { best = file; bestScore = s; }
+    }
+    if (best && bestScore > 0) { assignFontFile(slot, best); used.add(best); }
+  }
+  if (fontFiles['regular'] && !document.getElementById('input-font-name').value) {
+    let name = fontFiles['regular'].name.replace(/\.(ttf|otf)$/i, '').replace(/[-_ ](regular|bold|italic|bolditalic|bold-italic)$/i, '');
+    document.getElementById('input-font-name').value = name;
+  }
+  updateGenerateBtn();
+});
+for (const style of STYLES) {
+  const btn = document.getElementById('btn-' + style);
+  const input = document.getElementById('file-' + style);
+  btn.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => {
+    const file = input.files[0]; if (!file) return;
+    assignFontFile(style, file);
+    if (style === 'regular' && !document.getElementById('input-font-name').value) {
+      let name = file.name.replace(/\.(ttf|otf)$/i, '').replace(/[-_ ](regular|bold|italic|bolditalic|bold-italic)$/i, '');
+      document.getElementById('input-font-name').value = name;
+    }
+    updateGenerateBtn();
+  });
+}
+document.getElementById('btn-fallback').addEventListener('click', () => document.getElementById('file-fallback').click());
+document.getElementById('file-fallback').addEventListener('change', function () {
+  const file = this.files[0]; if (!file) return;
+  fallbackFile = file;
+  const nameEl = document.getElementById('name-fallback');
+  nameEl.textContent = file.name; nameEl.classList.remove('empty');
+  document.getElementById('btn-fallback').classList.add('has-file');
+  scheduleLivePreview();
+});
+function updateGenerateBtn() {
+  document.getElementById('btn-generate').disabled = !fontFiles['regular'];
+}
+document.getElementById('cb-bw-only').addEventListener('change', () => scheduleLivePreview());
+
+// ── Helpers ──
+function log(msg) {
+  const ts = new Date().toLocaleTimeString();
+  const box = document.getElementById('log-box');
+  box.textContent += `[${ts}] ${msg}\n`;
+  box.scrollTop = box.scrollHeight;
+}
+function setStatus(msg) {
+  const el = document.getElementById('status-bar');
+  el.textContent = msg;
+  el.className = 'status-bar' + (msg.startsWith('OK:') ? ' status-ok' : msg.startsWith('Error:') ? ' status-err' : msg.startsWith('WARNING:') ? ' status-warn' : '');
+}
+function setProgress(pct, label) {
+  document.getElementById('progress-fill').style.width = Number(pct).toFixed(1) + '%';
+  if (label !== undefined) document.getElementById('progress-label').textContent = label;
+}
+function showProgress(v) { document.getElementById('progress-wrap').classList.toggle('visible', v); }
+
+// ── Worker ──
+function ensureWorker() {
+  if (worker) return;
+  worker = new Worker('./font_gen_worker.js', { type: 'module' });
+  worker.addEventListener('message', e => {
+    const { type, requestId } = e.data;
+    if (type === 'log') { log(e.data.msg); return; }
+    if (type === 'progress') { setProgress(e.data.pct, e.data.label); return; }
+    const pending = pendingWorkerRequests.get(requestId);
+    if (!pending) return;
+    pendingWorkerRequests.delete(requestId);
+    if (type === 'result') pending.resolve(e.data.result);
+    else pending.reject(new Error(e.data.msg));
+  });
+}
+function callWorker(type, payload) {
+  ensureWorker();
+  const requestId = `req-${workerRequestId++}`;
+  return new Promise((resolve, reject) => {
+    pendingWorkerRequests.set(requestId, { resolve, reject });
+    worker.postMessage({ type, requestId, ...payload });
+  });
+}
+const readFile = f => f ? f.arrayBuffer().then(b => new Uint8Array(b)) : Promise.resolve(new Uint8Array(0));
+function callFontGen(regData, boldData, italData, biData, fbData, fontName, sizes, rangePairs, bwOnly) {
+  return callWorker('generate', { regData, boldData, italData, biData, fbData, fontName, sizes, rangePairs, bwOnly });
+}
+function callPreview(regData, boldData, italData, biData, fbData, sizes, rangePairs, bwOnly, previewText) {
+  return callWorker('preview', { regData, boldData, italData, biData, fbData, sizes, rangePairs, bwOnly, previewText });
+}
+
+// ── Live preview ──
+function paintPreviewImage(canvas, image) {
+  canvas.width = image.width; canvas.height = image.height;
+  canvas.style.width = image.width + 'px'; canvas.style.height = image.height + 'px';
+  canvas.style.imageRendering = 'pixelated';
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(canvas.width, canvas.height);
+  for (let y = 0; y < image.height; y++)
+    for (let x = 0; x < image.width; x++) {
+      const v = image.pixels[y * image.width + x], i = (y * image.width + x) * 4;
+      img.data[i] = img.data[i+1] = img.data[i+2] = v; img.data[i+3] = 255;
+    }
+  ctx.putImageData(img, 0, 0);
+}
+async function renderLivePreview(seq) {
+  if (!fontFiles['regular']) { document.getElementById('device-preview-empty').style.display = ''; document.getElementById('device-preview-grid').style.display = 'none'; return; }
+  try {
+    const sizes = [...selectedSizes].sort((a, b) => a - b);
+    if (!sizes.length || !getSelectedRanges().length) return;
+    const [regData, boldData, italData, biData, fbData] = await Promise.all([
+      readFile(fontFiles['regular']), readFile(fontFiles['bold']), readFile(fontFiles['italic']),
+      readFile(fontFiles['bold-italic']), readFile(fallbackFile),
+    ]);
+    if (seq !== previewSeq) return;
+    const preview = await callPreview(regData, boldData, italData, biData, fbData, sizes, getSelectedRanges(), document.getElementById('cb-bw-only').checked, document.getElementById('preview-text').value);
+    if (seq !== previewSeq) return;
+    const grid = document.getElementById('device-preview-grid');
+    grid.innerHTML = '';
+    const grouped = new Map();
+    for (const s of preview.deviceSections) {
+      if (!grouped.has(s.size)) grouped.set(s.size, []);
+      grouped.get(s.size).push(s);
+    }
+    for (const [size, sections] of grouped) {
+      const group = document.createElement('section');
+      group.className = 'preview-size-group';
+      const title = document.createElement('div');
+      title.className = 'preview-size-title'; title.textContent = size + 'px';
+      group.appendChild(title);
+      const strip = document.createElement('div');
+      strip.className = 'preview-style-strip';
+      sections.sort((a, b) => a.styleId - b.styleId).forEach(section => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'preview-swatch';
+        const label = document.createElement('div');
+        label.className = 'preview-label'; label.textContent = PREVIEW_STYLE_LABELS[section.styleId] || `Style ${section.styleId}`;
+        const viewport = document.createElement('div');
+        viewport.className = 'preview-viewport';
+        const canvas = document.createElement('canvas');
+        paintPreviewImage(canvas, section);
+        viewport.appendChild(canvas);
+        wrapper.appendChild(label); wrapper.appendChild(viewport);
+        strip.appendChild(wrapper);
+      });
+      group.appendChild(strip);
+      grid.appendChild(group);
+    }
+    document.getElementById('device-preview-empty').style.display = preview.deviceSections.length ? 'none' : '';
+    document.getElementById('device-preview-grid').style.display = preview.deviceSections.length ? 'flex' : 'none';
+  } catch (err) {
+    document.getElementById('device-preview-empty').style.display = '';
+    document.getElementById('device-preview-grid').style.display = 'none';
+  }
+}
+function scheduleLivePreview() {
+  previewSeq += 1;
+  const seq = previewSeq;
+  if (previewTimer) clearTimeout(previewTimer);
+  previewTimer = setTimeout(() => renderLivePreview(seq), 80);
+}
+
+// ── Generate ──
+let resultBytes = null, resultFilename = 'font.mfb';
+document.getElementById('btn-download').addEventListener('click', () => {
+  if (!resultBytes) return;
+  const url = URL.createObjectURL(new Blob([resultBytes], { type: 'application/octet-stream' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: resultFilename });
+  a.click(); URL.revokeObjectURL(url);
+});
+document.getElementById('btn-generate').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-generate');
+  const dlBtn = document.getElementById('btn-download');
+  btn.disabled = true; dlBtn.style.display = 'none'; resultBytes = null;
+  showProgress(true);
+  try {
+    const bwOnly = document.getElementById('cb-bw-only').checked;
+    const sizes  = [...selectedSizes].sort((a, b) => a - b);
+    const ranges = getSelectedRanges();
+    const fontName = document.getElementById('input-font-name').value.trim() || 'Font';
+    if (!fontFiles['regular']) throw new Error('Regular font file required');
+    if (!sizes.length) throw new Error('Select at least one size');
+    if (!ranges.length) throw new Error('Select at least one character range');
+    log('Reading font files…');
+    setProgress(0, 'Reading font files…');
+    const [regData, boldData, italData, biData, fbData] = await Promise.all([
+      readFile(fontFiles['regular']), readFile(fontFiles['bold']), readFile(fontFiles['italic']),
+      readFile(fontFiles['bold-italic']), readFile(fallbackFile),
+    ]);
+    log(`Regular: ${fontFiles['regular'].name} (${(regData.length/1024).toFixed(0)} KB)`);
+    setProgress(3, 'Starting generation…');
+    const fntsBytes = await callFontGen(regData, boldData, italData, biData, fbData, fontName, sizes, ranges, bwOnly);
+    const SPIFFS_MAX = 0x360000;
+    const bundleKB = (fntsBytes.length / 1024).toFixed(1);
+    log(fntsBytes.length > SPIFFS_MAX ? `WARNING: ${bundleKB} KB — exceeds limit` : `Bundle: ${bundleKB} KB`);
+    scheduleLivePreview();
+    resultBytes = fntsBytes;
+    resultFilename = fontName + '.mfb';
+    dlBtn.style.display = '';
+    setProgress(100, 'Done');
+    setStatus(fntsBytes.length > SPIFFS_MAX
+      ? `WARNING: ${resultFilename} — ${bundleKB} KB — exceeds flash limit`
+      : `OK: ${resultFilename} — ${sizes.length} size${sizes.length > 1 ? 's' : ''}, ${bundleKB} KB`);
+    log(`Done — click Download to save ${resultFilename}`);
+  } catch (e) {
+    log('Error: ' + e.message); setStatus('Error: ' + e.message);
+  } finally {
+    btn.disabled = !fontFiles['regular'];
+    showProgress(false);
+  }
+});
+
+// ── Init ──
+document.getElementById('preview-text').value = DEFAULT_PREVIEW_TEXT;
+document.getElementById('preview-text').addEventListener('input', scheduleLivePreview);
+renderSizeChips();
+updateRangePresetButtons();
+updateRangeMeta();
+addManualRangeRow();
+</script>
+</body>
+</html>

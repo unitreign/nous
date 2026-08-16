@@ -1,0 +1,5 @@
+{
+  "outputDirectory": "web",
+  "cleanUrls": true,
+  "trailingSlash": false
+}

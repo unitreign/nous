@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nous — Custom Firmware</title>
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  /* ── Hero ── */
+  .hero {
+    max-width: 980px;
+    margin: 0 auto;
+    min-height: 680px;
+    display: grid;
+    grid-template-columns: 1fr 310px;
+    gap: 80px;
+    align-items: center;
+  }
+  .hero-copy { padding-left: 24px; }
+  .hero h1 {
+    font-size: clamp(68px, 9vw, 122px);
+    line-height: .82;
+    letter-spacing: -.075em;
+    font-weight: 400;
+    margin: 26px 0 32px;
+  }
+  .hero h1 em { font-style: italic; }
+  .hero-text {
+    max-width: 320px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.75;
+  }
+  .hero-actions {
+    margin-top: 30px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .action-primary {
+    background: var(--ink);
+    color: var(--bg);
+    padding: 12px 18px;
+    font-family: "DM Mono", monospace;
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    display: inline-block;
+  }
+  .action-primary:hover { background: #444; }
+  .action-secondary {
+    font-family: "DM Mono", monospace;
+    font-size: 8px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--muted);
+    padding-bottom: 2px;
+  }
+  .action-secondary:hover { color: var(--ink); border-color: var(--ink); }
+
+  /* ── Device mockup ── */
+  .reader-wrap img {
+    display: block;
+    width: 272px;
+    height: 390px;
+    object-fit: cover;
+  }
+
+  /* ── Mini nav ── */
+  .mini-nav {
+    max-width: 980px;
+    margin: 0 auto 72px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .mini-nav a {
+    padding: 13px 18px;
+    border-right: 1px solid var(--line);
+    font-family: "DM Mono", monospace;
+    font-size: 8px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+  }
+  .mini-nav a:last-child { border-right: none; }
+  .mini-nav a:hover { background: var(--soft); color: var(--ink); }
+
+  /* ── Features ── */
+  .feature-section { max-width: 980px; margin: 0 auto; padding-bottom: 80px; }
+  .features { border-top: 1px solid var(--ink); }
+  .feature {
+    display: grid;
+    grid-template-columns: 36px 210px 1fr;
+    min-height: 66px;
+    align-items: center;
+    border-bottom: 1px solid var(--line);
+  }
+  .feature:hover { background: rgba(235,229,217,.45); }
+  .feature-no { font-family: "DM Mono", monospace; font-size: 8px; color: var(--brown); }
+  .feature-name { font-size: 15px; }
+  .feature-description { font-family: "DM Mono", monospace; font-size: 8px; color: var(--muted); line-height: 1.6; }
+
+  /* ── Mid ── */
+  .mid {
+    max-width: 980px;
+    margin: 0 auto 80px;
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .mid-label {
+    padding: 32px 26px;
+    border-right: 1px solid var(--line);
+    background: var(--soft);
+  }
+  .mid-label .number { font-family: "DM Mono", monospace; font-size: 8px; color: var(--brown); }
+  .mid-label h2 {
+    font-size: 34px;
+    line-height: .95;
+    font-weight: 400;
+    letter-spacing: -.06em;
+    margin: 46px 0 0;
+  }
+  .mid-content {
+    padding: 32px 38px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 36px;
+  }
+  .small-block h3 { font-size: 15px; font-weight: 500; margin: 0 0 7px; }
+  .small-block p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.72; }
+
+  /* ── Specs ── */
+  .spec-section { max-width: 980px; margin: 0 auto 80px; }
+  .spec-table { border-top: 1px solid var(--ink); }
+  .spec-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .spec-key { font-family: "DM Mono", monospace; font-size: 8px; color: var(--muted); text-transform: uppercase; }
+  .spec-value { font-size: 12px; }
+
+  /* ── Install ── */
+  .install {
+    max-width: 980px;
+    margin: 0 auto 80px;
+    background: var(--ink);
+    color: var(--bg);
+    padding: 28px 34px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .install h2 { font-size: 25px; font-weight: 400; margin: 0 0 6px; }
+  .install p { margin: 0; color: #b5b1a8; font-family: "DM Mono", monospace; font-size: 8px; }
+  .install a {
+    background: var(--bg);
+    color: var(--ink);
+    padding: 11px 16px;
+    font-family: "DM Mono", monospace;
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    flex-shrink: 0;
+    margin-left: 24px;
+  }
+  .install a:hover { background: var(--soft); }
+
+  /* ── Mobile ── */
+  @media (max-width: 750px) {
+    .hero { display: block; min-height: auto; padding: 68px 12px 80px; }
+    .hero-copy { padding-left: 0; }
+    .hero h1 { font-size: 23vw; }
+    .reader-wrap { margin-top: 80px; }
+    .reader { width: 250px; height: 355px; }
+    .mini-nav { grid-template-columns: 1fr 1fr; margin-bottom: 52px; }
+    .mini-nav a:nth-child(2) { border-right: none; }
+    .mini-nav a:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+    .feature { grid-template-columns: 30px 1fr; padding: 13px 0; }
+    .feature-description { grid-column: 2; margin-top: 4px; }
+    .mid { grid-template-columns: 1fr; }
+    .mid-label { border-right: none; border-bottom: 1px solid var(--line); }
+    .mid-content { grid-template-columns: 1fr; gap: 22px; }
+    .spec-row { grid-template-columns: 110px 1fr; }
+    .install { display: block; padding: 22px; }
+    .install a { display: inline-block; margin-top: 22px; margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <span class="wordmark">NOUS</span>
+  <nav class="top-nav">
+    <a href="/manager">Manager</a>
+    <a href="/fonts">Fonts</a>
+  </nav>
+  <div class="top-right">
+    <span>CFW</span>
+    <span id="version">—</span>
+  </div>
+</header>
+
+<div class="frame">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-copy">
+      <div class="tiny-label">Custom firmware · E-Ink</div>
+      <h1><em>nous</em></h1>
+      <div class="hero-text">
+        A clean, quick firmware for e-ink readers.
+        No wireless, no accounts, no overhead.
+      </div>
+      <div class="hero-actions">
+        <a href="#features" class="action-primary">See features</a>
+        <a href="#install" class="action-secondary">Installation</a>
+      </div>
+    </div>
+
+    <div class="reader-wrap">
+      <img src="https://placehold.co/272x390/222220/eeeade?text=device" alt="device mockup">
+    </div>
+  </section>
+
+  <!-- MINI NAV -->
+  <nav class="mini-nav">
+    <a href="#features">01 / Features</a>
+    <a href="#details">02 / Details</a>
+    <a href="#specs">03 / Specs</a>
+    <a href="#install">04 / Install</a>
+  </nav>
+
+  <!-- FEATURES -->
+  <section class="feature-section" id="features">
+    <div class="section-top">
+      <div class="section-title">Features</div>
+      <div class="section-number">8 included</div>
+    </div>
+    <div class="features">
+      <div class="feature">
+        <div class="feature-no">01</div>
+        <div class="feature-name">Fast start</div>
+        <div class="feature-description">Powers on and opens to your library in under 1.5 seconds.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-no">02</div>
+        <div class="feature-name">Flat library</div>
+        <div class="feature-description">Drop books anywhere on the SD card. No folder structure required.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-no">03</div>
+        <div class="feature-name">Series view</div>
+        <div class="feature-description">Groups books by series automatically. Navigate volumes in order.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-no">04</div>
+        <div class="feature-name">Quick pages</div>
+        <div class="feature-description">Display refresh tuned to keep the gap between pages as short as possible.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-no">05</div>
+        <div class="feature-name">Button remapping</div>
+        <div class="feature-description">Assign any action to any button. Fully configurable from settings.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-no">06</div>
+        <div class="feature-name">Hidden shelf</div>
+        <div class="feature-description">Hold back for three seconds to open a private library. Books live in <span style="font-family:'DM Mono',monospace;font-size:7px">.hidden</span> on the SD card.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-no">07</div>
+        <div class="feature-name">EPUB reader</div>
+        <div class="feature-description">Custom fonts, margins, and line spacing. Handles varied EPUB formatting.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-no">08</div>
+        <div class="feature-name">Stripped down</div>
+        <div class="feature-description">No wireless, no telemetry. Fewer moving parts means fewer things to slow it down.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DETAILS -->
+  <section class="mid" id="details">
+    <div class="mid-label">
+      <div class="number">02 / DETAILS</div>
+      <h2>Built<br>for the<br>page.</h2>
+    </div>
+    <div class="mid-content">
+      <div class="small-block">
+        <h3>Reading first</h3>
+        <p>The library opens immediately. Open a book and the interface gets out of the way.</p>
+      </div>
+      <div class="small-block">
+        <h3>No organisation needed</h3>
+        <p>Books are indexed on first run. Dump them anywhere and Nous will find them.</p>
+      </div>
+      <div class="small-block">
+        <h3>Your fonts</h3>
+        <p>Use the Font Converter to build a font pack from any TTF or OTF and load it onto the device.</p>
+      </div>
+      <div class="small-block">
+        <h3>Local only</h3>
+        <p>Everything lives on the SD card. USB transfer, no cloud dependency.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SPECS -->
+  <section class="spec-section" id="specs">
+    <div class="section-top">
+      <div class="section-title">System details</div>
+      <div class="section-number">03</div>
+    </div>
+    <div class="spec-table">
+      <div class="spec-row">
+        <div class="spec-key">Device</div>
+        <div class="spec-value">Xteink X4</div>
+      </div>
+      <div class="spec-row">
+        <div class="spec-key">Display</div>
+        <div class="spec-value">Monochrome E-Ink · 480 × 800</div>
+      </div>
+      <div class="spec-row">
+        <div class="spec-key">Format</div>
+        <div class="spec-value">EPUB</div>
+      </div>
+      <div class="spec-row">
+        <div class="spec-key">Library</div>
+        <div class="spec-value">Flat scan · Series grouping · Hidden shelf</div>
+      </div>
+      <div class="spec-row">
+        <div class="spec-key">Typography</div>
+        <div class="spec-value">Font · Size · Margin · Line spacing</div>
+      </div>
+      <div class="spec-row">
+        <div class="spec-key">Connectivity</div>
+        <div class="spec-value">USB only — no WiFi, no Bluetooth</div>
+      </div>
+      <div class="spec-row">
+        <div class="spec-key">License</div>
+        <div class="spec-value">GPL-3.0</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INSTALL -->
+  <section class="install" id="install">
+    <div>
+      <h2>Nous <span id="install-version">—</span></h2>
+      <p>STABLE RELEASE · XTEINK X4 · GPL-3.0</p>
+    </div>
+    <a href="https://github.com/unitreign/nous/releases/latest" target="_blank" rel="noopener">
+      Download firmware →
+    </a>
+  </section>
+
+</div>
+
+<footer>
+  <div>
+    NOUS / CUSTOM FIRMWARE<br>
+    2026
+  </div>
+  <div class="fork">
+    Built on an open-source foundation.<br>
+    Distributed under GPL-3.0.
+  </div>
+</footer>
+
+<script>
+  // Active nav
+  document.querySelectorAll('.top-nav a').forEach(a => {
+    if (a.getAttribute('href') === location.pathname) a.classList.add('active');
+  });
+
+  // Fetch latest release from GitHub
+  fetch('https://api.github.com/repos/unitreign/nous/releases/latest')
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      if (!d || !d.tag_name) return;
+      const v = d.tag_name;
+      document.getElementById('version').textContent = v;
+      document.getElementById('install-version').textContent = v;
+    })
+    .catch(() => {});
+</script>
+</body>
+</html>
