@@ -7,7 +7,6 @@
 #include "../Application.h"
 #include "../HeapLog.h"
 #include "../display/ui_font_large.h"
-#include "../display/ui_font_medium.h"
 #include "../display/ui_font_small.h"
 
 #ifdef ESP_PLATFORM
@@ -431,8 +430,6 @@ void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
     open_ok_ = false;
     goto show_error;
   }
-  show_reopen_dialog_ = (saved_progress_pct_ >= 100);
-  reopen_selected_ = 1;  // default highlight "Continue"
   page_pos_ = saved_page_pos_;
   save_position_();  // persist incremented times_opened_ with the correct chapter/pos
   layout_engine_ = TextLayout{};
@@ -440,8 +437,10 @@ void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
   layout_engine_.set_image_size_fn(image_size_fn_);
   layout_engine_.set_hyphenation_lang(detect_language(mrb_.metadata().language));
   render_page_(buf);
-  if (show_reopen_dialog_)
-    draw_reopen_dialog_(buf);
+  if (saved_progress_pct_ >= 100) {
+    open_reopen_picker_();
+    picker_overlay_.draw(buf);
+  }
 #ifdef ESP_PLATFORM
   ESP_LOGI("reader", "BOOK_OK: %s", path_.c_str());
 #endif
@@ -561,12 +560,23 @@ void ReaderScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime&
     return;
   }
 
-  if (show_reopen_dialog_) {
-    handle_reopen_dialog_(buttons, buf);
-    return;
-  }
-  if (show_finished_dialog_) {
-    handle_finished_dialog_(buttons, buf);
+  if (picker_overlay_.is_open()) {
+    if (picker_overlay_.update(buttons)) {
+      if (picker_overlay_.is_open()) {
+        render_page_(buf);
+        picker_overlay_.draw(buf);
+        buf.refresh();
+      } else {
+        if (picker_wants_pop_) {
+          picker_wants_pop_ = false;
+          mark_book_finished_();
+          return;
+        }
+        if (grayscale_active_) { buf.revert_grayscale(); grayscale_active_ = false; }
+        render_page_(buf);
+        buf.refresh();
+      }
+    }
     return;
   }
 
@@ -665,12 +675,12 @@ void ReaderScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime&
     save_position_();
   }
 
-  // End of last chapter — show the "Book Complete" dialog once.
+  // End of last chapter — show the "Book Complete" picker once.
   if (!changed && page_delta > 0 && page_.at_chapter_end &&
       chapter_idx_ + 1 >= mrb_.chapter_count()) {
-    show_finished_dialog_ = true;
+    open_finished_picker_();
     render_page_(buf);
-    draw_finished_dialog_(buf);
+    picker_overlay_.draw(buf);
     buf.refresh();
     return;
   }
@@ -1234,198 +1244,47 @@ uint64_t ReaderScreen::estimated_time_left_ms() const {
 }
 
 // ---------------------------------------------------------------------------
-// End-of-book dialog
+// Picker overlay helpers
 // ---------------------------------------------------------------------------
 
-void ReaderScreen::draw_finished_dialog_(DrawBuffer& buf) {
+void ReaderScreen::open_finished_picker_() {
   if (!dialog_font_.valid())
     dialog_font_.init(kFontData_ui_large_mbf, kFontData_ui_large_mbf_size);
-  if (!dialog_hint_font_.valid())
-    dialog_hint_font_.init(kFontData_ui_medium_mbf, kFontData_ui_medium_mbf_size);
-  if (!dialog_font_.valid() || !dialog_hint_font_.valid())
-    return;
-
-  const Rotation saved_rotation = buf.rotation();
-  buf.set_rotation_transform(Rotation::Deg90);
-  const int W = buf.width();
-  const int H = buf.height();
-
-  const char* kTitle = "Book Complete";
-  const char* kBody  = "Mark as finished?";
-  const char* kYes   = "Select: Yes";
-  const char* kNo    = "Cancel: No";
-
-  const int body_line_h = static_cast<int>(dialog_font_.y_advance());
-  const int hint_line_h = static_cast<int>(dialog_hint_font_.y_advance());
-  const int pad_x = 20;
-  const int pad_y = 20;
-  const int gap   = 6;
-
-  // Box height: title + gap + body + gap + hints
-  const int box_h = pad_y * 2 + body_line_h * 2 + gap * 2 + hint_line_h;
-  static constexpr int kBoxW = 300;
-  const int box_w = kBoxW;
-  const int box_x = (W - box_w) / 2;
-  const int box_y = (H - box_h) / 2;
-
-  // White fill
-  buf.fill_rect(box_x, box_y, box_w, box_h, true);
-  // Double border using fill_rect (top, bottom, left, right)
-  for (int t = 0; t <= 1; ++t) {
-    buf.fill_rect(box_x + t, box_y + t, box_w - t * 2, 1, false);
-    buf.fill_rect(box_x + t, box_y + box_h - 1 - t, box_w - t * 2, 1, false);
-    buf.fill_rect(box_x + t, box_y + t, 1, box_h - t * 2, false);
-    buf.fill_rect(box_x + box_w - 1 - t, box_y + t, 1, box_h - t * 2, false);
-  }
-
-  const int text_x = W / 2;
-  int y = box_y + pad_y + static_cast<int>(dialog_font_.baseline());
-
-  auto draw_centered_body = [&](const char* s) {
-    const int w = static_cast<int>(dialog_font_.word_width(s, std::strlen(s), FontStyle::Regular));
-    buf.draw_text_proportional(text_x - w / 2, y, s, std::strlen(s), dialog_font_, false);
-    y += body_line_h + gap;
-  };
-
-  draw_centered_body(kTitle);
-  draw_centered_body(kBody);
-
-  // Hint row: Cancel on left, Select on right (medium font = author-name size).
-  // y is at the next body-font baseline; convert to hint-font baseline.
-  const int hint_y = y - static_cast<int>(dialog_font_.baseline()) + static_cast<int>(dialog_hint_font_.baseline());
-  const int yw = static_cast<int>(dialog_hint_font_.word_width(kYes, std::strlen(kYes), FontStyle::Regular));
-  buf.draw_text_proportional(box_x + pad_x,              hint_y, kNo,  std::strlen(kNo),  dialog_hint_font_, false);
-  buf.draw_text_proportional(box_x + box_w - pad_x - yw, hint_y, kYes, std::strlen(kYes), dialog_hint_font_, false);
-
-  buf.set_rotation_transform(saved_rotation);
+  picker_overlay_.init(dialog_font_);
+  picker_overlay_.open(
+      "Book Complete",
+      {"Mark as Finished and Close", "Do not Mark as Finished"},
+      0,
+      [this](int sel) {
+        if (sel == 0) picker_wants_pop_ = true;
+      });
 }
 
-void ReaderScreen::handle_finished_dialog_(const ButtonState& buttons, DrawBuffer& buf) {
-  Button btn;
-  while (buttons.next_press(btn)) {
-    if (btn == Button::Button1) {
-      mark_book_finished_();
-      return;
-    } else if (btn == Button::Button0) {
-      show_finished_dialog_ = false;
-      if (grayscale_active_) {
-        buf.revert_grayscale();
-        grayscale_active_ = false;
-      }
-      render_page_(buf);
-      buf.refresh();
-      return;
-    }
-  }
+void ReaderScreen::open_reopen_picker_() {
+  if (!dialog_font_.valid())
+    dialog_font_.init(kFontData_ui_large_mbf, kFontData_ui_large_mbf_size);
+  picker_overlay_.init(dialog_font_);
+  picker_overlay_.open(
+      "Finished Book",
+      {"Start from beginning and reset progress", "Continue from last page"},
+      1,
+      [this](int sel) {
+        if (sel == 0) {
+          load_chapter_(0);
+          page_pos_ = PagePosition{0, 0};
+          layout_engine_.set_source(*chapter_src_);
+          layout_engine_.set_image_size_fn(image_size_fn_);
+          layout_engine_.set_hyphenation_lang(reader_settings_.hyphenation_enabled
+              ? detect_language(mrb_.metadata().language) : HyphenationLang::None);
+          save_position_();
+        }
+      });
 }
 
 void ReaderScreen::mark_book_finished_() {
   // progress_pct() already returns 100 when at_chapter_end on the last chapter.
   // stop() will call app_->update_book_read_time(progress_pct()) which saves it.
   app_->pop_screen();
-}
-
-// ---------------------------------------------------------------------------
-// Reopen (finished book) dialog
-// ---------------------------------------------------------------------------
-
-void ReaderScreen::draw_reopen_dialog_(DrawBuffer& buf) {
-  if (!dialog_font_.valid())
-    dialog_font_.init(kFontData_ui_large_mbf, kFontData_ui_large_mbf_size);
-  if (!dialog_hint_font_.valid())
-    dialog_hint_font_.init(kFontData_ui_medium_mbf, kFontData_ui_medium_mbf_size);
-  if (!dialog_font_.valid() || !dialog_hint_font_.valid())
-    return;
-
-  const Rotation saved_rotation = buf.rotation();
-  buf.set_rotation_transform(Rotation::Deg90);
-  const int W = buf.width();
-  const int H = buf.height();
-
-  const char* kTitle  = "Finished Book";
-  const char* kItems[2] = { "Start from beginning", "Continue from last page" };
-
-  const int title_h = static_cast<int>(dialog_font_.y_advance());
-  const int item_h  = static_cast<int>(dialog_hint_font_.y_advance());
-  const int pad_y    = 18;
-  const int gap      = 8;
-  const int item_pad = 6;
-
-  const int box_h = pad_y * 2 + title_h + gap + item_h * 2 + item_pad * 4;
-  static constexpr int kBoxW = 300;
-  const int box_x = (W - kBoxW) / 2;
-  const int box_y = (H - box_h) / 2;
-
-  buf.fill_rect(box_x, box_y, kBoxW, box_h, true);
-  for (int t = 0; t <= 1; ++t) {
-    buf.fill_rect(box_x + t, box_y + t, kBoxW - t * 2, 1, false);
-    buf.fill_rect(box_x + t, box_y + box_h - 1 - t, kBoxW - t * 2, 1, false);
-    buf.fill_rect(box_x + t, box_y + t, 1, box_h - t * 2, false);
-    buf.fill_rect(box_x + kBoxW - 1 - t, box_y + t, 1, box_h - t * 2, false);
-  }
-
-  // Title
-  int y = box_y + pad_y + static_cast<int>(dialog_font_.baseline());
-  const int tw = static_cast<int>(dialog_font_.word_width(kTitle, std::strlen(kTitle), FontStyle::Regular));
-  buf.draw_text_proportional(W / 2 - tw / 2, y, kTitle, std::strlen(kTitle), dialog_font_, false);
-  // Advance y to pixel-top of first item row (baseline → top of row)
-  y = y - static_cast<int>(dialog_font_.baseline()) + title_h + gap;
-
-  // List items — y is the pixel-top of each item row
-  for (int i = 0; i < 2; ++i) {
-    const bool sel = (i == reopen_selected_);
-    buf.fill_rect(box_x + 2, y, kBoxW - 4, item_h + item_pad * 2, !sel);
-    const int text_y = y + item_pad + static_cast<int>(dialog_hint_font_.baseline());
-    const int iw = static_cast<int>(dialog_hint_font_.word_width(kItems[i], std::strlen(kItems[i]), FontStyle::Regular));
-    buf.draw_text_proportional(W / 2 - iw / 2, text_y, kItems[i], std::strlen(kItems[i]), dialog_hint_font_, sel);
-    y += item_h + item_pad * 2;
-  }
-
-  buf.set_rotation_transform(saved_rotation);
-}
-
-void ReaderScreen::handle_reopen_dialog_(const ButtonState& buttons, DrawBuffer& buf) {
-  bool changed = false;
-  const bool inv_bottom2 = app_ && app_->invert_bottom_paging();
-  const bool inv_side2   = app_ && app_->invert_side_buttons();
-  const Button next_btn  = inv_bottom2 ? Button::Button2 : Button::Button3;
-  const Button prev_btn  = inv_bottom2 ? Button::Button3 : Button::Button2;
-  const Button next_side = inv_side2   ? Button::Down    : Button::Up;
-  const Button prev_side = inv_side2   ? Button::Up      : Button::Down;
-
-  Button btn;
-  while (buttons.next_press(btn)) {
-    if (btn == next_btn || btn == next_side) {
-      reopen_selected_ = (reopen_selected_ + 1) % 2;
-      changed = true;
-    } else if (btn == prev_btn || btn == prev_side) {
-      reopen_selected_ = (reopen_selected_ + 1) % 2;
-      changed = true;
-    } else if (btn == Button::Button1) {
-      show_reopen_dialog_ = false;
-      if (reopen_selected_ == 0) {
-        load_chapter_(0);
-        page_pos_ = PagePosition{0, 0};
-        layout_engine_.set_source(*chapter_src_);
-        layout_engine_.set_image_size_fn(image_size_fn_);
-        layout_engine_.set_hyphenation_lang(reader_settings_.hyphenation_enabled
-            ? detect_language(mrb_.metadata().language) : HyphenationLang::None);
-        save_position_();
-      }
-      render_page_(buf);
-      buf.refresh();
-      return;
-    } else if (btn == Button::Button0) {
-      app_->pop_screen();
-      return;
-    }
-  }
-
-  if (changed) {
-    render_page_(buf);
-    draw_reopen_dialog_(buf);
-    buf.refresh();
-  }
 }
 
 }  // namespace microreader

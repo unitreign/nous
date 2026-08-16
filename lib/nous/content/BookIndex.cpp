@@ -165,7 +165,7 @@ bool BookIndex::load(const std::string& index_file) {
                     if (sep11) {
                       series_str = sep11 + 1;
                       char* sep12 = std::strchr(sep11 + 1, '|');
-                      if (sep12) series_index_val = std::strtof(sep12 + 1, nullptr);
+                      if (sep12) { *sep12 = '\0'; series_index_val = std::strtof(sep12 + 1, nullptr); }
                     }
                   }
                 }

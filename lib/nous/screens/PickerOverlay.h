@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "../Input.h"
-#include "../display/BitmapFont.h"
+#include "../content/BitmapFont.h"
 #include "../display/DrawBuffer.h"
 
 namespace microreader {
