@@ -174,7 +174,11 @@ export async function fetchNousFirmware(onStatus) {
   const asset = meta.assets?.find(a => a.name.endsWith('.bin'));
   if (!asset) throw new Error('No .bin file found in the latest release.');
   if (onStatus) onStatus(`Downloading ${asset.name} (${(asset.size / 1024).toFixed(0)} KB)…`);
-  const res = await fetch(asset.browser_download_url);
+  // Use the asset API endpoint with Accept: application/octet-stream — this has
+  // proper CORS headers, unlike the github.com/releases/download redirect URL.
+  const res = await fetch(`https://api.github.com/repos/unitreign/nous/releases/assets/${asset.id}`, {
+    headers: { 'Accept': 'application/octet-stream' },
+  });
   if (!res.ok) throw new Error(`Firmware download failed: ${res.status}`);
   return new Uint8Array(await res.arrayBuffer());
 }
