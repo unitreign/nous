@@ -1,6 +1,7 @@
 #include "ConvertAllScreen.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 
@@ -18,6 +19,34 @@
 
 namespace microreader {
 
+// ---------------------------------------------------------------------------
+// Natural (numeric-aware) sort
+// ---------------------------------------------------------------------------
+
+static bool natural_less(std::string_view a, std::string_view b) {
+  size_t i = 0, j = 0;
+  while (i < a.size() && j < b.size()) {
+    if (std::isdigit((unsigned char)a[i]) && std::isdigit((unsigned char)b[j])) {
+      size_t si = i, sj = j;
+      while (i < a.size() && std::isdigit((unsigned char)a[i])) ++i;
+      while (j < b.size() && std::isdigit((unsigned char)b[j])) ++j;
+      size_t la = i - si, lb = j - sj;
+      if (la != lb) return la < lb;
+      int cmp = std::strncmp(a.data() + si, b.data() + sj, la);
+      if (cmp != 0) return cmp < 0;
+    } else {
+      char ca = (char)std::tolower((unsigned char)a[i++]);
+      char cb = (char)std::tolower((unsigned char)b[j++]);
+      if (ca != cb) return ca < cb;
+    }
+  }
+  return (a.size() - i) < (b.size() - j);
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 std::string ConvertAllScreen::derive_stem_(const std::string& path) {
   const char* name = path.c_str();
   const char* sep = std::strrchr(name, '/');
@@ -31,114 +60,180 @@ std::string ConvertAllScreen::derive_stem_(const std::string& path) {
   return std::string(name, len);
 }
 
-void ConvertAllScreen::scan_jobs_() {
-  jobs_.clear();
+int ConvertAllScreen::unconverted_count_() const {
+  int n = 0;
+  for (const auto& e : entries_)
+    if (!e.converted) ++n;
+  return n;
+}
+
+void ConvertAllScreen::scan_entries_() {
+  entries_.clear();
   if (!app_ || !app_->data_dir_) return;
 
-  // Always reload from disk — a prior screen may have left entries populated
-  // from a different context (e.g. filtered/sorted view from MainMenu).
-  std::string index_path = std::string(app_->data_dir_) + "/book_index.dat";
+  const std::string index_path = std::string(app_->data_dir_) + "/book_index.dat";
   BookIndex::instance().load(index_path);
 
   const StringPool& pool = BookIndex::instance().pool();
-  for (const auto& e : BookIndex::instance().entries()) {
-    BookJob job;
-    job.path = std::string(e.path.view(pool));
-    job.title = std::string(e.title.view(pool));
-    std::string stem = derive_stem_(job.path);
-    job.mrb_path = std::string(app_->data_dir_) + "/cache/" + stem + "/book.mrb";
-    FILE* f = std::fopen(job.mrb_path.c_str(), "rb");
-    if (f) {
-      std::fclose(f);
-      job.done = true;
-      job.skipped = true;
-    }
-    jobs_.push_back(std::move(job));
+  for (const auto& bk : BookIndex::instance().entries()) {
+    Entry e;
+    e.path  = std::string(bk.path.view(pool));
+    e.title = std::string(bk.title.view(pool));
+    if (e.title.empty()) e.title = derive_stem_(e.path);
+
+    const std::string mrb_path   = std::string(app_->data_dir_) + "/cache/" +
+                                   derive_stem_(e.path) + "/book.mrb";
+    const std::string cover_path = cover_bin_path(e.path.c_str(), app_->data_dir_);
+
+    FILE* mf = std::fopen(mrb_path.c_str(), "rb");
+    if (mf) { std::fclose(mf); e.converted = true; }
+    FILE* cf = std::fopen(cover_path.c_str(), "rb");
+    if (cf) { std::fclose(cf); e.has_cover = true; }
+
+    entries_.push_back(std::move(e));
   }
+
+  std::stable_sort(entries_.begin(), entries_.end(),
+      [](const Entry& a, const Entry& b) { return natural_less(a.title, b.title); });
 }
 
-void ConvertAllScreen::start(DrawBuffer& buf, IRuntime& runtime) {
-  buf_ = &buf;
-  current_idx_ = 0;
-  cover_idx_ = 0;
-  converted_count_ = 0;
-  failed_count_ = 0;
-  cancel_requested_ = false;
-  phase_ = Phase::Converting;
-  ListMenuScreen::apply_ui_font(ui_font_);
-
-  scan_jobs_();
-
-  buf.fill(true);
-  buf.full_refresh();
+void ConvertAllScreen::rebuild_items_() {
+  clear_items();
+  add_item("Convert All");
+  for (const auto& e : entries_)
+    add_item(e.title);
 }
+
+// ---------------------------------------------------------------------------
+// ListMenuScreen overrides
+// ---------------------------------------------------------------------------
 
 void ConvertAllScreen::stop() {
-  jobs_.clear();
-  buf_ = nullptr;
+  entries_.clear();
+  entries_.shrink_to_fit();
+}
+
+void ConvertAllScreen::on_start() {
+  title_ = "Convert Books";
+  scan_entries_();
+  rebuild_items_();
+  force_chronicle_list_ = (ListMenuScreen::theme() == ListMenuScreen::MenuTheme::Lyra ||
+                            ListMenuScreen::theme() == ListMenuScreen::MenuTheme::LyraExt);
+}
+
+void ConvertAllScreen::on_back() {
+  if (app_) app_->pop_screen();
+}
+
+std::string_view ConvertAllScreen::get_item_subtitle(int index) const {
+  if (index == 0) {
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%d unconverted", unconverted_count_());
+    subtitle_buf_ = buf;
+    return subtitle_buf_;
+  }
+  const int ei = index - 1;
+  if (ei < 0 || ei >= static_cast<int>(entries_.size())) return {};
+  const auto& e = entries_[ei];
+  char sbuf[64];
+  std::snprintf(sbuf, sizeof(sbuf), "%s  |  %s",
+                e.converted ? "converted" : "not converted",
+                e.has_cover ? "cover"     : "no cover");
+  subtitle_buf_ = sbuf;
+  return subtitle_buf_;
+}
+
+void ConvertAllScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) const {
+  ListMenuScreen::draw_all_(buf, battery_pct);
+  if (confirm_picker_.is_open())
+    confirm_picker_.draw(buf);
 }
 
 void ConvertAllScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& runtime) {
-  buf_ = &buf;
+  cur_buf_     = &buf;
+  cur_runtime_ = &runtime;
 
-  Button btn;
-  while (buttons.next_press(btn)) {
-    if (btn == Button::Button0) {
-      if (phase_ == Phase::Done) {
-        app_->pop_screen();
-        return;
-      }
-      cancel_requested_ = true;
+  if (confirm_picker_.is_open()) {
+    if (confirm_picker_.update(buttons)) {
+      draw_all_(buf, runtime.battery_percentage());
+      if (confirm_picker_.is_open())
+        buf.refresh();
+      else
+        buf.full_refresh();
     }
-  }
-
-  if (phase_ == Phase::Done) return;
-
-  // Prevent auto-sleep from firing mid-conversion and resetting the device.
-  if (app_) app_->keep_awake();
-
-  if (phase_ == Phase::Covers) {
-    if (cancel_requested_ || cover_idx_ >= static_cast<int>(jobs_.size())) {
-      phase_ = Phase::Done;
-      draw_done_(buf);
-      buf.full_refresh();
-      return;
-    }
-    const BookJob& job = jobs_[cover_idx_];
-    const int total = static_cast<int>(jobs_.size());
-    char msg[96];
-    const std::string& title = job.title.empty() ? job.path : job.title;
-    std::snprintf(msg, sizeof(msg), "Covers %d / %d: %.55s", cover_idx_ + 1, total, title.c_str());
-    buf.sync_bw_ram();
-    buf.show_loading(msg, cover_idx_ * 100 / total);
-    if (app_) app_->ensure_cover_bin(job.path, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize, app_->sleep_is_book_cover());
-    buf.reset_after_scratch(true);
-    ++cover_idx_;
-    if (cover_idx_ >= total) {
-      phase_ = Phase::Done;
-      draw_done_(buf);
-      buf.full_refresh();
-    }
+    cur_buf_     = nullptr;
+    cur_runtime_ = nullptr;
     return;
   }
 
-  // Phase::Converting — advance to next un-converted job.
-  while (current_idx_ < static_cast<int>(jobs_.size()) && jobs_[current_idx_].done)
-    ++current_idx_;
+  ListMenuScreen::update(buttons, buf, runtime);
+  cur_buf_     = nullptr;
+  cur_runtime_ = nullptr;
+}
 
-  if (cancel_requested_ || current_idx_ >= static_cast<int>(jobs_.size())) {
-    // Conversions done (or cancelled); move on to cover extraction.
-    phase_ = Phase::Covers;
-    return;
+void ConvertAllScreen::on_select(int index) {
+  if (!cur_buf_ || !cur_runtime_) return;
+  DrawBuffer& buf     = *cur_buf_;
+  IRuntime&   runtime = *cur_runtime_;
+
+  if (index == 0) {
+    const int unc = unconverted_count_();
+    if (unc == 0) return;
+    char ptitle[64];
+    std::snprintf(ptitle, sizeof(ptitle), "Convert All (%d unconverted)", unc);
+    confirm_picker_.init(ui_font_);
+    confirm_picker_.open(ptitle,
+        {"Convert all (may take a long time)", "Cancel"}, 1,
+        [this](int sel) {
+          if (sel != 0 || !cur_buf_ || !cur_runtime_) return;
+          struct Job { std::string path, title; };
+          std::vector<Job> jobs;
+          for (auto& e : entries_)
+            if (!e.converted) jobs.push_back({e.path, e.title});
+          entries_.clear();
+          entries_.shrink_to_fit();
+          for (auto& job : jobs)
+            do_convert_path_(job.path, job.title, *cur_buf_, *cur_runtime_);
+          app_->keep_awake();
+          scan_entries_();
+          rebuild_items_();
+        });
+    return;  // ListMenuScreen's needs_draw will call our draw_all_() which includes the picker
   }
 
-  BookJob& job = jobs_[current_idx_];
-  const int total_pending = static_cast<int>(std::count_if(jobs_.begin(), jobs_.end(),
-      [](const BookJob& j) { return !j.skipped; }));
-  const int job_num = converted_count_ + failed_count_ + 1;
+  const int ei = index - 1;
+  if (ei < 0 || ei >= static_cast<int>(entries_.size())) return;
 
-  // Create per-book cache directory.
-  std::string cache_dir = job.mrb_path.substr(0, job.mrb_path.rfind('/'));
+  if (entries_[ei].converted) {
+    do_delete_(ei, buf, runtime);
+    scan_entries_();
+  } else {
+    const std::string path = entries_[ei].path;
+    const std::string ttl  = entries_[ei].title;
+    entries_.clear();
+    entries_.shrink_to_fit();
+    do_convert_path_(path, ttl, buf, runtime);
+    app_->keep_awake();
+    scan_entries_();
+  }
+  rebuild_items_();
+  // ListMenuScreen's needs_draw path redraws and refreshes after on_select() returns.
+}
+
+// ---------------------------------------------------------------------------
+// Convert / Delete
+// ---------------------------------------------------------------------------
+
+void ConvertAllScreen::do_convert_path_(const std::string& path, const std::string& title,
+                                         DrawBuffer& buf, IRuntime& runtime) {
+  if (!app_) return;
+
+  const std::string stem       = derive_stem_(path);
+  const std::string cache_dir  = std::string(app_->data_dir_) + "/cache/" + stem;
+  const std::string mrb_path   = cache_dir + "/book.mrb";
+  const std::string cover_path = cover_bin_path(path.c_str(), app_->data_dir_);
+  const std::string sleep_path = cover_sleep_bin_path(path.c_str(), app_->data_dir_);
+
 #ifdef ESP_PLATFORM
   mkdir(cache_dir.c_str(), 0775);
 #else
@@ -146,117 +241,54 @@ void ConvertAllScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRunt
 #endif
 
   buf.sync_bw_ram();
-  {
-    char msg[96];
-    const std::string& title = job.title.empty() ? job.path : job.title;
-    std::snprintf(msg, sizeof(msg), "%d / %d: %.60s", job_num, total_pending, title.c_str());
-    buf.show_loading(msg, 0);
-  }
+  buf.show_loading(title.c_str(), 0);
 
   Book book;
-  auto err = book.open(job.path.c_str(), buf.scratch_buf1(), buf.scratch_buf2());
-  bool ok = false;
+  auto err = book.open(path.c_str(), buf.scratch_buf1(), buf.scratch_buf2());
   if (err == EpubError::Ok && book.chapter_count() > 0) {
-    const std::string& title = job.title.empty() ? job.path : job.title;
-    ok = convert_epub_to_mrb_streaming(
-        book, job.mrb_path.c_str(), buf.scratch_buf1(), buf.scratch_buf2(),
-        [&buf, job_num, total_pending, &title](int done, int total) {
+    // Write covers while book is freshly open — BEFORE conversion trashes scratch bufs.
+    runtime.yield();
+    book.write_cover_bin(cover_path.c_str(), 160, 240, buf.scratch_buf1(), DrawBuffer::kBufSize);
+    runtime.yield();
+    if (app_->sleep_is_book_cover())
+      book.write_cover_bin(sleep_path.c_str(), 480, 786, buf.scratch_buf1(), DrawBuffer::kBufSize);
+    runtime.yield();
+
+    convert_epub_to_mrb_streaming(
+        book, mrb_path.c_str(), buf.scratch_buf1(), buf.scratch_buf2(),
+        [&buf, &title, &runtime](int done, int total) {
           int pct = total > 0 ? done * 100 / total : 0;
-          char msg[96];
-          std::snprintf(msg, sizeof(msg), "%d / %d: %.60s", job_num, total_pending, title.c_str());
-          buf.show_loading(msg, pct);
+          buf.show_loading(title.c_str(), pct);
+          runtime.yield();
         });
   }
   book.close();
   buf.reset_after_scratch(true);
-
-  if (ok) {
-    job.done = true;
-    ++converted_count_;
-  } else {
-    job.done = true;
-    job.failed = true;
-    ++failed_count_;
-    std::remove(job.mrb_path.c_str());
-  }
-
-  ++current_idx_;
 }
 
-void ConvertAllScreen::draw_done_(DrawBuffer& buf) const {
-  buf.fill(true);
-  const int W = buf.width();
-  const int H = buf.height();
-  const bool have_font = ui_font_.valid();
-  const int fa = have_font ? ui_font_.y_advance() : 16;
-  const int bl = have_font ? static_cast<int>(ui_font_.baseline()) : 12;
-  constexpr int kPad = 8;
-  constexpr int kLM = 14;
+void ConvertAllScreen::do_delete_(int idx, DrawBuffer& buf, IRuntime& runtime) {
+  if (!app_) return;
+  const std::string path       = entries_[idx].path;
+  const std::string stem       = derive_stem_(path);
+  const std::string cache_dir  = std::string(app_->data_dir_) + "/cache/" + stem;
+  const std::string mrb_path   = cache_dir + "/book.mrb";
+  const std::string cover_path = cover_bin_path(path.c_str(), app_->data_dir_);
+  const std::string sleep_path = cover_sleep_bin_path(path.c_str(), app_->data_dir_);
 
-  auto draw_centered = [&](int y, const char* text) {
-    if (!text || !*text) return;
-    const size_t len = std::strlen(text);
-    if (have_font) {
-      const int tw = static_cast<int>(ui_font_.word_width(text, len, FontStyle::Regular));
-      buf.draw_text_proportional((W - tw) / 2, y + bl, text, len, ui_font_, false);
-    } else {
-      buf.draw_text_centered(W / 2, y, text, true);
-    }
-  };
-  auto draw_left = [&](int y, const char* text) {
-    if (!text || !*text) return;
-    const size_t len = std::strlen(text);
-    if (have_font)
-      buf.draw_text_proportional(kLM, y + bl, text, len, ui_font_, false);
-    else
-      buf.draw_text_centered(W / 2, y, text, true);
-  };
+  buf.sync_bw_ram();
+  buf.show_loading("Deleting...", 0);
 
-  // Title
-  const char* heading = cancel_requested_ ? "Stopped" : "Done";
-  int y = kPad;
-  draw_centered(y, heading);
-  y += fa + kPad;
-  buf.fill_rect(kLM, y, W - kLM * 2, 1, false);
-  y += kPad;
+  std::remove(mrb_path.c_str());
+  std::remove(cover_path.c_str());
+  std::remove(sleep_path.c_str());
+#ifdef ESP_PLATFORM
+  ::rmdir(cache_dir.c_str());
+#else
+  try { std::filesystem::remove(cache_dir); } catch (...) {}
+#endif
 
-  int skipped = static_cast<int>(std::count_if(jobs_.begin(), jobs_.end(),
-      [](const BookJob& j) { return j.skipped && !j.failed; }));
-
-  if (!cancel_requested_ && converted_count_ == 0 && failed_count_ == 0) {
-    draw_centered(H / 2 - fa / 2, "All books up to date.");
-  } else {
-    char line[64];
-    std::snprintf(line, sizeof(line), "Converted:    %d", converted_count_);
-    draw_left(y, line);
-    y += fa + 4;
-
-    std::snprintf(line, sizeof(line), "Already done: %d", skipped);
-    draw_left(y, line);
-    y += fa + 4;
-
-    std::snprintf(line, sizeof(line), "Failed:       %d", failed_count_);
-    draw_left(y, line);
-    y += fa + 8;
-
-    if (failed_count_ > 0) {
-      buf.fill_rect(kLM, y, W - kLM * 2, 1, false);
-      y += kPad;
-      int shown = 0;
-      for (const auto& job : jobs_) {
-        if (!job.failed) continue;
-        if (shown >= 5) { draw_left(y, "..."); break; }
-        const std::string& t = job.title.empty() ? job.path : job.title;
-        char entry[80];
-        std::snprintf(entry, sizeof(entry), "%.70s", t.c_str());
-        draw_left(y, entry);
-        y += fa + 2;
-        ++shown;
-      }
-    }
-  }
-
-  draw_centered(H - fa - kPad, "Back to return");
+  buf.show_loading("Deleting...", 100);
+  for (int i = 0; i < 150; ++i) runtime.yield();
 }
 
 }  // namespace microreader

@@ -402,7 +402,7 @@ void SettingsScreen::on_start() {
   }
 
   idx_convert_all_ = count();
-  add_item("Convert All Books");
+  add_item("Convert Books");
 
 
 #ifdef ESP_PLATFORM

@@ -3,53 +3,51 @@
 #include <string>
 #include <vector>
 
-#include "../content/BitmapFont.h"
-#include "../display/DrawBuffer.h"
-#include "IScreen.h"
 #include "ListMenuScreen.h"
+#include "PickerOverlay.h"
 
 namespace microreader {
 
-// Batch-converts all un-converted EPUBs in the book index to .mrb format.
-// Conversions run one per update() call (synchronous, ~seconds each).
-// Pressing back while converting requests cancellation; the current book
-// finishes, then the screen stops. Already-converted books are skipped.
-class ConvertAllScreen final : public IScreen {
+// Interactive per-book convert/delete screen backed by ListMenuScreen.
+// Row 0 = "Convert All" action. Rows 1..n = book entries (title + status subtitle).
+// Selecting an unconverted book converts it; selecting a converted book deletes its cache.
+class ConvertAllScreen final : public ListMenuScreen {
  public:
   ConvertAllScreen() = default;
 
-  const char* name() const override { return "ConvertAll"; }
+  const char* name() const override { return "ConvertBooks"; }
 
-  void start(DrawBuffer& buf, IRuntime& runtime) override;
   void stop() override;
   void update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& runtime) override;
+  std::string_view get_item_subtitle(int index) const override;
+  void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const override;
+
+ protected:
+  void on_start() override;
+  void on_select(int index) override;
+  void on_back() override;
 
  private:
-  DrawBuffer* buf_ = nullptr;
-  BitmapFont ui_font_;
-
-  enum class Phase { Converting, Covers, Done };
-  Phase phase_ = Phase::Converting;
-
-  struct BookJob {
+  struct Entry {
     std::string path;
     std::string title;
-    std::string mrb_path;
-    bool done = false;
-    bool failed = false;
-    bool skipped = false;
+    bool converted = false;
+    bool has_cover = false;
   };
 
-  std::vector<BookJob> jobs_;
-  int current_idx_ = 0;
-  int cover_idx_ = 0;
-  int converted_count_ = 0;
-  int failed_count_ = 0;
-  bool cancel_requested_ = false;
+  std::vector<Entry>  entries_;
+  mutable std::string subtitle_buf_;
+  PickerOverlay       confirm_picker_;
+  DrawBuffer*         cur_buf_     = nullptr;
+  IRuntime*           cur_runtime_ = nullptr;
 
   static std::string derive_stem_(const std::string& path);
-  void scan_jobs_();
-  void draw_done_(DrawBuffer& buf) const;
+  void scan_entries_();
+  void rebuild_items_();
+  int  unconverted_count_() const;
+  void do_convert_path_(const std::string& path, const std::string& title,
+                        DrawBuffer& buf, IRuntime& runtime);
+  void do_delete_(int idx, DrawBuffer& buf, IRuntime& runtime);
 };
 
 }  // namespace microreader

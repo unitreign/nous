@@ -33,15 +33,24 @@ static std::string_view filename_sv(const std::string& path) {
   return {name, len};
 }
 
-static bool ci_less(std::string_view a, std::string_view b) {
-  size_t min_len = std::min(a.size(), b.size());
-#ifdef _WIN32
-  int cmp = _strnicmp(a.data(), b.data(), min_len);
-#else
-  int cmp = strncasecmp(a.data(), b.data(), min_len);
-#endif
-  if (cmp != 0) return cmp < 0;
-  return a.size() < b.size();
+static bool natural_less(std::string_view a, std::string_view b) {
+  size_t i = 0, j = 0;
+  while (i < a.size() && j < b.size()) {
+    if (std::isdigit((unsigned char)a[i]) && std::isdigit((unsigned char)b[j])) {
+      size_t si = i, sj = j;
+      while (i < a.size() && std::isdigit((unsigned char)a[i])) ++i;
+      while (j < b.size() && std::isdigit((unsigned char)b[j])) ++j;
+      size_t la = i - si, lb = j - sj;
+      if (la != lb) return la < lb;
+      int cmp = std::strncmp(a.data() + si, b.data() + sj, la);
+      if (cmp != 0) return cmp < 0;
+    } else {
+      char ca = (char)std::tolower((unsigned char)a[i++]);
+      char cb = (char)std::tolower((unsigned char)b[j++]);
+      if (ca != cb) return ca < cb;
+    }
+  }
+  return (a.size() - i) < (b.size() - j);
 }
 
 void MainMenu::on_start() {
@@ -333,8 +342,8 @@ void MainMenu::populate_list_() {
                       if (a.last_open_order != b.last_open_order)
                         return a.last_open_order > b.last_open_order;
                       if (fmt == BookListFormat::Filename)
-                        return ci_less(filename_sv(a.path), filename_sv(b.path));
-                      return ci_less(a.title_ref.view(bpool), b.title_ref.view(bpool));
+                        return natural_less(filename_sv(a.path), filename_sv(b.path));
+                      return natural_less(a.title_ref.view(bpool), b.title_ref.view(bpool));
                      });
     // Find where recent books end (first entry never opened or finished)
     int split = static_cast<int>(entries_.size());
@@ -349,14 +358,14 @@ void MainMenu::populate_list_() {
                       [](const BookEntry& a, const BookEntry& b) {
                         const bool af = (a.progress_pct >= 100), bf = (b.progress_pct >= 100);
                         if (af != bf) return !af;
-                        return ci_less(filename_sv(a.path), filename_sv(b.path));
+                        return natural_less(filename_sv(a.path), filename_sv(b.path));
                       });
   } else {
     std::stable_sort(entries_.begin(), entries_.end(),
                      [&bpool](const BookEntry& a, const BookEntry& b) {
                         const bool af = (a.progress_pct >= 100), bf = (b.progress_pct >= 100);
                         if (af != bf) return !af;
-                        return ci_less(a.title_ref.view(bpool), b.title_ref.view(bpool));
+                        return natural_less(a.title_ref.view(bpool), b.title_ref.view(bpool));
                      });
   }
 
