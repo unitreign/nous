@@ -105,7 +105,7 @@ void HiddenBooksMenu::on_start() {
 void HiddenBooksMenu::on_select(int index) {
   if (paths_.empty() || index < 0 || index >= static_cast<int>(paths_.size()))
     return;
-  app_->ensure_cover_bin(paths_[index]);
+  show_opening_indicator();
   app_->reader()->set_path(paths_[index]);
   app_->push_screen(ScreenId::Reader);
 }

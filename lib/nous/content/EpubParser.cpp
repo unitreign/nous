@@ -563,6 +563,15 @@ EpubError Epub::parse_opf(IZipFile& file, const std::string& opf_path, uint8_t* 
                 std::string(id.data, id.length) == *metadata_.cover_id) {
               cover_idx_ = idx;
             }
+            // Fallback: some EPUBs use properties="cover-image" on the image item
+            // instead of matching the meta cover id (e.g. Yen Press volumes 2+).
+            if (cover_idx_ < 0 && mt == MediaType::Image && idx >= 0) {
+              auto props = ev.attrs.get("properties");
+              if (props.length > 0 &&
+                  std::string(props.data, props.length).find("cover-image") != std::string::npos) {
+                cover_idx_ = idx;
+              }
+            }
           }
         }
       } else if (section == Section::Spine) {

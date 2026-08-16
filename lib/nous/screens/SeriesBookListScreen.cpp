@@ -123,8 +123,8 @@ void SeriesBookListScreen::on_back() {
 
 void SeriesBookListScreen::on_select(int index) {
   if (!app_ || index < 0 || index >= static_cast<int>(entries_.size())) return;
+  show_opening_indicator();
   app_->record_book_opened(entries_[index].path);
-  app_->ensure_cover_bin(entries_[index].path);
   app_->reader()->set_path(entries_[index].path.c_str());
   app_->push_screen(ScreenId::Reader);
 }

@@ -129,6 +129,7 @@ void Application::auto_open_book(const char* epub_path, DrawBuffer& buf, IRuntim
   if (reader_font_)
     reader_.set_fonts(reader_font_);
 
+  ensure_cover_bin(epub_path, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize, sleep_is_book_cover());
   screen_mgr_.push(&reader_, buf, runtime);
 }
 
@@ -471,6 +472,7 @@ IScreen* microreader::Application::screen_for_(ScreenId id) {
     case ScreenId::MainMenu:
       return &menu_;
     case ScreenId::Reader:
+      reader_.set_cache_only(false);
       return &reader_;
     case ScreenId::Settings:
       return &settings_;
@@ -641,7 +643,7 @@ void microreader::Application::record_book_opened(const std::string& path) {
 }
 void Application::ensure_cover_bin(const std::string& epub_path,
                                     uint8_t* scratch1, uint8_t* scratch2,
-                                    size_t scratch_size) {
+                                    size_t scratch_size, bool generate_sleep) {
   if (!data_dir_) return;
   const std::string cpath  = cover_bin_path(epub_path.c_str(), data_dir_);
   const std::string spath  = cover_sleep_bin_path(epub_path.c_str(), data_dir_);
@@ -655,13 +657,17 @@ void Application::ensure_cover_bin(const std::string& epub_path,
     std::fclose(chk);
   }
 
-  // cover_sleep.bin: full-res (≤480×786). Stale if missing or width < 400.
-  bool need_sleep = true;
-  FILE* schk = std::fopen(spath.c_str(), "rb");
-  if (schk) {
-    uint16_t hdr[2] = {};
-    need_sleep = (std::fread(hdr, 2, 2, schk) != 2 || hdr[0] < 400);
-    std::fclose(schk);
+  // cover_sleep.bin: full-res (≤480×786). Only generated when requested.
+  bool need_sleep = false;
+  if (generate_sleep) {
+    FILE* schk = std::fopen(spath.c_str(), "rb");
+    if (schk) {
+      uint16_t hdr[2] = {};
+      need_sleep = (std::fread(hdr, 2, 2, schk) != 2 || hdr[0] < 400);
+      std::fclose(schk);
+    } else {
+      need_sleep = true;
+    }
   }
 
   if (!need_thumb && !need_sleep) return;

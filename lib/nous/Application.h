@@ -278,6 +278,9 @@ class Application {
     sleep_image_path_ = path;
     save_settings_();
   }
+  bool sleep_is_book_cover() const {
+    return sleep_image_path_ == "book-cover:";
+  }
 
   const std::string& installed_font_path() const {
     return installed_font_path_;
@@ -302,9 +305,10 @@ class Application {
   // Extract cover.bin for the given EPUB if it doesn't exist or is stale.
   // No-op if data_dir is not set or the EPUB has no cover.
   // Blocking — can take ~1s. Pass scratch bufs when available to avoid heap pressure.
+  // Set generate_sleep=true only when the sleep image setting is "book-cover:".
   void ensure_cover_bin(const std::string& epub_path,
                         uint8_t* scratch1 = nullptr, uint8_t* scratch2 = nullptr,
-                        size_t scratch_size = 0);
+                        size_t scratch_size = 0, bool generate_sleep = false);
 
   // Navigate to a screen: push on top of the current screen (current stays on stack).
   // Or replace the current screen (pop it first, then push the new one).

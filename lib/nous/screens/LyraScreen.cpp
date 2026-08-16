@@ -100,18 +100,18 @@ void LyraScreen::on_start() {
   cover_needs_extract_ = false;
   cover_bin_path_.clear();
   if (has_recent_ && app_ && app_->data_dir_) {
-    cover_bin_path_ = cover_bin_path(recent_path_.c_str(), app_->data_dir_);
+    // Prefer the full-res sleep cover for display; fall back to thumbnail.
+    const std::string sleep_path = cover_sleep_bin_path(recent_path_.c_str(), app_->data_dir_);
+    FILE* sf = std::fopen(sleep_path.c_str(), "rb");
+    if (sf) { std::fclose(sf); cover_bin_path_ = sleep_path; }
+    else cover_bin_path_ = cover_bin_path(recent_path_.c_str(), app_->data_dir_);
+
     FILE* chk = std::fopen(cover_bin_path_.c_str(), "rb");
     if (chk) {
       std::fclose(chk);
       load_cover_data_();
-      // cover.bin exists but cover_sleep.bin may be absent (e.g. after a
-      // firmware upgrade that added the sleep cover). Flag for extraction so
-      // the sleep image is generated the next time the book is opened.
-      const std::string sleep_path = cover_sleep_bin_path(recent_path_.c_str(), app_->data_dir_);
-      FILE* schk = std::fopen(sleep_path.c_str(), "rb");
-      if (schk) std::fclose(schk);
-      else cover_needs_extract_ = true;
+      if (!sf && app_->sleep_is_book_cover())
+        cover_needs_extract_ = true;  // sleep cover missing, flag for lazy gen
     } else {
       cover_needs_extract_ = true;
     }
@@ -167,8 +167,8 @@ void LyraScreen::load_cover_data_() {
 void LyraScreen::on_select(int index) {
   if (!app_) return;
   if (index == idx_recent_ && has_recent_) {
+    show_opening_indicator();
     app_->record_book_opened(recent_path_);
-    app_->ensure_cover_bin(recent_path_);
     app_->reader()->set_path(recent_path_.c_str());
     app_->push_screen(ScreenId::Reader);
   } else if (index == idx_all_books_) {
@@ -188,7 +188,7 @@ void LyraScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& r
   // Lazy cover extraction: show loading bar, extract, then redraw.
   if (cover_needs_extract_) {
     cover_needs_extract_ = false;
-    if (app_) app_->ensure_cover_bin(recent_path_, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize);
+    if (app_) app_->ensure_cover_bin(recent_path_, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize, app_->sleep_is_book_cover());
     load_cover_data_();
     request_redraw();
     return;

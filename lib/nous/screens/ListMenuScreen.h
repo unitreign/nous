@@ -186,6 +186,17 @@ class ListMenuScreen : public IScreen {
     force_redraw_ = true;
   }
 
+  // Show a full-screen loading indicator on the current draw buffer.
+  // Call at the start of on_select() before any blocking operation so the
+  // user sees immediate feedback while the device is working.
+  void show_opening_indicator(const char* msg = "Opening...") {
+    if (buf_) {
+      buf_->sync_bw_ram();
+      buf_->show_loading(msg, 0);
+      buf_->reset_after_scratch(true);
+    }
+  }
+
   // Re-run start() to rebuild items with updated settings (e.g. after font change).
   void restart() {
     if (buf_ && runtime_)

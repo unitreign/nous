@@ -111,7 +111,7 @@ void ConvertAllScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRunt
     std::snprintf(msg, sizeof(msg), "Covers %d / %d: %.55s", cover_idx_ + 1, total, title.c_str());
     buf.sync_bw_ram();
     buf.show_loading(msg, cover_idx_ * 100 / total);
-    if (app_) app_->ensure_cover_bin(job.path, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize);
+    if (app_) app_->ensure_cover_bin(job.path, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize, app_->sleep_is_book_cover());
     buf.reset_after_scratch(true);
     ++cover_idx_;
     if (cover_idx_ >= total) {

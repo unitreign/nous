@@ -123,8 +123,8 @@ void MainMenu::on_select(int index) {
   if (is_separator(index)) return;
   int real = entries_index_for(index);
   last_selected_path_ = entries_[real].path;
+  show_opening_indicator();
   app_->record_book_opened(entries_[real].path);
-  app_->ensure_cover_bin(entries_[real].path);
   app_->reader()->set_path(entries_[real].path.c_str());
   app_->push_screen(ScreenId::Reader);
 }
@@ -135,6 +135,9 @@ void MainMenu::stop() {
     initial_selection_ = cur;
     last_selected_path_ = cur;
   }
+
+  back_was_down_ = false;
+  back_hold_frames_ = 0;
 
   { std::vector<BookEntry> tmp; entries_.swap(tmp); }
   free_items_storage();

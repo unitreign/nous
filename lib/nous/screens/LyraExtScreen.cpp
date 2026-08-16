@@ -171,15 +171,18 @@ void LyraExtScreen::on_start() {
   for (int i = 0; i < num_books_; ++i) {
     auto& s = slots_[i];
     if (app_ && app_->data_dir_) {
-      s.bin_path = cover_bin_path(s.path.c_str(), app_->data_dir_);
+      // Prefer the full-res sleep cover for display; fall back to thumbnail.
+      const std::string sleep_path = cover_sleep_bin_path(s.path.c_str(), app_->data_dir_);
+      FILE* sf = std::fopen(sleep_path.c_str(), "rb");
+      if (sf) { std::fclose(sf); s.bin_path = sleep_path; }
+      else s.bin_path = cover_bin_path(s.path.c_str(), app_->data_dir_);
+
       FILE* chk = std::fopen(s.bin_path.c_str(), "rb");
       if (chk) {
         std::fclose(chk);
         load_cover_(i);
-        const std::string sleep_path = cover_sleep_bin_path(s.path.c_str(), app_->data_dir_);
-        FILE* schk = std::fopen(sleep_path.c_str(), "rb");
-        if (schk) std::fclose(schk);
-        else s.cover_needs_extract = true;
+        if (!sf && app_->sleep_is_book_cover())
+          s.cover_needs_extract = true;  // sleep cover missing, flag for lazy gen
       } else {
         s.cover_needs_extract = true;
       }
@@ -191,8 +194,8 @@ void LyraExtScreen::on_select(int index) {
   if (!app_) return;
   for (int i = 0; i < num_books_; ++i) {
     if (index == idx_books_[i]) {
+      show_opening_indicator();
       app_->record_book_opened(slots_[i].path);
-      app_->ensure_cover_bin(slots_[i].path);
       app_->reader()->set_path(slots_[i].path.c_str());
       app_->push_screen(ScreenId::Reader);
       return;
@@ -210,7 +213,7 @@ void LyraExtScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime
   for (int i = 0; i < num_books_; ++i) {
     if (slots_[i].cover_needs_extract) {
       slots_[i].cover_needs_extract = false;
-      if (app_) app_->ensure_cover_bin(slots_[i].path, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize);
+      if (app_) app_->ensure_cover_bin(slots_[i].path, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize, app_->sleep_is_book_cover());
       load_cover_(i);
       request_redraw();
       return;
