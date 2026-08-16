@@ -170,6 +170,72 @@
   }
   .install a:hover { background: var(--soft); }
 
+  /* ── Flash section ── */
+  .flash-section {
+    max-width: 980px;
+    margin: 0 auto 80px;
+    border: 1px solid var(--line);
+  }
+  .flash-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 32px;
+    padding: 28px 34px;
+    border-bottom: 1px solid var(--line);
+  }
+  .flash-credits {
+    font-family: "DM Mono", monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .flash-notices {
+    padding: 22px 34px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .flash-notice {
+    font-family: "DM Mono", monospace;
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.7;
+    padding-left: 14px;
+    border-left: 2px solid var(--line);
+  }
+  .flash-notice-warn {
+    border-left-color: var(--warn);
+    color: var(--ink);
+  }
+  .flash-disclaimer {
+    font-family: "DM Mono", monospace;
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-top: 4px;
+  }
+  .flash-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: "DM Mono", monospace;
+    font-size: 10px;
+    color: var(--muted);
+    padding: 5px 0;
+  }
+  .flash-step.running { color: var(--ink); }
+  .flash-step.done { color: var(--ok); }
+  .flash-step.error { color: var(--err); }
+  .step-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--line);
+    flex-shrink: 0;
+  }
+  .flash-step.running .step-dot { background: var(--ink); }
+  .flash-step.done .step-dot { background: var(--ok); }
+  .flash-step.error .step-dot { background: var(--err); }
+
   /* ── Mobile ── */
   @media (max-width: 750px) {
     .hero { display: block; min-height: auto; padding: 68px 12px 80px; }
@@ -188,6 +254,8 @@
     .spec-row { grid-template-columns: 110px 1fr; }
     .install { display: block; padding: 22px; }
     .install a { display: inline-block; margin-top: 22px; margin-left: 0; }
+    .flash-main { flex-direction: column; padding: 22px; }
+    .flash-notices { padding: 16px 22px; }
   }
 </style>
 </head>
@@ -360,6 +428,91 @@
     </a>
   </section>
 
+  <!-- BROWSER FLASH -->
+  <section class="flash-section">
+    <div class="flash-main">
+      <div class="flash-left">
+        <div class="tiny-label" style="margin-bottom:10px">Browser install · WebSerial · Chrome / Edge only</div>
+        <h2 style="font-size:25px;font-weight:400;margin:0 0 8px;letter-spacing:-.04em">Install directly</h2>
+        <p style="margin:0 0 14px;font-size:13px;color:var(--muted);line-height:1.7">
+          Connect your Xteink X4 via USB and flash the latest Nous release from your browser. No file download required.
+        </p>
+        <div class="flash-credits">
+          Flash engine originally by <a href="https://github.com/daveallie" target="_blank" rel="noopener">daveallie</a>,
+          extended by CrossPoint.
+        </div>
+      </div>
+      <button id="flash-btn" class="btn-primary" style="flex-shrink:0;align-self:center;padding:13px 20px">
+        Flash firmware →
+      </button>
+    </div>
+
+    <div class="flash-notices">
+      <div class="flash-notice flash-notice-warn">
+        Before you flash — check the list of
+        <a href="https://brickclub.pages.dev/" target="_blank" rel="noopener">approved and flagged firmware</a>.
+        Flashing unapproved firmware can permanently brick your device.
+      </div>
+      <div class="flash-notice">
+        Some international Xteink devices, including most from AliExpress, ship with USB flashing disabled.
+        The SD card method gets CrossPoint onto a locked device in a few minutes.
+        It won't unlock USB flashing, but it will run custom firmware.
+      </div>
+      <div class="flash-notice">
+        Stuck on a firmware that doesn't support SD flashing? Use the
+        <a href="https://crosspointreader.com/unlocker" target="_blank" rel="noopener">OTA Unlocker Tool</a>.
+      </div>
+      <div class="flash-disclaimer">
+        Flash at your own risk. I am not responsible for bricked devices, data loss, or any damage
+        resulting from the use of this tool.
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- CONFIRM MODAL -->
+<div id="flash-confirm-modal" class="modal" style="display:none">
+  <div class="modal-box">
+    <div class="modal-title">Flash Nous to Xteink X4?</div>
+    <div class="modal-body">
+      <p style="margin:0 0 10px">This will overwrite the firmware currently on your device.</p>
+      <p style="margin:0 0 10px">
+        Before continuing, confirm that Nous is on the
+        <a href="https://brickclub.pages.dev/" target="_blank" rel="noopener">approved firmware list</a>.
+      </p>
+      <p style="margin:0">
+        By proceeding you accept that flashing carries risk.
+        I am not responsible for any damage to your device.
+      </p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="flash-cancel-btn">Cancel</button>
+      <button class="btn-primary" id="flash-go-btn">I understand — connect device</button>
+    </div>
+  </div>
+</div>
+
+<!-- PROGRESS MODAL -->
+<div id="flash-progress-modal" class="modal" style="display:none">
+  <div class="modal-box" style="min-width:380px">
+    <div class="modal-title" id="flash-modal-title">Flashing Nous…</div>
+    <div id="flash-steps-list" style="margin:16px 0"></div>
+    <div class="progress-wrap" id="flash-prog-wrap">
+      <div class="progress-fill" id="flash-prog-fill"></div>
+    </div>
+    <div class="status-bar" id="flash-prog-status" style="margin-top:8px"></div>
+    <div id="flash-success" style="display:none;margin-top:18px">
+      <div class="status-bar status-ok" style="margin-bottom:14px">
+        Flash complete. Unplug and replug the USB cable to restart your device.
+      </div>
+      <button class="btn-primary" id="flash-close-btn">Close</button>
+    </div>
+    <div id="flash-error" style="display:none;margin-top:18px">
+      <div class="status-bar status-err" id="flash-error-msg" style="margin-bottom:14px"></div>
+      <button class="btn-secondary" id="flash-error-close-btn">Close</button>
+    </div>
+  </div>
 </div>
 
 <footer>
@@ -368,18 +521,15 @@
     2026
   </div>
   <div class="fork">
-    Built on an open-source foundation.<br>
+    Fork of <a href="https://github.com/CidVonHighwind/microreader" target="_blank" rel="noopener">microreader</a>.<br>
     Distributed under GPL-3.0.
   </div>
 </footer>
 
 <script>
-  // Active nav
   document.querySelectorAll('.top-nav a').forEach(a => {
     if (a.getAttribute('href') === location.pathname) a.classList.add('active');
   });
-
-  // Fetch latest release from GitHub
   fetch('https://api.github.com/repos/unitreign/nous/releases/latest')
     .then(r => r.ok ? r.json() : null)
     .then(d => {
@@ -389,6 +539,90 @@
       document.getElementById('install-version').textContent = v;
     })
     .catch(() => {});
+</script>
+<script type="module">
+  import { runFlash, STEPS } from '/js/nous-flasher.js';
+
+  const flashBtn       = document.getElementById('flash-btn');
+  const confirmModal   = document.getElementById('flash-confirm-modal');
+  const progressModal  = document.getElementById('flash-progress-modal');
+  const cancelBtn      = document.getElementById('flash-cancel-btn');
+  const goBtn          = document.getElementById('flash-go-btn');
+  const closeBtn       = document.getElementById('flash-close-btn');
+  const errCloseBtn    = document.getElementById('flash-error-close-btn');
+  const stepsList      = document.getElementById('flash-steps-list');
+  const progWrap       = document.getElementById('flash-prog-wrap');
+  const progFill       = document.getElementById('flash-prog-fill');
+  const progStatus     = document.getElementById('flash-prog-status');
+  const successEl      = document.getElementById('flash-success');
+  const errorEl        = document.getElementById('flash-error');
+  const errorMsg       = document.getElementById('flash-error-msg');
+  const modalTitle     = document.getElementById('flash-modal-title');
+
+  // WebSerial availability check
+  if (!('serial' in navigator)) {
+    flashBtn.textContent = 'WebSerial not supported (use Chrome/Edge)';
+    flashBtn.disabled = true;
+  }
+
+  flashBtn.addEventListener('click', () => { confirmModal.style.display = 'flex'; });
+  cancelBtn.addEventListener('click', () => { confirmModal.style.display = 'none'; });
+  closeBtn.addEventListener('click', () => { progressModal.style.display = 'none'; });
+  errCloseBtn.addEventListener('click', () => { progressModal.style.display = 'none'; });
+
+  // Step elements keyed by index
+  let stepEls = [];
+
+  function initStepsUI() {
+    stepsList.innerHTML = '';
+    stepEls = STEPS.map((label, i) => {
+      const el = document.createElement('div');
+      el.className = 'flash-step';
+      el.innerHTML = `<span class="step-dot"></span><span>${label}</span>`;
+      stepsList.appendChild(el);
+      return el;
+    });
+    progWrap.classList.remove('visible');
+    progFill.style.width = '0';
+    progStatus.textContent = '';
+    successEl.style.display = 'none';
+    errorEl.style.display = 'none';
+    modalTitle.textContent = 'Flashing Nous…';
+  }
+
+  goBtn.addEventListener('click', async () => {
+    confirmModal.style.display = 'none';
+    initStepsUI();
+    progressModal.style.display = 'flex';
+
+    try {
+      await runFlash({
+        onStep(i, label, status) {
+          stepEls.forEach((el, j) => {
+            if (j < i) el.className = 'flash-step done';
+            else if (j === i) el.className = `flash-step ${status}`;
+            else el.className = 'flash-step';
+          });
+        },
+        onProgress(label, done, total) {
+          progWrap.classList.add('visible');
+          progFill.style.width = total ? `${(done / total * 100).toFixed(1)}%` : '0';
+          progStatus.textContent = `${label} — ${total ? Math.round(done / total * 100) : 0}%`;
+        },
+        onStatus(msg) {
+          progStatus.textContent = msg;
+        },
+      });
+      modalTitle.textContent = 'Done';
+      successEl.style.display = 'block';
+    } catch (err) {
+      modalTitle.textContent = 'Flash failed';
+      errorMsg.textContent = err.message || String(err);
+      errorEl.style.display = 'block';
+      // Mark the running step as errored
+      stepEls.forEach(el => { if (el.classList.contains('running')) el.className = 'flash-step error'; });
+    }
+  });
 </script>
 </body>
 </html>
