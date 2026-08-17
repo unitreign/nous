@@ -751,8 +751,8 @@ function callPreview(regData, boldData, italData, biData, fbData, sizes, rangePa
 // ── Live preview ──
 function paintPreviewImage(canvas, image) {
   canvas.width = image.width; canvas.height = image.height;
-  canvas.style.width = '100%';
-  canvas.style.height = 'auto';
+  canvas.style.width = image.width + 'px';
+  canvas.style.height = image.height + 'px';
   canvas.style.imageRendering = 'pixelated';
   const ctx = canvas.getContext('2d');
   const img = ctx.createImageData(canvas.width, canvas.height);
@@ -790,7 +790,6 @@ async function renderLivePreview(seq) {
       group.appendChild(title);
       const strip = document.createElement('div');
       strip.className = 'preview-style-strip';
-      strip.style.gridTemplateColumns = sections.length > 1 ? 'repeat(2, minmax(0, 1fr))' : '1fr';
       sections.sort((a, b) => a.styleId - b.styleId).forEach(section => {
         const wrapper = document.createElement('div');
         wrapper.className = 'preview-swatch';
