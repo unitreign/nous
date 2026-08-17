@@ -15,7 +15,7 @@ CONFIG_FATFS_USE_LABEL=y
 # Main task needs enough stack for EPUB parsing (ZIP + XML + CSS) and
 # for FatFS/SDSPI calls inside settings flows (clear cache, etc).
 # IDF default is 3584 which is far too tight.
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=32768
 
 # --- RAM optimizations ---
 # Optimize for performance (-O2) — faster CPU-bound inflate/XML parsing

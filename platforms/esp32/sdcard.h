@@ -10,7 +10,7 @@
 #include "esp_vfs_fat.h"
 
 #define SD_MOUNT "/sdcard"
-#define SD_MAX_FILES 4
+#define SD_MAX_FILES 8
 
 static const char* kSdTag = "sd";
 
