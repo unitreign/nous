@@ -1,5 +1,5 @@
 {
-  "rewrites": [
-    { "source": "/", "destination": "/web/index.html" }
-  ]
+  "outputDirectory": "web",
+  "cleanUrls": true,
+  "trailingSlash": false
 }
