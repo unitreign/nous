@@ -186,6 +186,7 @@ fetch('https://api.github.com/repos/unitreign/nous/releases/latest')
 
 // ── State ──
 let worker = null;
+const FONT_WORKER_URL = '/fonts/font_gen_worker.js';
 let fallbackFile = null;
 const fontFiles = {};
 let previewSeq = 0;
@@ -506,7 +507,7 @@ function showProgress(v) { document.getElementById('progress-wrap').classList.to
 // ── Worker ──
 function ensureWorker() {
   if (worker) return;
-  worker = new Worker('./font_gen_worker.js', { type: 'module' });
+  worker = new Worker(FONT_WORKER_URL, { type: 'module' });
   worker.addEventListener('message', e => {
     const { type, requestId } = e.data;
     if (type === 'log') { log(e.data.msg); return; }
