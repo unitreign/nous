@@ -85,7 +85,7 @@ body.fonts-page .preview-size-group {
 
 body.fonts-page .preview-style-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
@@ -101,7 +101,7 @@ body.fonts-page .preview-viewport {
 
 body.fonts-page .preview-viewport canvas {
   display: block;
-  width: auto;
+  width: 100%;
   height: auto;
 }
 

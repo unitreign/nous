@@ -750,28 +750,18 @@ function callPreview(regData, boldData, italData, biData, fbData, sizes, rangePa
 
 // ── Live preview ──
 function paintPreviewImage(canvas, image) {
-  const viewport = canvas.parentElement;
-  const targetWidth = Math.max(1, viewport ? viewport.clientWidth : image.width);
-  const scale = targetWidth / image.width;
-  const targetHeight = Math.max(1, Math.round(image.height * scale));
-  const source = document.createElement('canvas');
-  source.width = image.width;
-  source.height = image.height;
+  canvas.width = image.width; canvas.height = image.height;
+  canvas.style.width = '100%';
+  canvas.style.height = 'auto';
   canvas.style.imageRendering = 'pixelated';
-  const sctx = source.getContext('2d');
-  const img = sctx.createImageData(source.width, source.height);
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(canvas.width, canvas.height);
   for (let y = 0; y < image.height; y++)
     for (let x = 0; x < image.width; x++) {
       const v = image.pixels[y * image.width + x], i = (y * image.width + x) * 4;
       img.data[i] = img.data[i+1] = img.data[i+2] = v; img.data[i+3] = 255;
     }
-  sctx.putImageData(img, 0, 0);
-  canvas.width = targetWidth;
-  canvas.height = targetHeight;
-  const ctx = canvas.getContext('2d');
-  ctx.imageSmoothingEnabled = false;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  ctx.putImageData(img, 0, 0);
 }
 async function renderLivePreview(seq) {
   if (!fontFiles['regular']) { document.getElementById('device-preview-empty').style.display = ''; document.getElementById('device-preview-grid').style.display = 'none'; return; }
@@ -800,6 +790,7 @@ async function renderLivePreview(seq) {
       group.appendChild(title);
       const strip = document.createElement('div');
       strip.className = 'preview-style-strip';
+      strip.style.gridTemplateColumns = sections.length > 1 ? 'repeat(2, minmax(0, 1fr))' : '1fr';
       sections.sort((a, b) => a.styleId - b.styleId).forEach(section => {
         const wrapper = document.createElement('div');
         wrapper.className = 'preview-swatch';
