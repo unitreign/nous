@@ -10,6 +10,13 @@
   .tool-wrap { padding-top: 48px; }
   .btn-sm { display: inline-flex; align-items: center; gap: 5px; }
   .btn-sm i { font-size: 11px; }
+  .toggle-label {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    font-family: "DM Mono", monospace; font-size: 11px; color: var(--muted);
+    letter-spacing: .04em; user-select: none;
+  }
+  .toggle-label input { accent-color: var(--brown); cursor: pointer; }
+  .toggle-label:has(input:checked) { color: var(--ink); }
 </style>
 </head>
 <body>
@@ -47,6 +54,7 @@
     <button class="btn-secondary" id="btn-refresh" disabled><i class="fa-solid fa-rotate-right"></i> Refresh</button>
     <button class="btn-secondary" id="btn-new-folder" disabled><i class="fa-solid fa-folder-plus"></i> New Folder</button>
     <button class="btn-secondary" id="btn-upload" disabled><i class="fa-solid fa-upload"></i> Upload</button>
+    <label class="toggle-label"><input type="checkbox" id="show-hidden-chk"> <i class="fa-solid fa-eye-slash"></i> Hidden</label>
     <input type="file" id="file-input" multiple style="display:none">
   </div>
 
@@ -308,7 +316,9 @@ let currentEntries = [];
 let sortCol = 'name', sortDir = 'asc';
 let busy = false;
 let autoconnect = false;
+let showHidden = false;
 try { autoconnect = localStorage.getItem('nous-autoconnect') === '1'; } catch (_) {}
+try { showHidden = localStorage.getItem('nous-show-hidden') === '1'; } catch (_) {}
 
 const $ = id => document.getElementById(id);
 const btnConnect   = $('btn-connect');
@@ -427,8 +437,8 @@ function renderEntries(entries) {
           : a.name.localeCompare(b.name);
     return sortDir === 'asc' ? v : -v;
   };
-  const dirs  = entries.filter(e => e.type === 'dir' && !e.name.startsWith('.')).sort(cmp);
-  const files = entries.filter(e => e.type === 'file'&& !e.name.startsWith('.')).sort(cmp);
+  const dirs  = entries.filter(e => e.type === 'dir'  && (showHidden || !e.name.startsWith('.'))).sort(cmp);
+  const files = entries.filter(e => e.type === 'file' && (showHidden || !e.name.startsWith('.'))).sort(cmp);
   if (!dirs.length && !files.length) {
     fileTbody.innerHTML = '<tr class="placeholder-row"><td colspan="4">Empty folder</td></tr>';
     updateSortUI(); return;
@@ -614,6 +624,13 @@ autoChk.checked = autoconnect;
 autoChk.addEventListener('change', () => {
   autoconnect = autoChk.checked;
   try { localStorage.setItem('nous-autoconnect', autoconnect ? '1' : '0'); } catch (_) {}
+});
+const showHiddenChk = $('show-hidden-chk');
+showHiddenChk.checked = showHidden;
+showHiddenChk.addEventListener('change', () => {
+  showHidden = showHiddenChk.checked;
+  try { localStorage.setItem('nous-show-hidden', showHidden ? '1' : '0'); } catch (_) {}
+  renderEntries(currentEntries);
 });
 btnRefresh.addEventListener('click', () => navigate(currentPath));
 btnNewFolder.addEventListener('click', onNewFolder);
