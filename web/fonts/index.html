@@ -30,73 +30,94 @@
 
   <div class="fc-layout">
 
-    <!-- Row 1 left: Font files -->
-    <div class="fc-panel fc-picker">
-      <div class="panel-label">Font files</div>
+    <!-- Left column: font picker + log/preview box stacked -->
+    <div class="fc-left">
 
-      <div style="margin-bottom:14px">
-        <button class="btn-secondary" id="btn-browse-folder" style="width:100%">Browse folder…</button>
-        <input type="file" id="file-folder" webkitdirectory multiple accept=".ttf,.otf" style="display:none">
-        <p style="font-family:'DM Mono',monospace;font-size:7px;color:var(--muted);margin:6px 0 0;line-height:1.6">
-          Open a font folder and Nous will match styles automatically.
-        </p>
-      </div>
+      <div class="fc-panel fc-picker">
+        <div class="panel-label">Font files</div>
 
-      <hr class="section-divider">
+        <div style="margin-bottom:14px">
+          <button class="btn-secondary" id="btn-browse-folder" style="width:100%">Browse folder…</button>
+          <input type="file" id="file-folder" webkitdirectory multiple accept=".ttf,.otf" style="display:none">
+          <p style="font-family:'DM Mono',monospace;font-size:7px;color:var(--muted);margin:6px 0 0;line-height:1.6">
+            Open a font folder and Nous will match styles automatically.
+          </p>
+        </div>
 
-      <div class="font-name-row">
-        <span class="font-name-label">Font name</span>
-        <input class="field-input" id="input-font-name" placeholder="e.g. Bookerly" style="flex:1">
-      </div>
+        <hr class="section-divider">
 
-      <div class="font-file-row">
-        <span class="font-style-label">Regular</span>
-        <button class="font-file-btn" data-style="regular" id="btn-regular">
-          <span id="name-regular" class="empty">Choose .ttf or .otf…</span>
-        </button>
-        <input type="file" id="file-regular" accept=".ttf,.otf" style="display:none">
-      </div>
-      <div class="font-file-row">
-        <span class="font-style-label">Bold</span>
-        <button class="font-file-btn" data-style="bold" id="btn-bold">
-          <span id="name-bold" class="empty">Optional</span>
-        </button>
-        <input type="file" id="file-bold" accept=".ttf,.otf" style="display:none">
-      </div>
-      <div class="font-file-row">
-        <span class="font-style-label">Italic</span>
-        <button class="font-file-btn" data-style="italic" id="btn-italic">
-          <span id="name-italic" class="empty">Optional</span>
-        </button>
-        <input type="file" id="file-italic" accept=".ttf,.otf" style="display:none">
-      </div>
-      <div class="font-file-row">
-        <span class="font-style-label">Bold Italic</span>
-        <button class="font-file-btn" data-style="bold-italic" id="btn-bold-italic">
-          <span id="name-bold-italic" class="empty">Optional</span>
-        </button>
-        <input type="file" id="file-bold-italic" accept=".ttf,.otf" style="display:none">
-      </div>
+        <div class="font-name-row">
+          <span class="font-name-label">Font name</span>
+          <input class="field-input" id="input-font-name" placeholder="e.g. Bookerly" style="flex:1">
+        </div>
 
-      <hr class="section-divider">
+        <div class="font-file-row">
+          <span class="font-style-label">Regular</span>
+          <button class="font-file-btn" data-style="regular" id="btn-regular">
+            <span id="name-regular" class="empty">Choose .ttf or .otf…</span>
+          </button>
+          <input type="file" id="file-regular" accept=".ttf,.otf" style="display:none">
+        </div>
+        <div class="font-file-row">
+          <span class="font-style-label">Bold</span>
+          <button class="font-file-btn" data-style="bold" id="btn-bold">
+            <span id="name-bold" class="empty">Optional</span>
+          </button>
+          <input type="file" id="file-bold" accept=".ttf,.otf" style="display:none">
+        </div>
+        <div class="font-file-row">
+          <span class="font-style-label">Italic</span>
+          <button class="font-file-btn" data-style="italic" id="btn-italic">
+            <span id="name-italic" class="empty">Optional</span>
+          </button>
+          <input type="file" id="file-italic" accept=".ttf,.otf" style="display:none">
+        </div>
+        <div class="font-file-row">
+          <span class="font-style-label">Bold Italic</span>
+          <button class="font-file-btn" data-style="bold-italic" id="btn-bold-italic">
+            <span id="name-bold-italic" class="empty">Optional</span>
+          </button>
+          <input type="file" id="file-bold-italic" accept=".ttf,.otf" style="display:none">
+        </div>
 
-      <div class="font-file-row" style="margin-bottom:0">
-        <span class="font-style-label">Fallback</span>
-        <button class="font-file-btn" id="btn-fallback">
-          <span id="name-fallback" class="empty">Optional — for missing glyphs</span>
-        </button>
-        <input type="file" id="file-fallback" accept=".ttf,.otf" style="display:none">
-      </div>
+        <hr class="section-divider">
 
-      <hr class="section-divider">
+        <div class="font-file-row" style="margin-bottom:0">
+          <span class="font-style-label">Fallback</span>
+          <button class="font-file-btn" id="btn-fallback">
+            <span id="name-fallback" class="empty">Optional — for missing glyphs</span>
+          </button>
+          <input type="file" id="file-fallback" accept=".ttf,.otf" style="display:none">
+        </div>
 
-      <label class="cb-row">
-        <input type="checkbox" id="cb-bw-only">
-        B&W only (smaller file, no greyscale anti-aliasing)
-      </label>
-    </div>
+        <hr class="section-divider">
 
-    <!-- Row 1 right: Customization -->
+        <label class="cb-row">
+          <input type="checkbox" id="cb-bw-only">
+          B&W only (smaller file, no greyscale anti-aliasing)
+        </label>
+      </div><!-- /fc-picker -->
+
+      <!-- Log + preview in bottom-left box -->
+      <div class="fc-panel fc-extra">
+        <div class="panel-label">Log</div>
+        <pre class="log-box" id="log-box"></pre>
+
+        <hr class="section-divider">
+
+        <div class="panel-label">Preview text</div>
+        <textarea class="preview-text" id="preview-text"></textarea>
+
+        <hr class="section-divider">
+
+        <div class="preview-label-row">Live preview</div>
+        <div id="device-preview-empty">Upload a Regular font file to see a live preview.</div>
+        <div id="device-preview-grid" style="display:none"></div>
+      </div><!-- /fc-extra -->
+
+    </div><!-- /fc-left -->
+
+    <!-- Right column: Settings -->
     <div class="fc-panel fc-settings">
       <div class="panel-label">Sizes</div>
       <div class="preset-row">
@@ -137,9 +158,9 @@
         <button class="btn-secondary" id="manual-ranges-clear" style="font-size:7px;padding:5px 10px">Clear</button>
       </div>
       <div class="manual-ranges-status" id="manual-ranges-status"></div>
-    </div>
+    </div><!-- /fc-settings -->
 
-    <!-- Row 2: Actions -->
+    <!-- Full-width: Actions -->
     <div class="fc-actions-row">
       <div class="fc-btns">
         <button class="btn-primary" id="btn-generate" disabled>Generate .mfb</button>
@@ -151,26 +172,7 @@
       </div>
       <div class="status-bar" id="status-bar"></div>
       <div class="progress-label" id="progress-label"></div>
-    </div>
-
-    <!-- Row 3: Log -->
-    <div class="fc-log">
-      <div class="log-label">Log</div>
-      <pre class="log-box" id="log-box"></pre>
-    </div>
-
-    <!-- Row 4: Preview text + live canvas -->
-    <div class="fc-preview">
-      <div class="fc-preview-text">
-        <div class="panel-label">Preview text</div>
-        <textarea class="preview-text" id="preview-text"></textarea>
-      </div>
-      <div class="fc-preview-canvas">
-        <div class="preview-label-row">Live preview</div>
-        <div id="device-preview-empty">Upload a Regular font file to see a live preview.</div>
-        <div id="device-preview-grid" style="display:none"></div>
-      </div>
-    </div>
+    </div><!-- /fc-actions-row -->
 
   </div><!-- /fc-layout -->
 
