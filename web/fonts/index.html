@@ -557,6 +557,7 @@ function u32le(n) {
   return b;
 }
 const CMND = new Uint8Array([0x43, 0x4D, 0x4E, 0x44]);
+const SDFN = new Uint8Array([0x53, 0x44, 0x46, 0x4E]);
 function isEspLog(line) { return /^[IWED] \(\d+\)/.test(line); }
 
 let serialConn = null;
@@ -630,11 +631,11 @@ async function readUntil(pred, ms = 8000) {
   }
 }
 
-async function cmdWriteFile(fullPath, bytes, onProgress) {
+async function cmdUploadFont(filename, bytes, onProgress) {
   const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  const pb = new TextEncoder().encode(fullPath);
+  const pb = new TextEncoder().encode(filename);
   const checksum = crc32(data);
-  await serialConn.write(new Uint8Array([...CMND, 0x57, ...u16le(pb.length), ...pb, ...u32le(data.length)]));
+  await serialConn.write(new Uint8Array([...SDFN, ...u16le(pb.length), ...pb, ...u32le(data.length)]));
   await readUntil(l => { if (l.startsWith('ERR:')) throw new Error(l); return l === 'READY'; }, 10000);
   const CHUNK = 2048;
   for (let sent = 0; sent < data.length; ) {
@@ -674,7 +675,6 @@ async function uploadResultToDevice() {
     throw new Error('WebSerial is not available in this browser. Use Chrome or Edge on desktop.');
   }
   const baseName = sanitizeFileStem(resultFilename.replace(/\.mfb$/i, ''), 'Font');
-  const dest = `${DEVICE_FONT_DIR}/${baseName}.mfb`;
   if (!serialConn) {
     log('Opening browser serial picker…');
     const port = await navigator.serial.requestPort({ filters: ESP_FILTERS });
@@ -685,8 +685,8 @@ async function uploadResultToDevice() {
   setProgress(0, `Uploading ${baseName}.mfb…`);
   document.getElementById('progress-wrap').classList.add('visible');
   document.getElementById('progress-label').textContent = `Uploading ${baseName}.mfb…`;
-  log(`upload → ${dest}`);
-  await cmdWriteFile(dest, resultBytes, pct => {
+  log(`upload → ${DEVICE_FONT_DIR}/${baseName}.mfb`);
+  await cmdUploadFont(`${baseName}.mfb`, resultBytes, pct => {
     document.getElementById('progress-fill').style.width = (pct * 100).toFixed(1) + '%';
   });
   document.getElementById('progress-fill').style.width = '100%';
