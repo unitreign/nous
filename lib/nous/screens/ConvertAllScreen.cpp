@@ -218,6 +218,7 @@ void ConvertAllScreen::on_select(int index) {
     scan_entries_();
   }
   rebuild_items_();
+  set_selected(std::min(index, count() - 1));
   // ListMenuScreen's needs_draw path redraws and refreshes after on_select() returns.
 }
 

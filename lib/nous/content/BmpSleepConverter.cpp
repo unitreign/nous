@@ -162,12 +162,16 @@ bool convert_bmp_to_mgr2(const char* bmp_path, const char* mgr_out_path) {
         // ── Portrait path: CCW 90° rotation (matches Python ROTATE_90) ───────
         // Derivation: new[out_y][out_x] = old[out_x * H / 800][W-1 - out_y * W / 480]
         // For a fixed out_x, the source row is constant → one seek per output column.
-        // Accumulate the 96 KB output array, then write all rows.
-        uint8_t* output = (uint8_t*)std::malloc(OUT_H * OUT_STRIDE);
-        if (!output) {
-            ok = false;
-        } else {
-            std::memset(output, 0, OUT_H * OUT_STRIDE);
+        // Split into two halves so peak allocation is ~48 KB (one display frame) rather
+        // than ~96 KB (two frames), which may not be contiguously available on-device.
+        const int kHalf      = OUT_H / 2;              // 240 rows
+        const int kHalfBytes = kHalf * OUT_STRIDE;     // 48 000 bytes
+        for (int half = 0; half < 2 && ok; ++half) {
+            const int out_y0 = half * kHalf;
+            const int out_y1 = out_y0 + kHalf;
+            uint8_t* output  = (uint8_t*)std::malloc((size_t)kHalfBytes);
+            if (!output) { ok = false; break; }
+            std::memset(output, 0, (size_t)kHalfBytes);
             for (int out_x = 0; out_x < OUT_W && ok; ++out_x) {
                 const int src_log_y  = out_x * (int)height / OUT_W;
                 const int src_file_y = top_down ? src_log_y : ((int)height - 1 - src_log_y);
@@ -176,19 +180,17 @@ bool convert_bmp_to_mgr2(const char* bmp_path, const char* mgr_out_path) {
                     std::fread(row_buf, 1, (size_t)src_stride, f) != (size_t)src_stride) {
                     ok = false; break;
                 }
-                for (int out_y = 0; out_y < OUT_H; ++out_y) {
+                for (int out_y = out_y0; out_y < out_y1; ++out_y) {
                     const int sx    = (int)width - 1 - out_y * (int)width / OUT_H;
                     const uint8_t g = decode_pixel(row_buf, sx, bpp, palette, is_rgb565);
                     const uint8_t s = quantize(g, out_x, out_y);
-                    output[out_y * OUT_STRIDE + out_x / 4] |=
+                    output[(out_y - out_y0) * OUT_STRIDE + out_x / 4] |=
                         (uint8_t)(s << (6 - (out_x % 4) * 2));
                 }
             }
-            if (ok) {
-                for (int out_y = 0; out_y < OUT_H && ok; ++out_y) {
-                    if (std::fwrite(output + out_y * OUT_STRIDE, 1, OUT_STRIDE, out) != OUT_STRIDE)
-                        ok = false;
-                }
+            for (int out_y = 0; out_y < kHalf && ok; ++out_y) {
+                if (std::fwrite(output + out_y * OUT_STRIDE, 1, OUT_STRIDE, out) != OUT_STRIDE)
+                    ok = false;
             }
             std::free(output);
         }

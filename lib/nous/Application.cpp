@@ -234,7 +234,10 @@ static bool show_bmp_sleep(const char* bmp_path, const char* data_dir, DrawBuffe
     cached = convert_bmp_to_mgr2(bmp_path, cache_path);
     MR_LOGI("sleep", "BMP convert result: %d cache=%s", (int)cached, cache_path);
   }
-  return cached && buf.show_sleep_image(cache_path, show_text);
+  if (!cached) return false;
+  if (buf.show_sleep_image(cache_path, show_text)) return true;
+  std::remove(cache_path);  // cache is corrupt; next sleep will reconvert
+  return false;
 }
 
 void Application::prepare_book_stats_for_sleep_() {
