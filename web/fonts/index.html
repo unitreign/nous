@@ -594,6 +594,7 @@ async function renderLivePreview(seq) {
     document.getElementById('device-preview-empty').style.display = preview.deviceSections.length ? 'none' : '';
     document.getElementById('device-preview-grid').style.display = preview.deviceSections.length ? 'flex' : 'none';
   } catch (err) {
+    log('Preview error: ' + err.message);
     document.getElementById('device-preview-empty').style.display = '';
     document.getElementById('device-preview-grid').style.display = 'none';
   }
