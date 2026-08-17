@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nous — Font Converter</title>
 <link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/fonts.css">
 </head>
-<body>
+<body class="fonts-page">
 
 <header class="top">
   <a href="/" class="wordmark">NOUS</a>
@@ -27,8 +28,9 @@
   <h1 class="tool-heading">Font Converter</h1>
   <p class="tool-sub">Convert TTF or OTF files into the .mfb format Nous reads from the SD card</p>
 
-  <!-- File inputs -->
-  <div class="fonts-grid" style="margin-top:32px">
+  <div class="fonts-layout">
+    <div class="fonts-stack">
+  <div class="fonts-grid">
 
     <div class="fonts-panel">
       <div class="panel-label">Font files</div>
@@ -154,8 +156,10 @@
       <div class="progress-fill" id="progress-fill"></div>
     </div>
   </div>
-  <div class="status-bar" id="status-bar" style="margin-top:8px"></div>
+  <div class="status-bar" id="status-bar"></div>
   <div class="progress-label" id="progress-label"></div>
+
+    </div><!-- /fonts-stack -->
 
   <!-- Live preview -->
   <div class="preview-wrap">
@@ -165,10 +169,12 @@
   </div>
 
   <!-- Log -->
-  <div class="log-section" style="margin-top:32px">
+  <div class="log-section">
     <div class="log-label">Log</div>
     <pre class="log-box" id="log-box"></pre>
   </div>
+
+  </div><!-- /fonts-layout -->
 
 </div>
 </div>

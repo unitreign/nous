@@ -1,0 +1,137 @@
+body.fonts-page .tool-wrap {
+  display: block;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 52px 0 80px;
+}
+
+body.fonts-page .fonts-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 500px) minmax(360px, 1fr);
+  grid-template-areas:
+    "stack preview"
+    "logs logs";
+  gap: 24px 28px;
+  align-items: start;
+  margin-top: 32px;
+}
+
+body.fonts-page .fonts-stack {
+  grid-area: stack;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+body.fonts-page .fonts-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 0;
+  width: 100%;
+}
+
+body.fonts-page .fonts-panel {
+  border: 1px solid var(--line);
+  padding: 20px;
+}
+
+body.fonts-page .preview-text-wrap,
+body.fonts-page .fonts-actions,
+body.fonts-page .status-bar,
+body.fonts-page .progress-label {
+  width: 100%;
+}
+
+body.fonts-page .preview-text-wrap,
+body.fonts-page .fonts-actions,
+body.fonts-page .status-bar,
+body.fonts-page .progress-label {
+  margin-top: 0;
+}
+
+body.fonts-page .preview-wrap {
+  grid-area: preview;
+  margin-top: 0;
+  border: 1px solid var(--line);
+  padding: 20px;
+  background: var(--paper);
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  max-height: calc(100vh - 124px);
+  overflow: auto;
+}
+
+body.fonts-page .log-section {
+  grid-area: logs;
+  margin-top: 0;
+}
+
+body.fonts-page #device-preview-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+body.fonts-page .preview-size-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+body.fonts-page .preview-style-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+body.fonts-page .preview-swatch {
+  min-width: 0;
+}
+
+body.fonts-page .preview-viewport {
+  display: block;
+}
+
+body.fonts-page .preview-viewport canvas {
+  display: block;
+}
+
+@media (max-width: 750px) {
+  body.fonts-page .fonts-layout {
+    display: block;
+  }
+
+  body.fonts-page .fonts-stack {
+    display: block;
+  }
+
+  body.fonts-page .preview-wrap {
+    position: static;
+    min-width: 0;
+    max-height: none;
+    overflow: visible;
+  }
+
+  body.fonts-page .preview-style-strip {
+    grid-template-columns: 1fr;
+  }
+
+  body.fonts-page .tool-wrap {
+    padding: 36px 0 60px;
+  }
+
+  body.fonts-page .fork {
+    text-align: left;
+    margin-top: 14px;
+  }
+
+  body.fonts-page footer {
+    display: block;
+    padding: 18px 14px;
+  }
+}
