@@ -1,5 +1,11 @@
 {
-  "outputDirectory": "web",
   "cleanUrls": true,
-  "trailingSlash": false
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/css/:path*",     "destination": "/web/css/:path*" },
+    { "source": "/js/:path*",      "destination": "/web/js/:path*" },
+    { "source": "/fonts/:path*",   "destination": "/web/fonts/:path*" },
+    { "source": "/manager/:path*", "destination": "/web/manager/:path*" },
+    { "source": "/",               "destination": "/web/index.html" }
+  ]
 }
