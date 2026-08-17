@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "../Application.h"
+#include "../ConvLog.h"
 #include "../content/Book.h"
 #include "../content/BookIndex.h"
 #include "../content/mrb/MrbConverter.h"
@@ -234,6 +235,9 @@ void ConvertAllScreen::do_convert_path_(const std::string& path, const std::stri
   const std::string cover_path = cover_bin_path(path.c_str(), app_->data_dir_);
   const std::string sleep_path = cover_sleep_bin_path(path.c_str(), app_->data_dir_);
 
+  CLOG("=== do_convert_path_ START: %s", path.c_str());
+  CLOG_HEAP("CAS-start");
+
 #ifdef ESP_PLATFORM
   mkdir(cache_dir.c_str(), 0775);
 #else
@@ -243,27 +247,56 @@ void ConvertAllScreen::do_convert_path_(const std::string& path, const std::stri
   buf.sync_bw_ram();
   buf.show_loading(title.c_str(), 0);
 
-  Book book;
-  auto err = book.open(path.c_str(), buf.scratch_buf1(), buf.scratch_buf2());
-  if (err == EpubError::Ok && book.chapter_count() > 0) {
-    // Write covers while book is freshly open — BEFORE conversion trashes scratch bufs.
+  // Pass 1: open book, write covers, close. Closing frees all zip/metadata
+  // allocations so the heap can coalesce before the conversion pass.
+  {
+    Book book;
+    auto err = book.open(path.c_str(), buf.scratch_buf1(), buf.scratch_buf2());
+    CLOG("[CAS] book.open result=%d chapters=%u", (int)err, (unsigned)book.chapter_count());
+    CLOG_HEAP("CAS-post-open");
+    if (err != EpubError::Ok || book.chapter_count() == 0) {
+      CLOG("[CAS] SKIP: err=%d chapters=%u", (int)err, (unsigned)book.chapter_count());
+      book.close();
+      buf.reset_after_scratch(true);
+      return;
+    }
     runtime.yield();
     book.write_cover_bin(cover_path.c_str(), 160, 240, buf.scratch_buf1(), DrawBuffer::kBufSize);
+    CLOG("[CAS] write_cover_bin(160x240) done");
+    CLOG_HEAP("CAS-post-cover160");
     runtime.yield();
-    if (app_->sleep_is_book_cover())
+    if (app_->sleep_is_book_cover()) {
       book.write_cover_bin(sleep_path.c_str(), 480, 786, buf.scratch_buf1(), DrawBuffer::kBufSize);
-    runtime.yield();
-
-    convert_epub_to_mrb_streaming(
-        book, mrb_path.c_str(), buf.scratch_buf1(), buf.scratch_buf2(),
-        [&buf, &title, &runtime](int done, int total) {
-          int pct = total > 0 ? done * 100 / total : 0;
-          buf.show_loading(title.c_str(), pct);
-          runtime.yield();
-        });
+      CLOG("[CAS] write_cover_bin(480x786) done");
+      CLOG_HEAP("CAS-post-cover480");
+    }
+    book.close();
   }
-  book.close();
+  CLOG_HEAP("CAS-post-cover-close");
+
+  // Pass 2: reopen for conversion. Cover already exists so write_cover_bin
+  // inside the reader path won't re-decode the JPEG; heap is coalesced.
+  runtime.yield();
+  {
+    Book book;
+    auto err = book.open(path.c_str(), buf.scratch_buf1(), buf.scratch_buf2());
+    CLOG("[CAS] book.open(conv) result=%d chapters=%u", (int)err, (unsigned)book.chapter_count());
+    CLOG_HEAP("CAS-pre-convert");
+    if (err == EpubError::Ok && book.chapter_count() > 0) {
+      bool conv_ok = convert_epub_to_mrb_streaming(
+          book, mrb_path.c_str(), buf.scratch_buf1(), buf.scratch_buf2(),
+          [&buf, &title, &runtime](int done, int total) {
+            int pct = total > 0 ? done * 100 / total : 0;
+            buf.show_loading(title.c_str(), pct);
+            runtime.yield();
+          });
+      CLOG("[CAS] convert returned %s", conv_ok ? "OK" : "FAIL");
+      CLOG_HEAP("CAS-post-convert");
+    }
+    book.close();
+  }
   buf.reset_after_scratch(true);
+  CLOG("=== do_convert_path_ END: %s", path.c_str());
 }
 
 void ConvertAllScreen::do_delete_(int idx, DrawBuffer& buf, IRuntime& runtime) {

@@ -2,6 +2,7 @@
 
 #include <cstring>
 
+#include "../../ConvLog.h"
 #include "../../display/DrawBuffer.h"
 #include "../Book.h"
 #include "../EpubParser.h"
@@ -142,13 +143,19 @@ bool write_split_paragraph(MrbWriter& writer, Paragraph& para) {
 
 bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t* work_buf, uint8_t* xml_buf,
                                    std::function<void(int, int)> progress_cb) {
+  CLOG("[Conv] convert_epub_to_mrb_streaming START out=%s chapters=%u", output_path,
+       (unsigned)book.chapter_count());
+  CLOG_HEAP("Conv-pre-open");
+
   MrbWriter writer;
   if (!writer.open(output_path)) {
+    CLOG("[Conv] FAIL writer.open");
 #ifdef ESP_PLATFORM
     ESP_LOGE("mrb", "writer.open failed: %s", output_path);
 #endif
     return false;
   }
+  CLOG("[Conv] writer.open OK");
 
   // On ESP32, caller always passes pre-allocated buffers. On desktop (tests etc.)
   // allocate here so the leaf parse_chapter_streaming never has to.
@@ -269,6 +276,8 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
   };
 
   for (size_t ci = 0; ci < book.chapter_count(); ++ci) {
+    CLOG("[Conv] chapter %u/%u START", (unsigned)ci, (unsigned)book.chapter_count());
+    CLOG_HEAP("Conv-ch-pre");
     writer.begin_chapter();
 
 #ifdef ESP_PLATFORM
@@ -279,6 +288,8 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
     ctx.current_chapter_idx = static_cast<uint16_t>(ci);
     book.load_chapter_streaming(ci, sink, &ctx, work_buf, xml_buf, id_sink, &ctx);
     if (ctx.error) {
+      CLOG("[Conv] FAIL ctx.error after chapter %u", (unsigned)ci);
+      CLOG_HEAP("Conv-ch-err");
 #ifdef ESP_PLATFORM
       ESP_LOGE("mrb", "ctx.error after ch %u", (unsigned)ci);
 #endif
@@ -286,6 +297,7 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
     }
 
     writer.end_chapter();
+    CLOG("[Conv] chapter %u OK", (unsigned)ci);
 
     if (progress_cb)
       progress_cb(static_cast<int>(ci + 1), static_cast<int>(book.chapter_count()));
@@ -331,25 +343,19 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
     spine_files.push_back(std::move(basename));
   }
 
+  CLOG_HEAP("Conv-pre-finish");
   bool ok = writer.finish(book.metadata(), toc_work, spine_files);
   writer.close();  // explicit close so fclose() happens before we return
+  CLOG("[Conv] writer.finish %s", ok ? "OK" : "FAIL");
+  CLOG_HEAP("Conv-post-finish");
 
-  // Extract cover image alongside the MRB file if the EPUB has one.
-  if (ok) {
-    std::string cover_path(output_path);
-    const size_t pos = cover_path.rfind("book.mrb");
-    if (pos != std::string::npos) {
-      cover_path.replace(pos, 8, "cover.bin");
-      book.write_cover_bin(cover_path.c_str(), 160, 240, work_buf,
-                           work_buf ? (ZipEntryInput::kDecompSize + ZipEntryInput::kDictSize + 1024) : 0);
-    }
-  }
 
 #ifdef ESP_PLATFORM
   long total_ms = (long)((esp_timer_get_time() - total_start) / 1000);
   ESP_LOGI("mrb", "TOTAL conversion: %ldms (%u chapters, %u paras, slowest ch%d=%ldms) ok=%d", total_ms,
            (unsigned)book.chapter_count(), (unsigned)total_paras, slowest_ci, slowest_ms, ok);
 #endif
+  CLOG("[Conv] convert_epub_to_mrb_streaming END result=%s", ok ? "OK" : "FAIL");
 
   return ok;
 }

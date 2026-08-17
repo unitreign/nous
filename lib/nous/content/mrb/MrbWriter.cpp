@@ -3,6 +3,8 @@
 #include <cerrno>
 #include <cstring>
 
+#include "../../ConvLog.h"
+
 #ifdef ESP_PLATFORM
 #include "esp_log.h"
 static constexpr char kMrbTag[] = "mrb_w";
@@ -91,16 +93,23 @@ bool BufferedFileWriter::seek(uint32_t offset) {
 
 bool MrbWriter::open(const char* path) {
   close();
-  if (!bw_.open(path))
+  if (!bw_.open(path)) {
+    CLOG("[MrbWriter] FAIL bw_.open: %s", path);
     return false;
+  }
+  CLOG("[MrbWriter] OK bw_.open: %s", path);
 
   // Open a temp file to stream anchor entries during conversion (zero RAM usage).
   std::snprintf(anchor_tmp_path_, sizeof(anchor_tmp_path_), "%s.tmp", path);
   anchor_tmp_ = std::fopen(anchor_tmp_path_, "w+b");
+  if (!anchor_tmp_) {
+    CLOG("[MrbWriter] FAIL anchor_tmp fopen: %s", anchor_tmp_path_);
 #ifdef ESP_PLATFORM
-  if (!anchor_tmp_)
     ESP_LOGW(kMrbTag, "anchor_tmp fopen failed: %s", anchor_tmp_path_);
 #endif
+  } else {
+    CLOG("[MrbWriter] OK anchor_tmp fopen: %s", anchor_tmp_path_);
+  }
   anchor_count_ = 0;
 
   // Open a single temp file for all paragraph descriptors across the whole book.
@@ -109,21 +118,25 @@ bool MrbWriter::open(const char* path) {
   desc_tmp_ = std::fopen(desc_tmp_path_, "w+b");
   chapter_desc_start_ = 0;
   if (!desc_tmp_) {
+    CLOG("[MrbWriter] FAIL desc_tmp fopen: %s (errno=%d)", desc_tmp_path_, errno);
 #ifdef ESP_PLATFORM
     ESP_LOGE(kMrbTag, "desc_tmp fopen failed: %s", desc_tmp_path_);
 #endif
     close();
     return false;
   }
+  CLOG("[MrbWriter] OK desc_tmp fopen: %s", desc_tmp_path_);
 
   // Write placeholder header (will be fixed up in finish()).
   MrbHeader hdr{};
   std::memcpy(hdr.magic, kMrbMagic, 4);
   hdr.version = kMrbVersion;
   if (!write_bytes(&hdr, sizeof(hdr))) {
+    CLOG("[MrbWriter] FAIL write header");
     close();
     return false;
   }
+  CLOG("[MrbWriter] open complete OK");
   return true;
 }
 
