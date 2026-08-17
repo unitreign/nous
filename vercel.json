@@ -1,4 +1,5 @@
 {
+  "outputDirectory": ".",
   "rewrites": [{ "source": "/", "destination": "/web/index.html" }],
   "cleanUrls": true,
   "trailingSlash": false
