@@ -94,9 +94,11 @@ body.fonts-page .preview-swatch {
   min-width: 0;
 }
 
-body.fonts-page .preview-viewport {
+body.fonts-page .preview-viewport canvas {
   display: block;
-  width: 100%;
+  width: 100%;  
+  height: auto;  
+  image-rendering: pixelated;
 }
 
 body.fonts-page .preview-viewport canvas {
