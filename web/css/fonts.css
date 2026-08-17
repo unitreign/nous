@@ -1,18 +1,18 @@
 body.fonts-page .tool-wrap {
   display: block;
-  max-width: 1120px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 52px 0 80px;
 }
 
 body.fonts-page .fonts-layout {
   display: grid;
-  grid-template-columns: minmax(0, 500px) minmax(360px, 1fr);
+  grid-template-columns: minmax(0, 470px) minmax(0, 1.35fr);
   grid-template-areas:
     "stack preview"
     "logs logs";
   gap: 24px 28px;
-  align-items: start;
+  align-items: stretch;
   margin-top: 32px;
 }
 
@@ -57,10 +57,10 @@ body.fonts-page .preview-wrap {
   border: 1px solid var(--line);
   padding: 20px;
   background: var(--paper);
-  position: sticky;
-  top: 24px;
-  align-self: start;
-  max-height: calc(100vh - 124px);
+  position: static;
+  align-self: stretch;
+  min-height: 0;
+  height: 100%;
   overflow: auto;
 }
 
