@@ -688,6 +688,25 @@ void CssStylesheet::extend_from_mut_sheet(char* css, size_t length) {
   }
 }
 
+void CssStylesheet::add_rule_if_valid(const char* sel_text, size_t sel_len,
+                                      const char* decl_text, size_t decl_len) {
+  if (decl_len == 0 || sel_len == 0) return;
+  CssRule rule = CssRule::parse(decl_text, decl_len, config_);
+  if (!rule.has_any()) return;
+  size_t sp = 0;
+  while (sp <= sel_len) {
+    size_t comma = sel_len;
+    for (size_t i = sp; i < sel_len; ++i) {
+      if (sel_text[i] == ',') { comma = i; break; }
+    }
+    Selector sel;
+    if (Selector::try_parse(sel_text + sp, comma - sp, sel))
+      rules_.emplace_back(std::move(sel), rule);
+    if (comma >= sel_len) break;
+    sp = comma + 1;
+  }
+}
+
 // Check if a whitespace-separated class string contains a specific class.
 static bool class_list_contains(const char* cls, const std::string& target) {
   if (!cls || target.empty())

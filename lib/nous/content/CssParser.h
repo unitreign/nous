@@ -334,6 +334,11 @@ class CssStylesheet {
     extend_from_sheet(s.c_str(), s.size());
   }
 
+  // Streaming parse helper: parse one complete CSS rule and add it to rules_.
+  // Called by CssCache::get_or_load's streaming path — avoids 66KB heap alloc.
+  void add_rule_if_valid(const char* sel_text, size_t sel_len,
+                         const char* decl_text, size_t decl_len);
+
   // Look up cascaded style for an element.
   CssRule get(const char* element, const char* id, const char* cls) const;
   // Overload accepting lengths (avoids null-termination requirement).

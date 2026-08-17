@@ -84,11 +84,9 @@ const CssStylesheet* CssCache::get_or_load(IZipFile& file, const ZipReader& zip,
   if (!ze)
     return nullptr;
 
-  std::vector<uint8_t> css_data;
-  if (zip.extract(file, *ze, css_data, work_buf, work_buf_size) != ZipError::Ok)
-    return nullptr;
-
-  bool over_budget = total_bytes_ + css_data.size() > kMaxCacheBytes;
+  // Determine slot using uncompressed_size — no extraction yet, no 66KB alloc.
+  size_t css_size = ze->uncompressed_size;
+  bool over_budget = total_bytes_ + css_size > kMaxCacheBytes;
   bool need_evict = over_budget || low_memory();
 
   size_t slot;
@@ -109,10 +107,81 @@ const CssStylesheet* CssCache::get_or_load(IZipFile& file, const ZipReader& zip,
 
   entries_[slot].path = path;
   entries_[slot].sheet = CssStylesheet(config);
-  entries_[slot].sheet.extend_from_mut_sheet(reinterpret_cast<char*>(css_data.data()), css_data.size());
-  entries_[slot].bytes = css_data.size();
+
+  // Stream-parse CSS directly from the ZIP entry — no 66KB contiguous heap
+  // allocation.  Selector/declaration text accumulates in small std::strings
+  // (a few hundred bytes per rule) and each rule is parsed immediately.
+  struct CssStreamParser {
+    CssStylesheet* sheet;
+    enum : uint8_t { OUTER, DECL, CMT_OUTER, CMT_DECL, AT_RULE, AT_NESTED } state = OUTER;
+    char prev = 0;
+    int depth = 0;
+    bool sel_ov = false, decl_ov = false;
+    std::string sel, decl;
+    enum { kMaxSel = 512, kMaxDecl = 4096 };
+
+    void feed(const uint8_t* data, size_t n) {
+      for (size_t i = 0; i < n; ++i) process(static_cast<char>(data[i]));
+    }
+
+    void emit() {
+      if (!sel_ov && !decl_ov && !sel.empty())
+        sheet->add_rule_if_valid(sel.c_str(), sel.size(), decl.c_str(), decl.size());
+      sel.clear(); decl.clear();
+      sel_ov = decl_ov = false;
+    }
+
+    void process(char c) {
+      switch (state) {
+        case OUTER:
+          if (prev == '/' && c == '*') {
+            if (!sel.empty()) sel.pop_back();
+            state = CMT_OUTER; prev = 0; return;
+          }
+          if (c == '@') { sel.clear(); sel_ov = false; state = AT_RULE; break; }
+          if (c == '{') { state = DECL; depth = 1; decl.clear(); decl_ov = false; break; }
+          if (!sel_ov) { if (sel.size() < kMaxSel) sel += c; else sel_ov = true; }
+          break;
+        case DECL:
+          if (prev == '/' && c == '*') {
+            if (!decl.empty()) decl.pop_back();
+            state = CMT_DECL; prev = 0; return;
+          }
+          if (c == '{') { depth++; break; }
+          if (c == '}') {
+            if (--depth == 0) { emit(); state = OUTER; } break;
+          }
+          if (depth == 1 && !decl_ov) { if (decl.size() < kMaxDecl) decl += c; else decl_ov = true; }
+          break;
+        case CMT_OUTER:
+          if (prev == '*' && c == '/') { state = OUTER; prev = 0; return; }
+          break;
+        case CMT_DECL:
+          if (prev == '*' && c == '/') { state = DECL; prev = 0; return; }
+          break;
+        case AT_RULE:
+          if (c == ';') { state = OUTER; break; }
+          if (c == '{') { state = AT_NESTED; depth = 1; break; }
+          break;
+        case AT_NESTED:
+          if (c == '{') depth++;
+          else if (c == '}') { if (--depth == 0) state = OUTER; }
+          break;
+      }
+      prev = c;
+    }
+  };
+  CssStreamParser css_stream;
+  css_stream.sheet = &entries_[slot].sheet;
+  zip.extract_streaming(file, *ze,
+      [](const uint8_t* d, size_t n, void* ud) -> bool {
+        static_cast<CssStreamParser*>(ud)->feed(d, n); return true;
+      },
+      &css_stream, work_buf, work_buf_size);
+
+  entries_[slot].bytes = css_size;
   entries_[slot].last_used_gen = ++gen_;
-  total_bytes_ += css_data.size();
+  total_bytes_ += css_size;
   return &entries_[slot].sheet;
 }
 

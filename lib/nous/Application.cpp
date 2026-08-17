@@ -151,7 +151,9 @@ static bool show_book_cover_sleep_(DrawBuffer& buf, const char* data_dir) {
   }
   if (best_path.empty()) return false;
 
-  // Load the pre-extracted full-res 1-bit cover for the sleep screen.
+  // Load full-res cover if available, otherwise fall back to the thumbnail.
+  // Both files share the same binary format (uint16 w, uint16 h, 1-bit data)
+  // and the scale-to-fit logic below handles any source dimensions.
   const std::string cpath = cover_sleep_bin_path(best_path.c_str(), data_dir);
   FILE* f = std::fopen(cpath.c_str(), "rb");
   if (!f) return false;
