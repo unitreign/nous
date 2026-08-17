@@ -94,17 +94,17 @@ body.fonts-page .preview-swatch {
   min-width: 0;
 }
 
-body.fonts-page .preview-viewport canvas {
+body.fonts-page .preview-viewport {
   display: block;
-  width: 100%;  
-  height: auto;  
-  image-rendering: pixelated;
+  width: 100%;
+
+  overflow: hidden;
 }
 
 body.fonts-page .preview-viewport canvas {
   display: block;
-  width: auto;
-  height: auto;
+  width: 100%;   
+  height: auto; 
 }
 
 @media (max-width: 750px) {
