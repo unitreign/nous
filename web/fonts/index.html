@@ -751,7 +751,8 @@ function callPreview(regData, boldData, italData, biData, fbData, sizes, rangePa
 // ── Live preview ──
 function paintPreviewImage(canvas, image) {
   canvas.width = image.width; canvas.height = image.height;
-  canvas.style.width = image.width + 'px'; canvas.style.height = image.height + 'px';
+  canvas.style.width = '100%';
+  canvas.style.height = 'auto';
   canvas.style.imageRendering = 'pixelated';
   const ctx = canvas.getContext('2d');
   const img = ctx.createImageData(canvas.width, canvas.height);

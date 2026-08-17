@@ -7,7 +7,7 @@ body.fonts-page .tool-wrap {
 
 body.fonts-page .fonts-layout {
   display: grid;
-  grid-template-columns: minmax(0, 470px) minmax(0, 1.35fr);
+  grid-template-columns: minmax(0, 440px) minmax(0, 1.6fr);
   grid-template-areas:
     "stack preview"
     "logs logs";
@@ -85,20 +85,24 @@ body.fonts-page .preview-size-group {
 
 body.fonts-page .preview-style-strip {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
 }
 
 body.fonts-page .preview-swatch {
+  width: 100%;
   min-width: 0;
 }
 
 body.fonts-page .preview-viewport {
   display: block;
+  width: 100%;
 }
 
 body.fonts-page .preview-viewport canvas {
   display: block;
+  width: 100%;
+  height: auto;
 }
 
 @media (max-width: 750px) {
