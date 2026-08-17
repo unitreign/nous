@@ -106,6 +106,15 @@ footer {
   max-width: 980px;
   margin: 0 auto;
   padding: 52px 0 80px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 24px 28px;
+}
+.tool-wrap > .tiny-label,
+.tool-wrap > .tool-heading,
+.tool-wrap > .tool-sub {
+  flex: 0 0 100%;
 }
 .tool-heading {
   font-size: 38px;
@@ -396,15 +405,30 @@ footer {
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
 /* ── Font converter ── */
+.fonts-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  margin-top: 32px;
+  width: 100%;
+}
+.fonts-main {
+  flex: 0 1 500px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
 .fonts-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 32px;
-  margin-top: 32px;
+  gap: 24px;
+  margin-top: 0;
+  width: 100%;
 }
 .fonts-panel {
   border: 1px solid var(--line);
-  padding: 22px 24px;
+  padding: 18px;
 }
 .panel-label {
   font-family: "DM Mono", monospace;
@@ -521,10 +545,17 @@ footer {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 24px;
+  margin-top: 0;
   padding-top: 20px;
   border-top: 1px solid var(--line);
   flex-wrap: wrap;
+  width: 100%;
+}
+.preview-text-wrap,
+.status-bar,
+.progress-label,
+.log-section {
+  width: 100%;
 }
 .cb-row {
   display: flex;
@@ -549,9 +580,17 @@ footer {
   flex-shrink: 0;
 }
 .preview-wrap {
-  margin-top: 32px;
-  border-top: 1px solid var(--ink);
-  padding-top: 22px;
+  margin-top: 0;
+  border: 1px solid var(--line);
+  padding: 20px;
+  background: var(--paper);
+  flex: 1 1 440px;
+  min-width: 360px;
+  position: sticky;
+  top: 24px;
+  align-self: flex-start;
+  max-height: calc(100vh - 124px);
+  overflow: auto;
 }
 .preview-label-row {
   font-family: "DM Mono", monospace;
@@ -567,8 +606,20 @@ footer {
   color: var(--muted);
   padding: 30px 0;
 }
-#device-preview-grid { display: flex; flex-direction: column; gap: 20px; }
-.preview-size-group {}
+#device-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.preview-size-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: #faf7f0;
+}
 .preview-size-title {
   font-family: "DM Mono", monospace;
   font-size: 10px;
@@ -577,8 +628,12 @@ footer {
   letter-spacing: .09em;
   margin-bottom: 8px;
 }
-.preview-style-strip { display: flex; gap: 16px; flex-wrap: wrap; }
-.preview-swatch {}
+.preview-style-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.preview-swatch { min-width: 0; }
 .preview-label {
   font-family: "DM Mono", monospace;
   font-size: 10px;
@@ -588,10 +643,11 @@ footer {
 .preview-viewport {
   border: 1px solid var(--line);
   background: #f0ede6;
-  display: inline-block;
+  display: block;
   overflow: auto;
   max-width: 100%;
 }
+.preview-viewport canvas { display: block; }
 .manual-range-row {
   display: flex;
   gap: 8px;
@@ -631,7 +687,34 @@ footer {
   .top { padding: 0 16px; }
   .top-nav { gap: 14px; }
   .frame { width: calc(100% - 28px); }
+  .tool-wrap { display: block; }
+  .fonts-layout {
+    display: block;
+    margin-top: 32px;
+  }
+  .fonts-main {
+    display: block;
+  }
   .fonts-grid { grid-template-columns: 1fr; }
+  .fonts-grid,
+  .preview-wrap,
+  .preview-text-wrap,
+  .fonts-actions,
+  .status-bar,
+  .progress-label,
+  .log-section {
+    flex: none;
+    order: initial;
+    width: 100%;
+  }
+  .preview-wrap {
+    position: static;
+    min-width: 0;
+    max-height: none;
+    overflow: visible;
+  }
+  #device-preview-grid { grid-template-columns: 1fr; }
+  .preview-style-strip { grid-template-columns: 1fr; }
   .tool-wrap { padding: 36px 0 60px; }
   .fork { text-align: left; margin-top: 14px; }
   footer { display: block; padding: 18px 14px; }

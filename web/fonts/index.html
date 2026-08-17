@@ -27,6 +27,9 @@
   <h1 class="tool-heading">Font Converter</h1>
   <p class="tool-sub">Convert TTF or OTF files into the .mfb format Nous reads from the SD card</p>
 
+  <div class="fonts-layout">
+    <div class="fonts-main">
+
   <!-- File inputs -->
   <div class="fonts-grid" style="margin-top:32px">
 
@@ -157,18 +160,21 @@
   <div class="status-bar" id="status-bar" style="margin-top:8px"></div>
   <div class="progress-label" id="progress-label"></div>
 
-  <!-- Live preview -->
-  <div class="preview-wrap">
-    <div class="preview-label-row">Live preview</div>
-    <div id="device-preview-empty">Upload a Regular font file to see a live preview.</div>
-    <div id="device-preview-grid" style="display:none"></div>
-  </div>
-
   <!-- Log -->
   <div class="log-section" style="margin-top:32px">
     <div class="log-label">Log</div>
     <pre class="log-box" id="log-box"></pre>
   </div>
+
+    </div><!-- /fonts-main -->
+
+    <!-- Live preview -->
+    <div class="preview-wrap">
+      <div class="preview-label-row">Live preview</div>
+      <div id="device-preview-empty">Upload a Regular font file to see a live preview.</div>
+      <div id="device-preview-grid" style="display:none"></div>
+    </div>
+  </div><!-- /fonts-layout -->
 
 </div>
 </div>
@@ -800,7 +806,7 @@ async function renderLivePreview(seq) {
       grid.appendChild(group);
     }
     document.getElementById('device-preview-empty').style.display = preview.deviceSections.length ? 'none' : '';
-    document.getElementById('device-preview-grid').style.display = preview.deviceSections.length ? 'flex' : 'none';
+    document.getElementById('device-preview-grid').style.display = preview.deviceSections.length ? 'grid' : 'none';
   } catch (err) {
     log('Preview error: ' + err.message);
     document.getElementById('device-preview-empty').style.display = '';
