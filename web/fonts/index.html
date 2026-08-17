@@ -187,10 +187,6 @@
         Connect your reader over USB. After you approve the browser prompt, Nous will copy the generated
         <code>.mfb</code> file into <code>/sdcard/fonts/</code>.
       </p>
-      <p style="margin:0">
-        Books (.epub) go anywhere on the SD card - the device scans recursively from the root.
-        Fonts (.mfb) go in the fonts/ folder. Sleep images go in the .sleep/ folder.
-      </p>
     </div>
     <div class="modal-actions">
       <button class="btn-secondary" id="device-modal-cancel">Cancel</button>
@@ -553,6 +549,12 @@ function crc32(data) {
   let c = 0xFFFFFFFF;
   for (const b of data) c = CRC_TABLE[(c ^ b) & 0xFF] ^ (c >>> 8);
   return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function u16le(n) { return new Uint8Array([n & 0xFF, (n >> 8) & 0xFF]); }
+function u32le(n) {
+  const b = new Uint8Array(4);
+  new DataView(b.buffer).setUint32(0, n >>> 0, true);
+  return b;
 }
 const CMND = new Uint8Array([0x43, 0x4D, 0x4E, 0x44]);
 function isEspLog(line) { return /^[IWED] \(\d+\)/.test(line); }
