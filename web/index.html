@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nous — Custom Firmware</title>
-<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/web/css/style.css">
 <style>
   /* ── Hero ── */
   .hero {
@@ -300,8 +300,8 @@
 <header class="top">
   <span class="wordmark">NOUS</span>
   <nav class="top-nav">
-    <a href="/manager">Manager</a>
-    <a href="/fonts">Fonts</a>
+    <a href="/web/manager">Manager</a>
+    <a href="/web/fonts">Fonts</a>
   </nav>
   <div class="top-right">
     <span>CFW</span>
@@ -327,7 +327,7 @@
     </div>
 
     <div class="reader-wrap">
-      <img src="https://raw.githubusercontent.com/unitreign/nous/main/images/devicedesk.png" alt="device mockup" style="filter:drop-shadow(0 8px 24px rgba(0,0,0,0.45))">
+      <img src="/images/device.png" alt="device mockup" style="filter:drop-shadow(0 3px 14px rgba(0,0,0,0.14))">
     </div>
   </section>
 
@@ -601,7 +601,7 @@
     .catch(() => {});
 </script>
 <script type="module">
-  import { runFlash, STEPS } from '/js/nous-flasher.js';
+  import { runFlash, STEPS } from '/web/js/nous-flasher.js';
 
   const flashBtn       = document.getElementById('flash-btn');
   const confirmModal   = document.getElementById('flash-confirm-modal');
