@@ -893,7 +893,6 @@ document.getElementById('btn-generate').addEventListener('click', async () => {
 // ── Init ──
 document.getElementById('preview-text').value = DEFAULT_PREVIEW_TEXT;
 document.getElementById('preview-text').addEventListener('input', scheduleLivePreview);
-window.addEventListener('resize', scheduleLivePreview);
 renderSizeChips();
 updateRangePresetButtons();
 updateRangeMeta();
