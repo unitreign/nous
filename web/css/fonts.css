@@ -13,7 +13,8 @@ body.fonts-page .fc-layout {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
   grid-template-areas:
     "left     settings"
-    "actions  actions";
+    "actions  actions"
+    "preview  preview";
   gap: 24px 28px;
   align-items: stretch;
   margin-top: 32px;
@@ -113,6 +114,11 @@ body.fonts-page .preview-viewport canvas {
   image-rendering: crisp-edges;
 }
 
+/* Full-width live preview */
+body.fonts-page .fc-preview {
+  grid-area: preview;
+}
+
 /* Actions row: full width below both columns */
 body.fonts-page .fc-actions-row {
   grid-area: actions;
@@ -148,7 +154,8 @@ body.fonts-page .fc-actions-row .progress-label {
     grid-template-areas:
       "left"
       "settings"
-      "actions";
+      "actions"
+      "preview";
   }
 
   body.fonts-page .tool-wrap {
