@@ -750,18 +750,28 @@ function callPreview(regData, boldData, italData, biData, fbData, sizes, rangePa
 
 // ── Live preview ──
 function paintPreviewImage(canvas, image) {
-  canvas.width = image.width; canvas.height = image.height;
-  canvas.style.width = '100%';
-  canvas.style.height = 'auto';
+  const viewport = canvas.parentElement;
+  const targetWidth = Math.max(1, viewport ? viewport.clientWidth : image.width);
+  const scale = targetWidth / image.width;
+  const targetHeight = Math.max(1, Math.round(image.height * scale));
+  const source = document.createElement('canvas');
+  source.width = image.width;
+  source.height = image.height;
   canvas.style.imageRendering = 'pixelated';
-  const ctx = canvas.getContext('2d');
-  const img = ctx.createImageData(canvas.width, canvas.height);
+  const sctx = source.getContext('2d');
+  const img = sctx.createImageData(source.width, source.height);
   for (let y = 0; y < image.height; y++)
     for (let x = 0; x < image.width; x++) {
       const v = image.pixels[y * image.width + x], i = (y * image.width + x) * 4;
       img.data[i] = img.data[i+1] = img.data[i+2] = v; img.data[i+3] = 255;
     }
-  ctx.putImageData(img, 0, 0);
+  sctx.putImageData(img, 0, 0);
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
 }
 async function renderLivePreview(seq) {
   if (!fontFiles['regular']) { document.getElementById('device-preview-empty').style.display = ''; document.getElementById('device-preview-grid').style.display = 'none'; return; }
@@ -798,8 +808,8 @@ async function renderLivePreview(seq) {
         const viewport = document.createElement('div');
         viewport.className = 'preview-viewport';
         const canvas = document.createElement('canvas');
-        paintPreviewImage(canvas, section);
         viewport.appendChild(canvas);
+        paintPreviewImage(canvas, section);
         wrapper.appendChild(label); wrapper.appendChild(viewport);
         strip.appendChild(wrapper);
       });
@@ -893,6 +903,7 @@ document.getElementById('btn-generate').addEventListener('click', async () => {
 // ── Init ──
 document.getElementById('preview-text').value = DEFAULT_PREVIEW_TEXT;
 document.getElementById('preview-text').addEventListener('input', scheduleLivePreview);
+window.addEventListener('resize', scheduleLivePreview);
 renderSizeChips();
 updateRangePresetButtons();
 updateRangeMeta();

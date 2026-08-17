@@ -101,7 +101,7 @@ body.fonts-page .preview-viewport {
 
 body.fonts-page .preview-viewport canvas {
   display: block;
-  width: 100%;
+  width: auto;
   height: auto;
 }
 
