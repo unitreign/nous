@@ -691,7 +691,7 @@ async function uploadResultToDevice() {
   });
   document.getElementById('progress-fill').style.width = '100%';
   setStatus(`OK: ${baseName}.mfb copied to ${DEVICE_FONT_DIR}`);
-  log(`Upload complete: ${dest}`);
+  log(`Upload complete: ${DEVICE_FONT_DIR}/${baseName}.mfb`);
 }
 
 async function beginDeviceUpload() {
