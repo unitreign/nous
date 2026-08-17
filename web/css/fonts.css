@@ -1,3 +1,5 @@
+/* ── Font converter page layout ──────────────────────────── */
+
 body.fonts-page .tool-wrap {
   display: block;
   max-width: 1280px;
@@ -5,62 +7,82 @@ body.fonts-page .tool-wrap {
   padding: 52px 0 80px;
 }
 
-body.fonts-page .fonts-layout {
+/* 4-row grid */
+body.fonts-page .fc-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
   grid-template-areas:
-    "picker  settings"
-    "preview preview"
-    "logs    logs";
+    "picker   settings"
+    "actions  actions"
+    "log      log"
+    "preview  preview";
   gap: 24px 28px;
   align-items: start;
   margin-top: 32px;
 }
 
-body.fonts-page .panel-picker  { grid-area: picker; }
-body.fonts-page .panel-settings { grid-area: settings; }
+/* Row 1 */
+body.fonts-page .fc-picker   { grid-area: picker; }
+body.fonts-page .fc-settings { grid-area: settings; }
 
-body.fonts-page .fonts-panel {
+body.fonts-page .fc-panel {
   border: 1px solid var(--line);
   padding: 20px;
 }
 
-/* Preview text inside settings panel */
-body.fonts-page .preview-text {
-  width: 100%;
-  box-sizing: border-box;
-  margin-top: 6px;
+/* Row 2: Actions */
+body.fonts-page .fc-actions-row {
+  grid-area: actions;
+  border: 1px solid var(--line);
+  padding: 16px 20px;
 }
 
-body.fonts-page .fonts-actions {
+body.fonts-page .fc-btns {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
   align-items: center;
+  gap: 10px;
+}
+
+body.fonts-page .fc-actions-row .progress-wrap {
+  flex: 1;
+  min-width: 80px;
   margin-top: 0;
 }
 
-body.fonts-page .status-bar,
-body.fonts-page .progress-label {
-  width: 100%;
-  margin-top: 6px;
+body.fonts-page .fc-actions-row .status-bar {
+  margin-top: 10px;
 }
 
-/* ── Live preview panel ── */
-body.fonts-page .preview-wrap {
+body.fonts-page .fc-actions-row .progress-label {
+  margin-top: 4px;
+}
+
+/* Row 3: Log */
+body.fonts-page .fc-log {
+  grid-area: log;
+}
+
+/* Row 4: Preview */
+body.fonts-page .fc-preview {
   grid-area: preview;
   border: 1px solid var(--line);
   padding: 20px;
   background: var(--paper);
-  min-height: 0;
 }
 
-body.fonts-page .log-section {
-  grid-area: logs;
-  margin-top: 0;
+body.fonts-page .fc-preview-text {
+  margin-bottom: 20px;
 }
 
-/* Each size group */
+body.fonts-page .preview-text {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  resize: vertical;
+}
+
+/* Canvas preview */
 body.fonts-page #device-preview-grid {
   display: flex;
   flex-direction: column;
@@ -71,7 +93,7 @@ body.fonts-page #device-preview-grid {
 body.fonts-page .preview-size-group {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   padding-bottom: 20px;
   border-bottom: 1px solid var(--line);
 }
@@ -81,11 +103,12 @@ body.fonts-page .preview-size-group:last-child {
   padding-bottom: 0;
 }
 
-/* Styles stack vertically, each fills full width */
+/* One style per row — fills full width */
 body.fonts-page .preview-style-strip {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  gap: 16px;
 }
 
 body.fonts-page .preview-swatch {
@@ -93,40 +116,33 @@ body.fonts-page .preview-swatch {
 }
 
 body.fonts-page .preview-viewport {
-  display: block;
+  display: block !important;
   width: 100%;
-  overflow: hidden;
   margin-top: 4px;
+  overflow: hidden;
 }
 
 body.fonts-page .preview-viewport canvas {
-  display: block;
-  width: 100%;
-  height: auto;
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
   image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 
+/* ── Responsive ── */
 @media (max-width: 820px) {
-  body.fonts-page .fonts-layout {
+  body.fonts-page .fc-layout {
     grid-template-columns: 1fr;
     grid-template-areas:
       "picker"
       "settings"
-      "preview"
-      "logs";
+      "actions"
+      "log"
+      "preview";
   }
 
   body.fonts-page .tool-wrap {
     padding: 36px 0 60px;
-  }
-
-  body.fonts-page footer {
-    display: block;
-    padding: 18px 14px;
-  }
-
-  body.fonts-page .fork {
-    text-align: left;
-    margin-top: 14px;
   }
 }

@@ -28,10 +28,10 @@
   <h1 class="tool-heading">Font Converter</h1>
   <p class="tool-sub">Convert TTF or OTF files into the .mfb format Nous reads from the SD card</p>
 
-  <div class="fonts-layout">
+  <div class="fc-layout">
 
-    <!-- Left: Font picker -->
-    <div class="fonts-panel panel-picker">
+    <!-- Row 1 left: Font files -->
+    <div class="fc-panel fc-picker">
       <div class="panel-label">Font files</div>
 
       <div style="margin-bottom:14px">
@@ -96,8 +96,8 @@
       </label>
     </div>
 
-    <!-- Right: Settings + actions -->
-    <div class="fonts-panel panel-settings">
+    <!-- Row 1 right: Customization -->
+    <div class="fc-panel fc-settings">
       <div class="panel-label">Sizes</div>
       <div class="preset-row">
         <button class="preset-btn size-preset-btn" data-preset="small">Small</button>
@@ -137,19 +137,15 @@
         <button class="btn-secondary" id="manual-ranges-clear" style="font-size:7px;padding:5px 10px">Clear</button>
       </div>
       <div class="manual-ranges-status" id="manual-ranges-status"></div>
+    </div>
 
-      <hr class="section-divider">
-
-      <div class="panel-label">Preview text</div>
-      <textarea class="preview-text" id="preview-text"></textarea>
-
-      <hr class="section-divider">
-
-      <div class="fonts-actions">
+    <!-- Row 2: Actions -->
+    <div class="fc-actions-row">
+      <div class="fc-btns">
         <button class="btn-primary" id="btn-generate" disabled>Generate .mfb</button>
         <button class="btn-primary" id="btn-device" style="display:none">Add directly to device</button>
         <button class="btn-secondary" id="btn-download" style="display:none">Download</button>
-        <div class="progress-wrap" id="progress-wrap" style="flex:1;margin-top:0">
+        <div class="progress-wrap" id="progress-wrap">
           <div class="progress-fill" id="progress-fill"></div>
         </div>
       </div>
@@ -157,20 +153,26 @@
       <div class="progress-label" id="progress-label"></div>
     </div>
 
-    <!-- Full-width: Live preview -->
-    <div class="preview-wrap">
-      <div class="preview-label-row">Live preview</div>
-      <div id="device-preview-empty">Upload a Regular font file to see a live preview.</div>
-      <div id="device-preview-grid" style="display:none"></div>
-    </div>
-
-    <!-- Full-width: Log -->
-    <div class="log-section">
+    <!-- Row 3: Log -->
+    <div class="fc-log">
       <div class="log-label">Log</div>
       <pre class="log-box" id="log-box"></pre>
     </div>
 
-  </div><!-- /fonts-layout -->
+    <!-- Row 4: Preview text + live canvas -->
+    <div class="fc-preview">
+      <div class="fc-preview-text">
+        <div class="panel-label">Preview text</div>
+        <textarea class="preview-text" id="preview-text"></textarea>
+      </div>
+      <div class="fc-preview-canvas">
+        <div class="preview-label-row">Live preview</div>
+        <div id="device-preview-empty">Upload a Regular font file to see a live preview.</div>
+        <div id="device-preview-grid" style="display:none"></div>
+      </div>
+    </div>
+
+  </div><!-- /fc-layout -->
 
 </div>
 </div>
