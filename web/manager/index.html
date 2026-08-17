@@ -5,8 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nous — Manager</title>
 <link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
 <style>
   .tool-wrap { padding-top: 48px; }
+  .btn-sm { display: inline-flex; align-items: center; gap: 5px; }
+  .btn-sm i { font-size: 11px; }
 </style>
 </head>
 <body>
@@ -41,9 +44,9 @@
       </div>
     </div>
     <span class="badge" id="conn-badge">Disconnected</span>
-    <button class="btn-secondary" id="btn-refresh" disabled>Refresh</button>
-    <button class="btn-secondary" id="btn-new-folder" disabled>New Folder</button>
-    <button class="btn-secondary" id="btn-upload" disabled>Upload</button>
+    <button class="btn-secondary" id="btn-refresh" disabled><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+    <button class="btn-secondary" id="btn-new-folder" disabled><i class="fa-solid fa-folder-plus"></i> New Folder</button>
+    <button class="btn-secondary" id="btn-upload" disabled><i class="fa-solid fa-upload"></i> Upload</button>
     <input type="file" id="file-input" multiple style="display:none">
   </div>
 
@@ -256,6 +259,31 @@ async function cmdRename(src, dst) {
   await conn.write(new Uint8Array([...CMND, 0x4E, ...u16le(sp.length), ...sp, ...u16le(dp.length), ...dp]));
   return readUntil(l => l === 'OK' || l.startsWith('ERR:'), 5000);
 }
+async function cmdReadFile(fullPath, onProgress) {
+  const pb = enc.encode(fullPath);
+  await conn.write(new Uint8Array([...CMND, 0x54, ...u16le(pb.length), ...pb]));
+  await readUntil(l => { if (l.startsWith('ERR:')) throw new Error(l); return l === 'READY'; }, 10000);
+  // read 4-byte LE size
+  const szBytes = [];
+  for (let i = 0; i < 4; i++) szBytes.push(await conn.readByte(5000));
+  const fileSize = szBytes[0] | (szBytes[1] << 8) | (szBytes[2] << 16) | (szBytes[3] << 24);
+  const out = new Uint8Array(fileSize);
+  let received = 0;
+  const CHUNK = 2048;
+  while (received < fileSize) {
+    const want = Math.min(CHUNK, fileSize - received);
+    for (let i = 0; i < want; i++) out[received++] = await conn.readByte(30000);
+    onProgress(received / fileSize);
+    await conn.write(new Uint8Array([0x06])); // ACK
+  }
+  // read 4-byte CRC32
+  const crcBytes = [];
+  for (let i = 0; i < 4; i++) crcBytes.push(await conn.readByte(5000));
+  const remoteCrc = crcBytes[0] | (crcBytes[1] << 8) | (crcBytes[2] << 16) | (crcBytes[3] << 24);
+  const localCrc = crc32(out);
+  if ((remoteCrc >>> 0) !== (localCrc >>> 0)) throw new Error(`CRC mismatch (remote=0x${remoteCrc.toString(16)} local=0x${localCrc.toString(16)})`);
+  return out;
+}
 
 // ── Formatting ──
 function fmtSize(bytes) {
@@ -406,15 +434,17 @@ function renderEntries(entries) {
     updateSortUI(); return;
   }
   fileTbody.innerHTML = '';
-  const actions = `<button class="btn-sm btn-ren">Rename</button><button class="btn-sm btn-danger btn-del">Delete</button>`;
+  const dirActions  = `<button class="btn-sm btn-ren"><i class="fa-solid fa-pencil"></i>Rename</button><button class="btn-sm btn-danger btn-del"><i class="fa-solid fa-trash"></i>Delete</button>`;
+  const fileActions = `<button class="btn-sm btn-dl"><i class="fa-solid fa-download"></i>Download</button><button class="btn-sm btn-ren"><i class="fa-solid fa-pencil"></i>Rename</button><button class="btn-sm btn-danger btn-del"><i class="fa-solid fa-trash"></i>Delete</button>`;
   for (const entry of [...dirs, ...files]) {
     const tr = document.createElement('tr');
     const fullPath = currentPath + '/' + entry.name;
     if (entry.type === 'dir') {
-      tr.innerHTML = `<td class="col-name"><div class="entry-name"><span class="entry-icon">▶</span><span class="entry-label is-dir">${escHtml(entry.name)}</span></div></td><td class="col-size">—</td><td class="col-date">—</td><td class="col-actions">${actions}</td>`;
+      tr.innerHTML = `<td class="col-name"><div class="entry-name"><span class="entry-icon"><i class="fa-solid fa-folder" style="color:var(--brown)"></i></span><span class="entry-label is-dir">${escHtml(entry.name)}</span></div></td><td class="col-size">—</td><td class="col-date">—</td><td class="col-actions">${dirActions}</td>`;
       tr.querySelector('.is-dir').addEventListener('click', () => navigate(fullPath, { push: true }));
     } else {
-      tr.innerHTML = `<td class="col-name"><div class="entry-name"><span class="entry-icon" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted)">${fileIcon(entry.name)}</span><span class="entry-label">${escHtml(entry.name)}</span></div></td><td class="col-size">${fmtSize(entry.size)}</td><td class="col-date">${fmtDate(entry.mtime)}</td><td class="col-actions">${actions}</td>`;
+      tr.innerHTML = `<td class="col-name"><div class="entry-name"><span class="entry-icon" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted)">${fileIcon(entry.name)}</span><span class="entry-label">${escHtml(entry.name)}</span></div></td><td class="col-size">${fmtSize(entry.size)}</td><td class="col-date">${fmtDate(entry.mtime)}</td><td class="col-actions">${fileActions}</td>`;
+      tr.querySelector('.btn-dl').addEventListener('click', () => onDownload(fullPath, entry.name));
     }
     tr.querySelector('.btn-ren').addEventListener('click', () => onRename(fullPath));
     tr.querySelector('.btn-del').addEventListener('click', () => onDelete(fullPath, entry.type));
@@ -544,6 +574,29 @@ async function onUpload(files) {
   progressLabel.textContent = '';
   setBusy(false);
   await navigate(currentPath);
+}
+
+async function onDownload(fullPath, name) {
+  if (!conn) return;
+  setBusy(true);
+  progressWrap.classList.add('visible');
+  progressFill.style.width = '0%';
+  progressLabel.textContent = `Downloading ${name}…`;
+  log(`download ← ${fullPath}`);
+  try {
+    const data = await cmdReadFile(fullPath, pct => { progressFill.style.width = (pct * 100).toFixed(1) + '%'; });
+    progressFill.style.width = '100%';
+    const blob = new Blob([data]);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    setStatus(`Downloaded ${name}`);
+    log(`download OK: ${name} (${fmtSize(data.length)})`);
+  } catch (e) { log(`Download failed: ${e.message}`); setStatus('Download failed: ' + e.message); }
+  finally { progressWrap.classList.remove('visible'); progressLabel.textContent = ''; setBusy(false); }
 }
 
 // Events
