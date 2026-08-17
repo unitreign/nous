@@ -1,5 +1,6 @@
 {
   "outputDirectory": "web",
   "cleanUrls": true,
-  "trailingSlash": false
+  "trailingSlash": false,
+  "source": "/"
 }
