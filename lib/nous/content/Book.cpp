@@ -57,8 +57,8 @@ EpubError Book::load_chapter(size_t index, Chapter& out) {
 }
 
 EpubError Book::load_chapter_streaming(size_t index, ParagraphSink sink, void* sink_ctx, uint8_t* work_buf,
-                                       uint8_t* xml_buf, IdSink id_sink, void* id_sink_ctx) {
-  return epub_.parse_chapter_streaming(file_, index, sink, sink_ctx, work_buf, xml_buf, id_sink, id_sink_ctx);
+                                       uint8_t* xml_buf, IdSink id_sink, void* id_sink_ctx, CssCache* ext_cache) {
+  return epub_.parse_chapter_streaming(file_, index, sink, sink_ctx, work_buf, xml_buf, id_sink, id_sink_ctx, ext_cache);
 }
 
 ImageError Book::decode_image(uint16_t entry_index, DecodedImage& out, uint16_t max_w, uint16_t max_h,

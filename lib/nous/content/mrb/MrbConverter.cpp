@@ -142,7 +142,7 @@ bool write_split_paragraph(MrbWriter& writer, Paragraph& para) {
 }  // namespace
 
 bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t* work_buf, uint8_t* xml_buf,
-                                   std::function<void(int, int)> progress_cb) {
+                                   std::function<void(int, int)> progress_cb, CssCache* css_cache) {
   CLOG("[Conv] convert_epub_to_mrb_streaming START out=%s chapters=%u", output_path,
        (unsigned)book.chapter_count());
   CLOG_HEAP("Conv-pre-open");
@@ -286,7 +286,7 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
 
     ctx.current_zip_file_idx = static_cast<uint16_t>(book.epub().spine()[ci].file_idx);
     ctx.current_chapter_idx = static_cast<uint16_t>(ci);
-    book.load_chapter_streaming(ci, sink, &ctx, work_buf, xml_buf, id_sink, &ctx);
+    book.load_chapter_streaming(ci, sink, &ctx, work_buf, xml_buf, id_sink, &ctx, css_cache);
     if (ctx.error) {
       CLOG("[Conv] FAIL ctx.error after chapter %u", (unsigned)ci);
       CLOG_HEAP("Conv-ch-err");

@@ -2171,7 +2171,8 @@ EpubError Epub::parse_chapter(IZipFile& file, size_t index, Chapter& out) const 
 // ---------------------------------------------------------------------------
 
 EpubError Epub::parse_chapter_streaming(IZipFile& file, size_t index, ParagraphSink sink, void* sink_ctx,
-                                        uint8_t* work_buf, uint8_t* xml_buf, IdSink id_sink, void* id_sink_ctx) const {
+                                        uint8_t* work_buf, uint8_t* xml_buf, IdSink id_sink, void* id_sink_ctx,
+                                        CssCache* ext_cache) const {
   if (index >= spine_.size())
     return EpubError::InvalidData;
 
@@ -2234,10 +2235,12 @@ EpubError Epub::parse_chapter_streaming(IZipFile& file, size_t index, ParagraphS
   }  // zip_scan destroyed → work_ptr is now free
 
   // Load CSS files using work_buf (free between the two streaming passes).
-  uint32_t protect_gen = css_cache_.current_gen();
+  // Use ext_cache if provided so the warm cache survives book close/reopen.
+  CssCache& cache = ext_cache ? *ext_cache : css_cache_;
+  uint32_t protect_gen = cache.current_gen();
   for (size_t i = 0; i < css_link_count; ++i) {
     std::string path(css_link_paths[i], css_link_lens[i]);
-    css_cache_.get_or_load(file, zip_, path, css_config_, protect_gen, work_ptr, kWorkBufSize);
+    cache.get_or_load(file, zip_, path, css_config_, protect_gen, work_ptr, kWorkBufSize);
   }
 
   // --- Pass 2: full XHTML streaming parse with CSS already cached.
@@ -2258,7 +2261,7 @@ EpubError Epub::parse_chapter_streaming(IZipFile& file, size_t index, ParagraphS
   parser.reserve_runs(512);
 
   // work_buf=nullptr: CSS is already cached; any remaining cache miss skips silently.
-  CssContext ctx{&file, &zip_, &css_cache_, css_config_, &base_dir, protect_gen, nullptr, 0};
+  CssContext ctx{&file, &zip_, &cache, css_config_, &base_dir, protect_gen, nullptr, 0};
 
   EpubError err = parse_xhtml_events(reader, nullptr, nullptr, &ctx, base_dir, zip_, parser);
   if (err != EpubError::Ok)

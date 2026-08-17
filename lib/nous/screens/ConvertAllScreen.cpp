@@ -247,8 +247,7 @@ void ConvertAllScreen::do_convert_path_(const std::string& path, const std::stri
   buf.sync_bw_ram();
   buf.show_loading(title.c_str(), 0);
 
-  // Pass 1: open book, write covers, close. Closing frees all zip/metadata
-  // allocations so the heap can coalesce before the conversion pass.
+  // Pass 1: open book, write covers, close. Heap coalesces after close.
   {
     Book book;
     auto err = book.open(path.c_str(), buf.scratch_buf1(), buf.scratch_buf2());
@@ -274,8 +273,28 @@ void ConvertAllScreen::do_convert_path_(const std::string& path, const std::stri
   }
   CLOG_HEAP("CAS-post-cover-close");
 
-  // Pass 2: reopen for conversion. Cover already exists so write_cover_bin
-  // inside the reader path won't re-decode the JPEG; heap is coalesced.
+  // Pass 2: reopen, pre-load CSS into external cache, close. The 66KB CSS
+  // allocation happens here when heap is coalesced; the cache survives close.
+  CssCache css_cache;
+  runtime.yield();
+  {
+    Book book;
+    auto err = book.open(path.c_str(), buf.scratch_buf1(), buf.scratch_buf2());
+    CLOG("[CAS] book.open(css) result=%d", (int)err);
+    CLOG_HEAP("CAS-pre-css");
+    if (err == EpubError::Ok && book.chapter_count() > 0) {
+      auto noop = [](void*, Paragraph&&) {};
+      book.load_chapter_streaming(0, noop, nullptr, buf.scratch_buf1(), buf.scratch_buf2(),
+                                  nullptr, nullptr, &css_cache);
+      CLOG("[CAS] css preload done entries=%u", (unsigned)css_cache.entry_count());
+      CLOG_HEAP("CAS-post-css");
+    }
+    book.close();
+  }
+  CLOG_HEAP("CAS-post-css-close");
+
+  // Pass 3: reopen for conversion. CSS cache is already warm — no 66KB
+  // allocation during chapter 0; heap is coalesced from pass 2 close.
   runtime.yield();
   {
     Book book;
@@ -289,7 +308,8 @@ void ConvertAllScreen::do_convert_path_(const std::string& path, const std::stri
             int pct = total > 0 ? done * 100 / total : 0;
             buf.show_loading(title.c_str(), pct);
             runtime.yield();
-          });
+          },
+          &css_cache);
       CLOG("[CAS] convert returned %s", conv_ok ? "OK" : "FAIL");
       CLOG_HEAP("CAS-post-convert");
     }

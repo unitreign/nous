@@ -115,8 +115,11 @@ class Epub {
 
   // Stream-parse a chapter: paragraphs are emitted one at a time via sink.
   // Uses ~37KB working memory instead of extracting the full XHTML.
+  // ext_cache: if non-null, use this CSS cache instead of the internal one.
+  // Allows the cache to survive book close/reopen across multi-pass conversion.
   EpubError parse_chapter_streaming(IZipFile& file, size_t index, ParagraphSink sink, void* sink_ctx, uint8_t* work_buf,
-                                    uint8_t* xml_buf, IdSink id_sink = nullptr, void* id_sink_ctx = nullptr) const;
+                                    uint8_t* xml_buf, IdSink id_sink = nullptr, void* id_sink_ctx = nullptr,
+                                    CssCache* ext_cache = nullptr) const;
 
   // Access metadata.
   const EpubMetadata& metadata() const {
