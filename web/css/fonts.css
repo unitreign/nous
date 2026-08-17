@@ -7,61 +7,52 @@ body.fonts-page .tool-wrap {
 
 body.fonts-page .fonts-layout {
   display: grid;
-  grid-template-columns: minmax(0, 440px) minmax(0, 1.6fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
   grid-template-areas:
-    "stack preview"
-    "logs logs";
+    "picker  settings"
+    "preview preview"
+    "logs    logs";
   gap: 24px 28px;
-  align-items: stretch;
+  align-items: start;
   margin-top: 32px;
 }
 
-body.fonts-page .fonts-stack {
-  grid-area: stack;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  min-width: 0;
-}
-
-body.fonts-page .fonts-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  margin-top: 0;
-  width: 100%;
-}
+body.fonts-page .panel-picker  { grid-area: picker; }
+body.fonts-page .panel-settings { grid-area: settings; }
 
 body.fonts-page .fonts-panel {
   border: 1px solid var(--line);
   padding: 20px;
 }
 
-body.fonts-page .preview-text-wrap,
-body.fonts-page .fonts-actions,
+/* Preview text inside settings panel */
+body.fonts-page .preview-text {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+}
+
+body.fonts-page .fonts-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 0;
+}
+
 body.fonts-page .status-bar,
 body.fonts-page .progress-label {
   width: 100%;
+  margin-top: 6px;
 }
 
-body.fonts-page .preview-text-wrap,
-body.fonts-page .fonts-actions,
-body.fonts-page .status-bar,
-body.fonts-page .progress-label {
-  margin-top: 0;
-}
-
+/* ── Live preview panel ── */
 body.fonts-page .preview-wrap {
   grid-area: preview;
-  margin-top: 0;
   border: 1px solid var(--line);
   padding: 20px;
   background: var(--paper);
-  position: static;
-  align-self: stretch;
   min-height: 0;
-  height: 100%;
-  overflow: auto;
 }
 
 body.fonts-page .log-section {
@@ -69,75 +60,73 @@ body.fonts-page .log-section {
   margin-top: 0;
 }
 
+/* Each size group */
 body.fonts-page #device-preview-grid {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
+  margin-top: 12px;
 }
 
 body.fonts-page .preview-size-group {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding-bottom: 14px;
+  padding-bottom: 20px;
   border-bottom: 1px solid var(--line);
 }
 
+body.fonts-page .preview-size-group:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+/* Styles stack vertically, each fills full width */
 body.fonts-page .preview-style-strip {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 body.fonts-page .preview-swatch {
   width: 100%;
-  min-width: 0;
 }
 
 body.fonts-page .preview-viewport {
   display: block;
   width: 100%;
-
   overflow: hidden;
+  margin-top: 4px;
 }
 
 body.fonts-page .preview-viewport canvas {
   display: block;
-  width: 100%;   
-  height: auto; 
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
 }
 
-@media (max-width: 750px) {
+@media (max-width: 820px) {
   body.fonts-page .fonts-layout {
-    display: block;
-  }
-
-  body.fonts-page .fonts-stack {
-    display: block;
-  }
-
-  body.fonts-page .preview-wrap {
-    position: static;
-    min-width: 0;
-    max-height: none;
-    overflow: visible;
-  }
-
-  body.fonts-page .preview-style-strip {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "picker"
+      "settings"
+      "preview"
+      "logs";
   }
 
   body.fonts-page .tool-wrap {
     padding: 36px 0 60px;
   }
 
-  body.fonts-page .fork {
-    text-align: left;
-    margin-top: 14px;
-  }
-
   body.fonts-page footer {
     display: block;
     padding: 18px 14px;
+  }
+
+  body.fonts-page .fork {
+    text-align: left;
+    margin-top: 14px;
   }
 }

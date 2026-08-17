@@ -29,10 +29,9 @@
   <p class="tool-sub">Convert TTF or OTF files into the .mfb format Nous reads from the SD card</p>
 
   <div class="fonts-layout">
-    <div class="fonts-stack">
-  <div class="fonts-grid">
 
-    <div class="fonts-panel">
+    <!-- Left: Font picker -->
+    <div class="fonts-panel panel-picker">
       <div class="panel-label">Font files</div>
 
       <div style="margin-bottom:14px">
@@ -97,7 +96,8 @@
       </label>
     </div>
 
-    <div class="fonts-panel">
+    <!-- Right: Settings + actions -->
+    <div class="fonts-panel panel-settings">
       <div class="panel-label">Sizes</div>
       <div class="preset-row">
         <button class="preset-btn size-preset-btn" data-preset="small">Small</button>
@@ -137,42 +137,38 @@
         <button class="btn-secondary" id="manual-ranges-clear" style="font-size:7px;padding:5px 10px">Clear</button>
       </div>
       <div class="manual-ranges-status" id="manual-ranges-status"></div>
+
+      <hr class="section-divider">
+
+      <div class="panel-label">Preview text</div>
+      <textarea class="preview-text" id="preview-text"></textarea>
+
+      <hr class="section-divider">
+
+      <div class="fonts-actions">
+        <button class="btn-primary" id="btn-generate" disabled>Generate .mfb</button>
+        <button class="btn-primary" id="btn-device" style="display:none">Add directly to device</button>
+        <button class="btn-secondary" id="btn-download" style="display:none">Download</button>
+        <div class="progress-wrap" id="progress-wrap" style="flex:1;margin-top:0">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+      </div>
+      <div class="status-bar" id="status-bar"></div>
+      <div class="progress-label" id="progress-label"></div>
     </div>
 
-  </div><!-- /fonts-grid -->
-
-  <!-- Preview text -->
-  <div class="preview-text-wrap">
-    <div class="preview-text-label">Preview text</div>
-    <textarea class="preview-text" id="preview-text"></textarea>
-  </div>
-
-  <!-- Actions -->
-  <div class="fonts-actions">
-    <button class="btn-primary" id="btn-generate" disabled>Generate .mfb</button>
-    <button class="btn-primary" id="btn-device" style="display:none">Add directly to device</button>
-    <button class="btn-secondary" id="btn-download" style="display:none">Download</button>
-    <div class="progress-wrap" id="progress-wrap" style="flex:1;margin-top:0">
-      <div class="progress-fill" id="progress-fill"></div>
+    <!-- Full-width: Live preview -->
+    <div class="preview-wrap">
+      <div class="preview-label-row">Live preview</div>
+      <div id="device-preview-empty">Upload a Regular font file to see a live preview.</div>
+      <div id="device-preview-grid" style="display:none"></div>
     </div>
-  </div>
-  <div class="status-bar" id="status-bar"></div>
-  <div class="progress-label" id="progress-label"></div>
 
-    </div><!-- /fonts-stack -->
-
-  <!-- Live preview -->
-  <div class="preview-wrap">
-    <div class="preview-label-row">Live preview</div>
-    <div id="device-preview-empty">Upload a Regular font file to see a live preview.</div>
-    <div id="device-preview-grid" style="display:none"></div>
-  </div>
-
-  <!-- Log -->
-  <div class="log-section">
-    <div class="log-label">Log</div>
-    <pre class="log-box" id="log-box"></pre>
-  </div>
+    <!-- Full-width: Log -->
+    <div class="log-section">
+      <div class="log-label">Log</div>
+      <pre class="log-box" id="log-box"></pre>
+    </div>
 
   </div><!-- /fonts-layout -->
 
