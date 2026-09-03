@@ -248,7 +248,7 @@ void ConvertAllScreen::do_convert_path_(const std::string& path, const std::stri
   buf.sync_bw_ram();
   buf.show_loading(title.c_str(), 0);
 
-  // Pass 1: open book, write covers, close. Heap coalesces after close.
+  // Pass 1: open book, write thumbnail cover, close. Heap coalesces after close.
   {
     Book book;
     auto err = book.open(path.c_str(), buf.scratch_buf1(), buf.scratch_buf2());
@@ -261,16 +261,29 @@ void ConvertAllScreen::do_convert_path_(const std::string& path, const std::stri
       return;
     }
     runtime.yield();
-    book.write_cover_bin(cover_path.c_str(), 160, 240, buf.scratch_buf1(), DrawBuffer::kBufSize);
-    CLOG("[CAS] write_cover_bin(160x240) done");
+    bool cov_ok = book.write_cover_bin(cover_path.c_str(), 160, 240, buf.scratch_buf1(), DrawBuffer::kBufSize);
+    CLOG("[CAS] write_cover_bin(160x240) %s", cov_ok ? "OK" : "FAIL");
     CLOG_HEAP("CAS-post-cover160");
-    runtime.yield();
-    book.write_cover_bin(sleep_path.c_str(), 480, 786, buf.scratch_buf1(), DrawBuffer::kBufSize);
-    CLOG("[CAS] write_cover_bin(480x786) done");
-    CLOG_HEAP("CAS-post-cover480");
     book.close();
   }
   CLOG_HEAP("CAS-post-cover-close");
+
+  // Pass 1b: reopen on coalesced heap, write full-res sleep cover, close.
+  // The sleep cover decode needs ~47KB contiguous — requires a fresh heap.
+  runtime.yield();
+  {
+    Book book;
+    auto err = book.open(path.c_str(), buf.scratch_buf1(), buf.scratch_buf2());
+    CLOG("[CAS] book.open(sleep) result=%d", (int)err);
+    CLOG_HEAP("CAS-pre-sleep");
+    if (err == EpubError::Ok && book.chapter_count() > 0) {
+      bool slp_ok = book.write_cover_bin(sleep_path.c_str(), 480, 786, buf.scratch_buf1(), DrawBuffer::kBufSize);
+      CLOG("[CAS] write_cover_bin(480x786) %s", slp_ok ? "OK" : "FAIL");
+      CLOG_HEAP("CAS-post-cover480");
+    }
+    book.close();
+  }
+  CLOG_HEAP("CAS-post-sleep-close");
 
   // Pass 2: reopen, pre-load CSS into external cache, close. The 66KB CSS
   // allocation happens here when heap is coalesced; the cache survives close.

@@ -129,7 +129,7 @@ void Application::auto_open_book(const char* epub_path, DrawBuffer& buf, IRuntim
   if (reader_font_)
     reader_.set_fonts(reader_font_);
 
-  ensure_cover_bin(epub_path, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize, sleep_is_book_cover());
+  ensure_cover_bin(epub_path, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize, true);
   screen_mgr_.push(&reader_, buf, runtime);
 }
 

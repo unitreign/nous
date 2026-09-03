@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "../ConvLog.h"
 #include "../HeapLog.h"
 
 namespace microreader {
@@ -109,26 +110,67 @@ bool Book::read_image_size(uint16_t entry_index, uint16_t& w, uint16_t& h, uint8
 bool Book::write_cover_bin(const char* cover_path, int max_w, int max_h,
                             uint8_t* work_buf, size_t work_buf_size) {
   const int idx = epub_.cover_zip_idx();
-  if (idx < 0 || idx >= static_cast<int>(epub_.zip().entry_count()))
+  if (idx < 0 || idx >= static_cast<int>(epub_.zip().entry_count())) {
+    CLOG("[Book] write_cover_bin: no cover entry (idx=%d) path=%s", idx, cover_path);
     return false;
-  DecodedImage img;
-  // Force images_enabled=true so covers are always generated regardless of
-  // the "show reader images" setting.
+  }
+
+  // Open output file first so we can stream rows directly into it, avoiding
+  // a large heap allocation for the full output bitmap (covers can be hi-res).
+  FILE* f = std::fopen(cover_path, "wb");
+  if (!f) {
+    CLOG("[Book] write_cover_bin: fopen failed path=%s", cover_path);
+    return false;
+  }
+  // Placeholder header — patched with real dimensions after decode.
+  uint16_t placeholder[2] = {0, 0};
+  if (std::fwrite(placeholder, 2, 2, f) != 2) {
+    std::fclose(f); std::remove(cover_path);
+    CLOG("[Book] write_cover_bin: header write failed path=%s", cover_path);
+    return false;
+  }
+
+  // Sink: each dithered row is written directly to file as it comes out.
+  struct SinkCtx { FILE* f; bool ok; };
+  SinkCtx ctx{f, true};
+  ImageRowSink sink;
+  sink.ctx = &ctx;
+  sink.emit_row = [](void* cv, uint16_t /*y*/, const uint8_t* data, uint16_t width) {
+    auto* c = static_cast<SinkCtx*>(cv);
+    if (!c->ok) return;
+    size_t stride = (static_cast<size_t>(width) + 7) / 8;
+    if (std::fwrite(data, 1, stride, c->f) != stride) c->ok = false;
+  };
+
   auto& entry = epub_.zip().entry(static_cast<uint16_t>(idx));
+  DecodedImage img;  // data stays empty; width/height filled by decoder
   const bool was_enabled = images_enabled;
   images_enabled = true;
-  auto err = decode_image_from_entry(file_, entry, max_w, max_h, img, work_buf, work_buf_size, /*scale_to_fill=*/false);
+  auto err = decode_image_from_entry(file_, entry,
+                                     static_cast<uint16_t>(max_w),
+                                     static_cast<uint16_t>(max_h),
+                                     img, work_buf, work_buf_size,
+                                     /*scale_to_fill=*/false, &sink);
   images_enabled = was_enabled;
-  if (err != ImageError::Ok || img.data.empty())
+
+  if (err != ImageError::Ok || !ctx.ok || img.width == 0 || img.height == 0) {
+    std::fclose(f); std::remove(cover_path);
+    CLOG("[Book] write_cover_bin: decode failed err=%d ok=%d max=%dx%d path=%s",
+         (int)err, (int)ctx.ok, max_w, max_h, cover_path);
     return false;
-  FILE* f = std::fopen(cover_path, "wb");
-  if (!f)
-    return false;
+  }
+
+  // Patch header with actual output dimensions.
+  std::rewind(f);
   uint16_t le[2] = {img.width, img.height};
-  const bool ok = (std::fwrite(le, 2, 2, f) == 2) &&
-                  (std::fwrite(img.data.data(), 1, img.data.size(), f) == img.data.size());
+  const bool hdr_ok = (std::fwrite(le, 2, 2, f) == 2);
   std::fclose(f);
-  if (!ok) { std::remove(cover_path); return false; }
+  if (!hdr_ok) {
+    std::remove(cover_path);
+    CLOG("[Book] write_cover_bin: header patch failed path=%s", cover_path);
+    return false;
+  }
+  CLOG("[Book] write_cover_bin: OK %dx%d → %s", (int)img.width, (int)img.height, cover_path);
   return true;
 }
 

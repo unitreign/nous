@@ -213,7 +213,7 @@ void LyraExtScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime
   for (int i = 0; i < num_books_; ++i) {
     if (slots_[i].cover_needs_extract) {
       slots_[i].cover_needs_extract = false;
-      if (app_) app_->ensure_cover_bin(slots_[i].path, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize, app_->sleep_is_book_cover());
+      if (app_) app_->ensure_cover_bin(slots_[i].path, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize, true);
       load_cover_(i);
       request_redraw();
       return;

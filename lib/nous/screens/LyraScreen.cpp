@@ -188,7 +188,7 @@ void LyraScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& r
   // Lazy cover extraction: show loading bar, extract, then redraw.
   if (cover_needs_extract_) {
     cover_needs_extract_ = false;
-    if (app_) app_->ensure_cover_bin(recent_path_, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize, app_->sleep_is_book_cover());
+    if (app_) app_->ensure_cover_bin(recent_path_, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize, true);
     load_cover_data_();
     request_redraw();
     return;
