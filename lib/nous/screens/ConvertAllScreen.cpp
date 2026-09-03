@@ -265,11 +265,9 @@ void ConvertAllScreen::do_convert_path_(const std::string& path, const std::stri
     CLOG("[CAS] write_cover_bin(160x240) done");
     CLOG_HEAP("CAS-post-cover160");
     runtime.yield();
-    if (app_->sleep_is_book_cover()) {
-      book.write_cover_bin(sleep_path.c_str(), 480, 786, buf.scratch_buf1(), DrawBuffer::kBufSize);
-      CLOG("[CAS] write_cover_bin(480x786) done");
-      CLOG_HEAP("CAS-post-cover480");
-    }
+    book.write_cover_bin(sleep_path.c_str(), 480, 786, buf.scratch_buf1(), DrawBuffer::kBufSize);
+    CLOG("[CAS] write_cover_bin(480x786) done");
+    CLOG_HEAP("CAS-post-cover480");
     book.close();
   }
   CLOG_HEAP("CAS-post-cover-close");
