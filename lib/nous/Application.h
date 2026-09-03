@@ -202,6 +202,9 @@ class Application {
   bool sunlight_fading_fix() const { return sunlight_fading_fix_; }
   void set_sunlight_fading_fix(bool v) { sunlight_fading_fix_ = v; save_settings_(); }
 
+  bool conv_log_enabled() const { return conv_log_enabled_; }
+  void set_conv_log_enabled(bool v);
+
   uint8_t battery_display() const { return battery_display_; }
   void set_battery_display(uint8_t v) { battery_display_ = v <= 2 ? v : 0; save_settings_(); }
 
@@ -382,6 +385,7 @@ class Application {
   bool show_reader_images_ = true;
   bool show_sleep_text_ = true;
   bool sunlight_fading_fix_ = false;
+  bool conv_log_enabled_ = false;
   uint8_t battery_display_ = 0;  // 0=icon, 1=number, 2=both
   uint8_t list_align_ = 0;       // 0=center, 1=left, 2=right
   uint8_t sleep_timeout_min_ = 10;  // 0=off, else minutes until auto-sleep

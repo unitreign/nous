@@ -224,7 +224,7 @@ void SettingsScreen::on_start() {
   idx_invert_side_ = idx_invert_side_reader_ = idx_power_short_ = -1;
   idx_series_view_ = idx_rotate_display_ = idx_reader_rotate_display_ = idx_menu_font_ = -1;
   idx_font_ = idx_sleep_image_ = idx_sleep_text_ = idx_reader_images_ = idx_sunlight_fading_ = -1;
-  idx_battery_display_ = idx_sleep_timeout_ = idx_convert_all_ = idx_theme_ = -1;
+  idx_battery_display_ = idx_sleep_timeout_ = idx_convert_all_ = idx_debug_log_ = idx_theme_ = -1;
 #ifdef MICROREADER_ENABLE_DEMOS
   idx_bouncing_ball_ = idx_grayscale_demo_ = -1;
 #endif
@@ -404,6 +404,8 @@ void SettingsScreen::on_start() {
   idx_convert_all_ = count();
   add_item("Convert Books");
 
+  idx_debug_log_ = count();
+  add_item(std::string("Debug Log: ") + (app_ && app_->conv_log_enabled() ? "On" : "Off"));
 
 #ifdef ESP_PLATFORM
   if (app_ && app_->has_invalidate_font_fn()) {
@@ -750,6 +752,14 @@ void SettingsScreen::on_select(int index) {
     if (app_) app_->push_screen(ScreenId::ConvertAll);
     return;
   }
+  if (index == idx_debug_log_) {
+    if (app_) {
+      bool v = !app_->conv_log_enabled();
+      app_->set_conv_log_enabled(v);
+      set_item_label(idx_debug_log_, std::string("Debug Log: ") + (v ? "On" : "Off"));
+    }
+    return;
+  }
   if (index == idx_sort_order_) {
     if (app_) {
       BookSortOrder order = (app_->sort_order() == BookSortOrder::Alphabetical)
@@ -1055,39 +1065,17 @@ void SettingsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_p
   // ── Lyra bottom tooltips ─────────────────────────────────────────────────
   if (is_lyra && section_font_.valid()) {
     const BitmapFont& sf = section_font_;
-    const bool inv = app_ && app_->invert_menu_buttons();
 
     static constexpr int kBotPad    = 5;
     static constexpr int kBotMargin = 10;
-    static constexpr int kBoxLX     = 53;
-    static constexpr int kBoxW      = 176;
-    static constexpr int kBoxRX     = kBoxLX + kBoxW + 22;
-    static constexpr int kLDiv      = kBoxLX + kBoxW / 2;
-    static constexpr int kRDiv      = kBoxRX + kBoxW / 2;
 
-    const int box_h  = kBotPad + sf.y_advance() + kBotPad;
-    const int bot_h  = 1 + box_h + kBotMargin;
-    const int box_y  = H - bot_h;
-    const int text_y = box_y + kBotPad + sf.baseline();
+    const int box_h = kBotPad + sf.y_advance() + kBotPad;
+    const int bot_h = 1 + box_h + kBotMargin;
+    const int box_y = H - bot_h;
 
-    auto draw_box = [&](int bx) {
-      buf.fill_rect(bx,             box_y,             kBoxW, 1,     false);
-      buf.fill_rect(bx,             box_y + box_h - 1, kBoxW, 1,     false);
-      buf.fill_rect(bx,             box_y,             1,     box_h, false);
-      buf.fill_rect(bx + kBoxW - 1, box_y,             1,     box_h, false);
-    };
-    draw_box(kBoxLX);
-    buf.fill_rect(kLDiv, box_y, 1, box_h, false);
-    draw_box(kBoxRX);
-    buf.fill_rect(kRDiv, box_y, 1, box_h, false);
-
-    const char* labels[4] = {"Back", "Select", inv ? "Up" : "Down", inv ? "Down" : "Up"};
-    const int centers[4]  = {kBoxLX + kBoxW / 4, kBoxLX + 3 * kBoxW / 4,
-                              kBoxRX + kBoxW / 4, kBoxRX + 3 * kBoxW / 4};
-    for (int i = 0; i < 4; ++i) {
-      const int tw = static_cast<int>(sf.word_width(labels[i], std::strlen(labels[i]), FontStyle::Regular));
-      buf.draw_text_proportional(centers[i] - tw / 2, text_y, labels[i], std::strlen(labels[i]), sf, false);
-    }
+    const char* labels[4];
+    get_button_labels(labels);
+    draw_lyra_tooltip_bar(buf, sf, W, box_y, labels);
   }
 
   // ── Picker overlay ───────────────────────────────────────────────────────

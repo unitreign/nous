@@ -203,6 +203,15 @@ class ListMenuScreen : public IScreen {
       start(*buf_, *runtime_);
   }
 
+  // Returns the 4 Lyra tooltip labels: [back, select, down/up, up/down].
+  // Override to customise a slot (e.g. "—" for a disabled action).
+  virtual void get_button_labels(const char* out[4]) const;
+
+  // Draws the shared Lyra two-box four-slot tooltip bar.
+  // box_y: top of the box area. Geometry is computed dynamically from W.
+  static void draw_lyra_tooltip_bar(DrawBuffer& buf, const BitmapFont& sf,
+                                    int W, int box_y, const char* labels[4]);
+
   virtual void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const;
   virtual void ensure_visible_();
   void set_scroll_offset_(int v) { scroll_offset_ = v; }

@@ -36,6 +36,7 @@ class StatsScreen final : public ListMenuScreen {
   }
 
   const char* name() const override { return "Stats"; }
+  void get_button_labels(const char* out[4]) const override;
 
   // Render stats layout (no tooltips), then full_refresh + deep_sleep.
   // Call this from Application::do_sleep_ after populating via set_book_stats().

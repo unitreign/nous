@@ -11,9 +11,13 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+// Controlled by Settings > System > Debug Log. Default off.
+extern bool g_conv_log_enabled;
+
 static constexpr const char* kConvLogPath = "/sdcard/.microreader/convert_log.txt";
 
 inline void clog_write(const char* fmt, ...) {
+  if (!g_conv_log_enabled) return;
   FILE* f = fopen(kConvLogPath, "a");
   if (!f) return;
   va_list ap;
@@ -26,6 +30,7 @@ inline void clog_write(const char* fmt, ...) {
 
 // Logs a line + current heap/stack snapshot on the next line.
 inline void clog_heap(const char* tag) {
+  if (!g_conv_log_enabled) return;
   clog_write("[%s] heap_free=%lu largest=%lu stack_hwm=%lu", tag,
              (unsigned long)esp_get_free_heap_size(),
              (unsigned long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),

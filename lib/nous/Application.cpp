@@ -26,6 +26,10 @@
 namespace fs = std::filesystem;
 #endif
 
+#ifdef ESP_PLATFORM
+bool g_conv_log_enabled = false;
+#endif
+
 namespace microreader {
 
 void Application::start(DrawBuffer& buf, IRuntime& runtime) {
@@ -599,6 +603,7 @@ void microreader::Application::save_settings_() {
   std::fprintf(f, "sleep_timeout_min=%u\n", static_cast<unsigned>(sleep_timeout_min_));
   std::fprintf(f, "menu_theme=%u\n", static_cast<unsigned>(menu_theme_));
   std::fprintf(f, "sleep_text=%u\n", show_sleep_text_ ? 1u : 0u);
+  std::fprintf(f, "conv_log=%u\n", conv_log_enabled_ ? 1u : 0u);
   if (!last_seen_version_.empty())
     std::fprintf(f, "last_version=%s\n", last_seen_version_.c_str());
 
@@ -625,6 +630,14 @@ void microreader::Application::set_menu_theme(uint8_t v) {
 void microreader::Application::set_show_reader_images(bool v) {
   show_reader_images_ = v;
   images_enabled = v;
+  save_settings_();
+}
+
+void microreader::Application::set_conv_log_enabled(bool v) {
+  conv_log_enabled_ = v;
+#ifdef ESP_PLATFORM
+  g_conv_log_enabled = v;
+#endif
   save_settings_();
 }
 
@@ -796,10 +809,16 @@ void microreader::Application::load_settings_() {
       menu_theme_ = static_cast<uint8_t>(uval <= 5 ? uval : 0);
     else if (std::sscanf(line, "sleep_text=%u", &uval) == 1)
       show_sleep_text_ = (uval != 0);
+    else if (std::sscanf(line, "conv_log=%u", &uval) == 1)
+      conv_log_enabled_ = (uval != 0);
     else if (std::sscanf(line, "last_version=%511[^\n]", sval) == 1)
       last_seen_version_ = sval;
   }
   std::fclose(f);
+
+#ifdef ESP_PLATFORM
+  g_conv_log_enabled = conv_log_enabled_;
+#endif
 
   // These toggles have been removed from Settings UI — always enforce.
   show_nav_arrows_ = true;
