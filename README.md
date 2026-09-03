@@ -1,172 +1,225 @@
 # Nous
 
-Nous is my personal fork of [microreader](https://github.com/CidVonHighwind/microreader/) by [CidVonHighwind](https://github.com/CidVonHighwind) — an open-source EPUB reader firmware for the Xteink X4 e-ink device (ESP32-C3, 800×480).
+Custom firmware for the **Xteink X4**.
 
+<p align="center">
+  <a href="https://github.com/unitreign/nous/releases/latest"><img src="https://img.shields.io/github/v/release/unitreign/nous?label=version&color=black" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-black" alt="License: GPL v3"></a>
+  <a href="https://ko-fi.com/unitreign"><img src="https://img.shields.io/badge/Ko--fi-support-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
+</p>
 
-[📋 Roadmap](https://kan.bn/as1ejm5nnww5/nous) • [☕ Donate](https://ko-fi.com/U7U41U5JQ)
+<p align="center">
+  <img src="images/devicedesk.png" alt="Nous running on the Xteink X4" width="700">
+</p>
 
----
+Nous is a fork of [MicroReader](https://github.com/CidVonHighwind/microreader) for the Xteink X4.
 
----
+It keeps things simple and fast. No wireless, no accounts, no telemetry. Books live on the SD card, and the library is ready when you turn the device on.
 
-## Screenshots
+## Install
 
-| Home | Home (Landscape) | Reader |
-|---|---|---|
-| <img src="images/homeportrait.png" width="220"> | <img src="images/homelandscape.png" width="320"> | <img src="images/readerportrait.png" width="220"> |
+The easiest way to install Nous is through:
 
-| Settings | Stats | Hidden Books |
-|---|---|---|
-| <img src="images/settingsportrait.png" width="220"> | <img src="images/statsportrait.png" width="220"> | <img src="images/hiddenportrait.png" width="220"> |
+**[nous.reign.fyi](https://nous.reign.fyi/)**
 
-| Stele Theme | Converter |
-|---|---|
-| <img src="images/steletheme.png" width="220"> | <img src="images/converter.png" width="220"> |
+The site includes:
 
----
+* **[Firmware installer](https://nous.reign.fyi/)** (scroll to the bottom)
+* **[Font Converter](https://nous.reign.fyi/fonts)**
+* **[Device Manager](https://nous.reign.fyi/manager)**
+
+Firmware releases are also available from the [Releases](https://github.com/unitreign/nous/releases) page.
 
 ## Features
 
-### Themes
+### Speed
 
-Four visual themes, switchable from Settings:
-
-| Theme | Style |
-|---|---|
-| **Chronicle** | Clean header bar with battery and button hints at the bottom |
-| **Minimal** | Bare list with no decoration — just items |
-| **Stele** | Two-line rows with title and author, read time in subtitle |
-| **Codex** | Numbered catalog — ALL CAPS titles, author and read time below, 00 for recents |
-
-### Menu
-
-| Feature | Description |
-|---|---|
-| **Menu Size** | Small / Medium / Large / X-Large — scales all menus and settings |
-| **Book Sort** | Alphabetical or Last Opened. Last Opened splits the list into a Recent section above and full library below |
-| **Book List Format** | Title only, Title & Author, or Filename |
-| **List Alignment** | Left, center, or right — Minimal theme only |
+* Starts up and opens the library in under 1.5 seconds
+* No splash screen
+* Fast page turns
+* Quick book opening
+* Display refresh tuned to keep the delay between presses and page changes short
 
 ### Library
 
-| Feature | Description |
-|---|---|
-| **Convert All** | Batch-convert your whole library from Settings — shows per-book progress |
-| **Converted Indicator** | Marks already-converted books on the list. Stele uses `·dots·`, Codex shows `· not converted` on unconverted books when enabled |
-| **Reading Stats** | Per-book open count and total reading time — visible from the book options screen. Updates live while reading |
-| **Hidden Books** | Drop EPUBs into a `.hidden/` folder on the SD card. They won't appear in the list, recents, or auto-open on boot. Long-press Back (~3s) from the book list to access them |
+* Flat library with no folder structure required
+* Books can be placed anywhere on the SD card
+* Books are indexed automatically
+* Natural sorting
+* Series View
+* Series grouped automatically
+* Volumes sorted in the correct order - For example, `Vol. 2` is sorted before `Vol. 10`.
+* Finished books moved to the bottom of the library
+* Finished books marked with `(fin)`
 
-### Display & Controls
 
-| Feature | Description |
-|---|---|
-| **Battery Display** | Icon only, number only, or both — Chronicle and Minimal themes |
-| **Nav Arrows** | Toggle the button hint glyphs in the bottom bar on or off |
-| **Display Rotation** | Portrait or Landscape |
-| **Auto-Sleep** | Configurable inactivity timeout — 1 / 3 / 5 / 10 / 20 / 30 min, or Off |
-| **Sleep Image** | Custom sleep screen from SD card (`.mgr` or `.bmp` in `/.sleep/`) with auto-cycle support |
-| **Button Remapping** | Invert menu navigation direction, bottom paging direction, and side button paging direction independently |
+### Reading
+
+* EPUB support
+* Custom fonts
+* Adjustable font size
+* Custom margins
+* Adjustable line spacing
+* Reader rotation
+* Picks up from the exact page where you left off
+* Finished book tracking
+* Book Complete dialog
+* Reopen finished books from the beginning or continue where you left off
+* Per-book reading statistics
+* Global reading statistics
+
+### Controls
+
+Front and side buttons can be configured independently for menus and reading.
+
+* Front button direction
+* Front reader button direction
+* Side button direction
+* Side reader button direction
+* Configurable power button behaviour
+
+### Statistics
+
+Track reading activity at both the book and global library level.
+
+* Reading time
+* Time remaining
+* Pages per minute
+* Page turns
+* Session count
+* Average session
+* Times opened
+* Finished books
+
+### Book Conversion
+
+The **Convert Books** screen in Settings shows the conversion and cover status of every book.
+
+You can:
+
+* Convert individual books
+* Generate covers during conversion
+* Delete cached conversion data
+* Reconvert books
+* Convert all unconverted books at once
+
+Large and complex EPUB stylesheets are handled more reliably, avoiding conversion failures caused by large contiguous memory allocations.
+> **Note:** EPUBs with unusually large or complex CSS may still cause conversion to stop. If this happens, reboot the device and convert that book individually rather than converting it as part of a batch.
 
 ### Fonts
 
-| Feature | Description |
-|---|---|
-| **Custom Reader Fonts** | Load `.mfb` bitmap fonts from `fonts/` on the SD card |
-| **Reader Font Size** | Adjustable font size for reading |
+Use the **Font Converter** at [nous.reign.fyi](https://nous.reign.fyi/) to turn a TTF or OTF font into a font pack for Nous.
 
----
+Load the resulting font onto the device and select it from the reader settings.
 
-## Installation
+### Sleep Screen
 
-> [!WARNING]
-> **Requires an unlocked Xteink X4.** Do not flash on a locked device.
+* Custom sleep screen image
+* Book covers on the sleep screen
+* Cover generated during book conversion
+* Full-resolution covers on supported themes
 
-Download the latest `.bin` from the [Releases](../../releases) page.
+### Hidden Shelf
 
-Flash using the [Crosspoint flash tool](https://crosspointreader.com/#flash-tools) (browser-based, nothing to install), or with esptool:
+Hold the Back button for three seconds to open a private library.
 
-```powershell
-python -m esptool --chip esp32c3 --port COM5 --baud 921600 write_flash 0x0 nous.bin
-```
+Books placed in `.hidden` on the SD card appear there instead of in the normal library.
 
-Replace `COM5` with your actual port. Hold BOOT while connecting if the device doesn't enter flash mode automatically.
+### Sunlight Fading Fix
 
-Back up your existing firmware first:
+The optional **Sunlight Fading Fix** powers down the display's analog supply after each refresh.
 
-```powershell
-python -m esptool --chip esp32c3 --port COM5 read_flash 0x0 0x1000000 firmware_backup.bin
-```
+This helps prevent fading and ghosting when using the X4 in direct sunlight.
 
----
+It is off by default and adds a short delay when changing pages.
 
-## Hidden Books
+## Details
 
-Create a `.hidden/` folder at the root of your SD card and put EPUBs inside:
+### Reading first
 
-```
-SD card root/
-└── .hidden/
-    └── mybook.epub
-```
+The library opens quickly and the reader stays out of the way.
 
-They won't show in the book list, won't appear in recents, and the device won't reopen them on boot. Long-press Back (~3 seconds) from the book list to get to them.
+Open a book, read, and pick up where you stopped.
 
----
+### No organisation needed
 
-## Managing Content
+You do not need to maintain a particular folder structure.
 
-EPUBs go anywhere on the SD card — the device scans recursively from the root.
+Drop EPUBs anywhere on the SD card. Nous scans the card and builds the library for you.
 
-- **Fonts** — `.mfb` files go in `fonts/`
-- **Sleep images** — `.mgr` or `.bmp` files go in `.sleep/`
+### Local only
 
-You can copy files directly to the SD card or transfer over USB. The [microreader browser manager](https://cidvonhighwind.github.io/microreader/) is compatible with Nous.
+Everything stays on the device and SD card.
 
----
+There is no cloud library, account, sync service, Wi-Fi, or Bluetooth.
 
-## Building
+Transfer books and files over USB or directly through the SD card.
 
-Requires [PlatformIO](https://platformio.org/). Open in VS Code and hit Build, or from the terminal:
+### Your fonts
 
-```powershell
-pio run
-```
+Bring your own TTF or OTF fonts and convert them with the web-based Font Converter.
 
-Output: `.pio\build\esp32c3\firmware.bin`
+Typography controls include:
 
-### Desktop Emulator
+* Font
+* Font size
+* Margins
+* Line spacing
 
-Runs the full UI in an SDL2 window — no device needed. Requires CMake, Ninja, MinGW, and SDL2.
+## Stability
 
-```powershell
-cmake -B build/desktop-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ "-DCMAKE_POLICY_VERSION_MINIMUM:STRING=3.5" platforms/desktop
-cmake --build build/desktop-debug --config Debug
-.\build\desktop-debug\nous_desktop.exe
-```
+Nous includes fixes for damaged books, malformed fonts, SD card errors, and interrupted saves.
 
----
+This includes:
 
-## Project Structure
+* Corrupt books being rejected instead of crashing
+* Safer handling of corrupt paragraph data
+* Atomic book-index saves
+* Automatic index backups
+* Atomic settings saves
+* Bounds checking for malformed font files
+* Safer SD card writes
+* Safer SD card reads
+* Safer navigation to unavailable screens
 
-```
-lib/nous/          core library (platform-agnostic C++20)
-  content/         EPUB parsing, layout, MRB binary format
-  display/         DrawBuffer, font interfaces
-  screens/         all UI screen implementations
-platforms/esp32/   ESP-IDF + PlatformIO firmware entry point
-platforms/desktop/ SDL2 desktop emulator
-resources/         embedded assets (sleep image, fonts)
-tools/             build scripts
-```
+## System Details
 
----
+|                  |                                            |
+| ---------------- | ------------------------------------------ |
+| **Device**       | Xteink X4                                  |
+| **Display**      | Monochrome E-Ink · 480 × 800               |
+| **Format**       | EPUB                                       |
+| **Library**      | Flat scan · Series grouping · Hidden shelf |
+| **Typography**   | Font · Size · Margin · Line spacing        |
+| **Connectivity** | USB only · No Wi-Fi · No Bluetooth         |
+| **License**      | GPL-3.0                                    |
 
-## Credits
+## Before You Flash
 
-The architecture, MRB conversion system, rendering engine, and the entire foundation this runs on is [CidVonHighwind's](https://github.com/CidVonHighwind) work. I built on top of it.
+**Check the [approved and flagged firmware list](https://brickclub.pages.dev/) before flashing.**
+
+Flashing unapproved firmware can permanently brick your device.
+
+Some international Xteink devices, including many sold through AliExpress, ship with USB flashing disabled. The SD card method can install custom firmware on these locked devices in a few minutes. It does not unlock USB flashing.
+
+If your current firmware does not support SD flashing, use the [OTA Unlocker Tool](https://crosspointreader.com/unlocker).
+
+**Flash at your own risk.** I am not responsible for bricked devices, data loss, or any damage resulting from the use of this firmware or its tools.
+
+## MicroReader
+
+Nous is based on [MicroReader](https://github.com/CidVonHighwind/microreader).
+
+The original project provides the foundation for the reader, book conversion, and Xteink X4 support. Nous extends it with the features and changes listed above.
 
 ## License
 
-GPL v2 — see [LICENSE](LICENSE).
+Nous is licensed under the **GNU General Public License v3.0**.
 
-Fork of [microreader](https://github.com/CidVonHighwind/microreader/), inheriting its GPL v2 license. All additions in this fork are under the same terms.
+See [LICENSE](LICENSE) for the full license text.
+
+## Releases
+
+Firmware downloads and release notes are available on the [GitHub Releases](https://github.com/unitreign/nous/releases) page.
+
+The in-device changelog was removed in Nous 2.2.2. Release notes are now published on GitHub.
