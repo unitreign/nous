@@ -194,6 +194,7 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
   for (size_t i = 0; i < toc_work.entries.size(); ++i) {
     auto frag = toc_work.entries[i].fragment.to_string(toc_work.pool);
     if (!frag.empty()) {
+      toc_work.entries[i].para_index = 0xFFFF;  // unresolved sentinel
       fragment_needs.push_back({toc_work.entries[i].file_idx, std::string(frag), i});
     }
   }
@@ -242,7 +243,7 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
       if (need.zip_file_idx == c.current_zip_file_idx && need.fragment.size() == id_len &&
           std::memcmp(need.fragment.data(), id_p, id_len) == 0) {
         auto& entry = c.toc_work->entries[need.toc_entry_idx];
-        if (entry.para_index == 0)  // only record first match per entry
+        if (entry.para_index == 0xFFFF)  // only record first match per entry
           entry.para_index = static_cast<uint16_t>(para_idx < 0xFFFFu ? para_idx : 0xFFFFu);
       }
     }

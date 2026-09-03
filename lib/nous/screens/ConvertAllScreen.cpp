@@ -352,8 +352,7 @@ void ConvertAllScreen::do_delete_(int idx, DrawBuffer& buf, IRuntime& runtime) {
   try { std::filesystem::remove(cache_dir); } catch (...) {}
 #endif
 
-  buf.show_loading("Deleting...", 100);
-  for (int i = 0; i < 150; ++i) runtime.yield();
+  buf.reset_after_scratch(true);
 }
 
 }  // namespace microreader

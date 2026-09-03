@@ -76,7 +76,7 @@ bool MrbReader::open(const char* path) {
     for (uint16_t i = 0; i < toc_count; ++i) {
       std::string label = read_string();
       uint8_t buf[5] = {};
-      read_bytes(buf, 5);
+      if (!read_bytes(buf, 5)) break;
       uint16_t file_idx = mrb_read_u16(buf);
       uint8_t depth = buf[2];
       uint16_t para_index = mrb_read_u16(buf + 3);
@@ -360,7 +360,8 @@ bool MrbReader::read_bytes(void* buf, size_t size) {
 }
 
 bool MrbReader::read_at(uint32_t offset, void* buf, size_t size) {
-  fseek(f_, static_cast<long>(offset), SEEK_SET);
+  if (fseek(f_, static_cast<long>(offset), SEEK_SET) != 0)
+    return false;
   return read_bytes(buf, size);
 }
 

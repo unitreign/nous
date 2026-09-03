@@ -594,12 +594,9 @@ void microreader::Application::save_settings_() {
   if (!sleep_image_path_.empty())
     std::fprintf(f, "sleep_image=%s\n", sleep_image_path_.c_str());
   std::fprintf(f, "sleep_image_idx=%d\n", sleep_image_idx_);
-  std::fprintf(f, "show_nav_arrows=%u\n", show_nav_arrows_ ? 1u : 0u);
-  std::fprintf(f, "show_conv_ind=%u\n", show_converted_indicator_ ? 1u : 0u);
   std::fprintf(f, "sunlight_fix=%u\n", sunlight_fading_fix_ ? 1u : 0u);
   std::fprintf(f, "show_reader_images=%u\n", show_reader_images_ ? 1u : 0u);
   std::fprintf(f, "battery_display=%u\n", static_cast<unsigned>(battery_display_));
-  std::fprintf(f, "list_align=%u\n", static_cast<unsigned>(list_align_));
   std::fprintf(f, "sleep_timeout_min=%u\n", static_cast<unsigned>(sleep_timeout_min_));
   std::fprintf(f, "menu_theme=%u\n", static_cast<unsigned>(menu_theme_));
   std::fprintf(f, "sleep_text=%u\n", show_sleep_text_ ? 1u : 0u);
@@ -791,18 +788,12 @@ void microreader::Application::load_settings_() {
       sleep_image_path_ = sval;
     else if (std::sscanf(line, "sleep_image_idx=%u", &uval) == 1)
       sleep_image_idx_ = static_cast<int>(uval);
-    else if (std::sscanf(line, "show_nav_arrows=%u", &uval) == 1)
-      show_nav_arrows_ = (uval != 0);
-    else if (std::sscanf(line, "show_conv_ind=%u", &uval) == 1)
-      show_converted_indicator_ = (uval != 0);
     else if (std::sscanf(line, "sunlight_fix=%u", &uval) == 1)
       sunlight_fading_fix_ = (uval != 0);
     else if (std::sscanf(line, "show_reader_images=%u", &uval) == 1)
       show_reader_images_ = (uval != 0);
     else if (std::sscanf(line, "battery_display=%u", &uval) == 1)
       battery_display_ = static_cast<uint8_t>(uval <= 2 ? uval : 0);
-    else if (std::sscanf(line, "list_align=%u", &uval) == 1)
-      list_align_ = static_cast<uint8_t>(uval <= 2 ? uval : 0);
     else if (std::sscanf(line, "sleep_timeout_min=%u", &uval) == 1)
       sleep_timeout_min_ = static_cast<uint8_t>(uval <= 60 ? uval : 10);
     else if (std::sscanf(line, "menu_theme=%u", &uval) == 1)
@@ -819,11 +810,6 @@ void microreader::Application::load_settings_() {
 #ifdef ESP_PLATFORM
   g_conv_log_enabled = conv_log_enabled_;
 #endif
-
-  // These toggles have been removed from Settings UI — always enforce.
-  show_nav_arrows_ = true;
-  show_converted_indicator_ = true;
-  list_align_ = 0;
 
   MR_LOGI("app", "Loaded settings: align=%u ph=%u pv=%u ls=%u prog=%u sel=%s", static_cast<unsigned>(rs.align_override),
           rs.padding_h_idx, rs.padding_v_idx, static_cast<unsigned>(rs.spacing_override),

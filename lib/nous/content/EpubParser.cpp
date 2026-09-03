@@ -46,7 +46,7 @@ static EpubError extract_entry(IZipFile& file, const ZipReader& zip, const ZipEn
 
 bool CssCache::low_memory() {
 #ifdef ESP_PLATFORM
-  return esp_get_free_heap_size() < 24 * 1024;
+  return heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) < 24 * 1024;
 #else
   return false;
 #endif

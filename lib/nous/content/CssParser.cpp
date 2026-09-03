@@ -283,8 +283,7 @@ CssRule CssRule::parse(const char* decl, size_t length, const CssConfig& config)
             rule.set_font_size_pct(75);
           rule.set_vertical_align(VerticalAlign::Sub);
         } else if (value == "top" || value == "bottom") {
-          if (!rule.has_font_size_pct_)
-            rule.set_font_size_pct(75);
+          // vertical-align: top/bottom has no effect on font size
         }
       } else if (key == "line-height") {
         // Parse line-height as percentage of our natural y_advance.
