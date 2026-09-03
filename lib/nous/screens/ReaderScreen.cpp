@@ -363,14 +363,13 @@ void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
       goto show_error;
     }
 
-    // Generate cover.bin (and cover_sleep.bin if configured) while the book
-    // is already open and real scratch bufs are available.
+    // Generate cover.bin and cover_sleep.bin while the book is already open
+    // and real scratch bufs are available.
     if (app_ && app_->data_dir_) {
       const std::string cpath = cover_bin_path(path_.c_str(), data_dir_.c_str());
       const std::string spath = cover_sleep_bin_path(path_.c_str(), data_dir_.c_str());
       book_.write_cover_bin(cpath.c_str(), 160, 240, buf.scratch_buf1(), DrawBuffer::kBufSize);
-      if (app_->sleep_is_book_cover())
-        book_.write_cover_bin(spath.c_str(), 480, 786, buf.scratch_buf1(), DrawBuffer::kBufSize);
+      book_.write_cover_bin(spath.c_str(), 480, 786, buf.scratch_buf1(), DrawBuffer::kBufSize);
     }
 
 #ifdef ESP_PLATFORM
