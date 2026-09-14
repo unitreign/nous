@@ -6,6 +6,7 @@ Custom firmware for the **Xteink X4**.
   <a href="https://github.com/unitreign/nous/releases/latest"><img src="https://img.shields.io/github/v/release/unitreign/nous?label=version&color=black" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-black" alt="License: GPL v3"></a>
   <a href="https://ko-fi.com/unitreign"><img src="https://img.shields.io/badge/Ko--fi-support-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
+  <a href="https://github.com/unitreign/nous/releases"><img src="https://img.shields.io/github/downloads/unitreign/nous/total?color=black" alt="Downloads"></a>
 </p>
 
 <p align="center">
