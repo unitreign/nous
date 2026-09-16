@@ -8,6 +8,10 @@
 
 #include "../Application.h"
 #include "../display/brand_font_nous.h"
+#include "../display/terminus_ui_font_header.h"
+#include "../display/terminus_ui_font_large.h"
+#include "../display/terminus_ui_font_medium.h"
+#include "../display/terminus_ui_font_small.h"
 #include "../display/ui_font_header.h"
 #include "../display/ui_font_large.h"
 #include "../display/ui_font_medium.h"
@@ -16,17 +20,21 @@
 namespace microreader {
 
 int ListMenuScreen::font_size_idx_ = 0;
+int ListMenuScreen::font_face_     = 0;
 ListMenuScreen::MenuTheme ListMenuScreen::theme_ = ListMenuScreen::MenuTheme::Chronicle;
 
 void ListMenuScreen::apply_ui_font(BitmapFont& out) {
-  if (font_size_idx_ == 1)
-    out.init(kFontData_ui_medium_mbf, kFontData_ui_medium_mbf_size);
-  else if (font_size_idx_ == 2)
-    out.init(kFontData_ui_large_mbf, kFontData_ui_large_mbf_size);
-  else if (font_size_idx_ == 3)
-    out.init(kFontData_ui_header_mbf, kFontData_ui_header_mbf_size);
-  else
-    out.init(kFontData_ui_small_mbf, kFontData_ui_small_mbf_size);
+  if (font_face_ == 1) {
+    if (font_size_idx_ == 1)      out.init(kFontData_terminus_medium_mbf, kFontData_terminus_medium_mbf_size);
+    else if (font_size_idx_ == 2) out.init(kFontData_terminus_large_mbf,  kFontData_terminus_large_mbf_size);
+    else if (font_size_idx_ == 3) out.init(kFontData_terminus_header_mbf, kFontData_terminus_header_mbf_size);
+    else                          out.init(kFontData_terminus_small_mbf,  kFontData_terminus_small_mbf_size);
+  } else {
+    if (font_size_idx_ == 1)      out.init(kFontData_ui_medium_mbf, kFontData_ui_medium_mbf_size);
+    else if (font_size_idx_ == 2) out.init(kFontData_ui_large_mbf,  kFontData_ui_large_mbf_size);
+    else if (font_size_idx_ == 3) out.init(kFontData_ui_header_mbf, kFontData_ui_header_mbf_size);
+    else                          out.init(kFontData_ui_small_mbf,   kFontData_ui_small_mbf_size);
+  }
 }
 
 static constexpr int kHeaderY = 15;         // top padding before the title text
@@ -44,16 +52,9 @@ static constexpr int kItemSpacing = 6;      // vertical gap between list item ro
 void ListMenuScreen::start(DrawBuffer& buf, IRuntime& runtime) {
   buf_ = &buf;
   runtime_ = &runtime;
-  // Re-init ui_font_ whenever the font_size_idx_ setting may have changed.
+  // Re-init ui_font_ whenever the font_size_idx_ or font_face_ setting may have changed.
   ui_font_ = BitmapFont{};
-  if (font_size_idx_ == 1)
-    ui_font_.init(kFontData_ui_medium_mbf, kFontData_ui_medium_mbf_size);
-  else if (font_size_idx_ == 2)
-    ui_font_.init(kFontData_ui_large_mbf, kFontData_ui_large_mbf_size);
-  else if (font_size_idx_ == 3)
-    ui_font_.init(kFontData_ui_header_mbf, kFontData_ui_header_mbf_size);
-  else
-    ui_font_.init(kFontData_ui_small_mbf, kFontData_ui_small_mbf_size);
+  apply_ui_font(ui_font_);
   if (!header_font_.valid())
     header_font_.init(kFontData_ui_header_mbf, kFontData_ui_header_mbf_size);
   brand_font_ = BitmapFont{};
@@ -68,14 +69,26 @@ void ListMenuScreen::start(DrawBuffer& buf, IRuntime& runtime) {
   brand_header_font_ = BitmapFont{};
   brand_header_font_.init(kFontData_brand_nous_header_mbf, kFontData_brand_nous_header_mbf_size);
   subtitle_font_ = BitmapFont{};
-  subtitle_font_.init(kFontData_ui_small_mbf, kFontData_ui_small_mbf_size);
-  section_font_ = BitmapFont{};
-  if (font_size_idx_ >= 3)
-    section_font_.init(kFontData_ui_large_mbf, kFontData_ui_large_mbf_size);
-  else if (font_size_idx_ >= 2)
-    section_font_.init(kFontData_ui_medium_mbf, kFontData_ui_medium_mbf_size);
+  if (font_face_ == 1)
+    subtitle_font_.init(kFontData_terminus_small_mbf, kFontData_terminus_small_mbf_size);
   else
-    section_font_.init(kFontData_ui_small_mbf, kFontData_ui_small_mbf_size);
+    subtitle_font_.init(kFontData_ui_small_mbf, kFontData_ui_small_mbf_size);
+  section_font_ = BitmapFont{};
+  if (font_face_ == 1) {
+    if (font_size_idx_ >= 3)
+      section_font_.init(kFontData_terminus_large_mbf, kFontData_terminus_large_mbf_size);
+    else if (font_size_idx_ >= 2)
+      section_font_.init(kFontData_terminus_medium_mbf, kFontData_terminus_medium_mbf_size);
+    else
+      section_font_.init(kFontData_terminus_small_mbf, kFontData_terminus_small_mbf_size);
+  } else {
+    if (font_size_idx_ >= 3)
+      section_font_.init(kFontData_ui_large_mbf, kFontData_ui_large_mbf_size);
+    else if (font_size_idx_ >= 2)
+      section_font_.init(kFontData_ui_medium_mbf, kFontData_ui_medium_mbf_size);
+    else
+      section_font_.init(kFontData_ui_small_mbf, kFontData_ui_small_mbf_size);
+  }
   if (app_)
     list_align_ = app_->list_align();
   const int prev_selected = selected_;

@@ -265,6 +265,13 @@ class Application {
     save_settings_();
   }
 
+  int ui_font_face() const { return ui_font_face_; }
+  void set_ui_font_face(int v) {
+    ui_font_face_ = v;
+    ListMenuScreen::set_font_face(v);
+    save_settings_();
+  }
+
   const std::string& custom_font_path() const {
     return custom_font_path_;
   }
@@ -371,6 +378,7 @@ class Application {
   uint8_t rotate_reader_ = 0;   // independent reader rotation, same encoding
 
   int menu_font_size_ = 2;  // Large default
+  int ui_font_face_   = 0;  // 0=Inter, 1=Terminus
   uint16_t open_counter_ = 0;  // monotonically increasing; incremented each time a book is opened
 
   std::string custom_font_path_;

@@ -80,6 +80,7 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
 
   // Apply persisted menu font size and theme to all list screens.
   ListMenuScreen::set_font_size(menu_font_size_);
+  ListMenuScreen::set_font_face(ui_font_face_);
   ListMenuScreen::set_theme(static_cast<ListMenuScreen::MenuTheme>(menu_theme_));
 
   // Apply persisted display rotation.
@@ -586,6 +587,7 @@ void microreader::Application::save_settings_() {
   std::fprintf(f, "rotate_display=%u\n", static_cast<unsigned>(rotate_display_));
   std::fprintf(f, "rotate_reader=%u\n", static_cast<unsigned>(rotate_reader_));
   std::fprintf(f, "menu_font_size=%d\n", menu_font_size_);
+  std::fprintf(f, "ui_font_face=%d\n", ui_font_face_);
 
   if (!custom_font_path_.empty())
     std::fprintf(f, "custom_font=%s\n", custom_font_path_.c_str());
@@ -780,6 +782,8 @@ void microreader::Application::load_settings_() {
       rotate_reader_ = static_cast<uint8_t>(uval <= 3 ? uval : 0);
     else if (std::sscanf(line, "menu_font_size=%u", &uval) == 1)
       menu_font_size_ = static_cast<int>(uval > 3 ? 3 : uval);
+    else if (std::sscanf(line, "ui_font_face=%u", &uval) == 1)
+      ui_font_face_ = static_cast<int>(uval > 1 ? 1 : uval);
     else if (std::sscanf(line, "custom_font=%511[^\n]", sval) == 1)
       custom_font_path_ = sval;
     else if (std::sscanf(line, "inst_font=%511[^\n]", sval) == 1)

@@ -225,6 +225,7 @@ void SettingsScreen::on_start() {
   idx_series_view_ = idx_rotate_display_ = idx_reader_rotate_display_ = idx_menu_font_ = -1;
   idx_font_ = idx_sleep_image_ = idx_sleep_text_ = idx_reader_images_ = idx_sunlight_fading_ = -1;
   idx_battery_display_ = idx_sleep_timeout_ = idx_convert_all_ = idx_debug_log_ = idx_theme_ = -1;
+  idx_ui_font_face_ = -1;
 #ifdef MICROREADER_ENABLE_DEMOS
   idx_bouncing_ball_ = idx_grayscale_demo_ = -1;
 #endif
@@ -326,6 +327,9 @@ void SettingsScreen::on_start() {
 
   idx_menu_font_ = count();
   add_item(get_menu_font_label(app_ ? app_->menu_font_size() : 0));
+
+  idx_ui_font_face_ = count();
+  add_item(std::string("UI Font: ") + (app_ && app_->ui_font_face() == 1 ? "Terminus" : "Inter"));
 
   idx_sleep_image_ = count();
   add_item(get_sleep_image_label(sleep_images_[sleep_image_sel_idx_]));
@@ -620,11 +624,23 @@ void SettingsScreen::apply_picker_(int sel) {
   if (picker_target_ == idx_menu_font_) {
     app_->set_menu_font_size(sel);
     const int saved_tab = active_tab_;
-    restart();  // rebuilds items + fonts; resets active_tab_ and focus_state_
+    restart();
     active_tab_ = saved_tab;
     focus_state_ = FocusState::List;
     set_selected(idx_menu_font_);
     ensure_visible_();
+    if (buf_) buf_->refresh();
+    return;
+  }
+  if (picker_target_ == idx_ui_font_face_) {
+    app_->set_ui_font_face(sel);
+    const int saved_tab = active_tab_;
+    restart();
+    active_tab_ = saved_tab;
+    focus_state_ = FocusState::List;
+    set_selected(idx_ui_font_face_);
+    ensure_visible_();
+    if (buf_) buf_->refresh();
     return;
   }
   if (picker_target_ == idx_battery_display_) {
@@ -833,6 +849,12 @@ void SettingsScreen::on_select(int index) {
     open_picker_("Menu Size", idx_menu_font_,
       {"Small", "Medium", "Large", "X-Large"},
       app_ ? app_->menu_font_size() : 0);
+    return;
+  }
+  if (index == idx_ui_font_face_) {
+    open_picker_("UI Font", idx_ui_font_face_,
+      {"Inter", "Terminus"},
+      app_ ? app_->ui_font_face() : 0);
     return;
   }
   if (index == idx_font_) {

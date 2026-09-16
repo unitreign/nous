@@ -41,6 +41,11 @@ class ListMenuScreen : public IScreen {
   static int font_size() {
     return font_size_idx_;
   }
+
+  // Global UI font face — 0 = Inter, 1 = Terminus.
+  static void set_font_face(int face) { font_face_ = face; }
+  static int font_face() { return font_face_; }
+
   // Initialise `out` with the MBF4 data for the current menu font size.
   // Declared here; implemented in ListMenuScreen.cpp (which owns the font headers).
   static void apply_ui_font(BitmapFont& out);
@@ -180,6 +185,7 @@ class ListMenuScreen : public IScreen {
   BitmapFont brand_font_;        // "nous" logotype, sized to match ui_font_
   BitmapFont brand_header_font_; // "nous" logotype, sized to match header_font_
   static int font_size_idx_;  // 0=Normal, 1=Large, 2=XLarge
+  static int font_face_;      // 0=Inter, 1=Terminus
   static MenuTheme theme_;
 
   void request_redraw() {
