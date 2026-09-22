@@ -51,9 +51,18 @@ class ListMenuScreen : public IScreen {
   static void apply_ui_font(BitmapFont& out);
 
   // Global visual theme — affects all ListMenuScreen instances (static).
-  enum class MenuTheme : uint8_t { Chronicle = 0, Minimal = 1, Stele = 2, Codex = 3, Lyra = 4, LyraExt = 5 };
+  enum class MenuTheme : uint8_t {
+    Chronicle = 0, Minimal = 1, Stele = 2, Codex = 3,
+    Lyra = 4, LyraExt = 5,
+    BentoCover = 6, BentoText = 7,
+  };
   static void set_theme(MenuTheme t) { theme_ = t; }
   static MenuTheme theme() { return theme_; }
+  // Returns true for home-screen themes that use Lyra-style headers and tooltips.
+  static bool is_lyra_family() {
+    return theme_ == MenuTheme::Lyra || theme_ == MenuTheme::LyraExt ||
+           theme_ == MenuTheme::BentoCover || theme_ == MenuTheme::BentoText;
+  }
 
  protected:
   const char* title_ = nullptr;

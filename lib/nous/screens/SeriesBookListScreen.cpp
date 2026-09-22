@@ -16,8 +16,7 @@ void SeriesBookListScreen::on_start() {
   entries_.clear();
   clear_items();
 
-  force_chronicle_list_ = (ListMenuScreen::theme() == ListMenuScreen::MenuTheme::Lyra ||
-                            ListMenuScreen::theme() == ListMenuScreen::MenuTheme::LyraExt);
+  force_chronicle_list_ = ListMenuScreen::is_lyra_family();
 
   const auto& idx = BookIndex::instance();
   const StringPool& pool = idx.pool();

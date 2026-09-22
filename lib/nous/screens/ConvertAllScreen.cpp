@@ -118,8 +118,7 @@ void ConvertAllScreen::on_start() {
   title_ = "Convert Books";
   scan_entries_();
   rebuild_items_();
-  force_chronicle_list_ = (ListMenuScreen::theme() == ListMenuScreen::MenuTheme::Lyra ||
-                            ListMenuScreen::theme() == ListMenuScreen::MenuTheme::LyraExt);
+  force_chronicle_list_ = ListMenuScreen::is_lyra_family();
 }
 
 void ConvertAllScreen::on_back() {

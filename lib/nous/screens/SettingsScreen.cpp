@@ -120,6 +120,8 @@ static std::string get_theme_label(uint8_t theme) {
   if (theme == 3) return "Theme: Codex (deprecated)";
   if (theme == 4) return "Theme: Lyra Like";
   if (theme == 5) return "Theme: Lyra Extended Like";
+  if (theme == 6) return "Theme: Bento Cover";
+  if (theme == 7) return "Theme: Bento Text";
   return "Theme: Minimal (deprecated)";
 }
 
@@ -315,7 +317,9 @@ void SettingsScreen::on_start() {
 
   const uint8_t cur_theme = app_ ? app_->menu_theme() : 0;
   const bool is_lyra_theme = (cur_theme == static_cast<uint8_t>(MenuTheme::Lyra) ||
-                               cur_theme == static_cast<uint8_t>(MenuTheme::LyraExt));
+                               cur_theme == static_cast<uint8_t>(MenuTheme::LyraExt) ||
+                               cur_theme == static_cast<uint8_t>(MenuTheme::BentoCover) ||
+                               cur_theme == static_cast<uint8_t>(MenuTheme::BentoText));
 
   if (is_lyra_theme) {
     idx_series_view_ = count();
@@ -470,7 +474,7 @@ void SettingsScreen::on_back() {
 
 int SettingsScreen::get_visible_count_(int H, int scroll_off) const {
   if (scroll_off < tab_start_[active_tab_]) return 0;
-  const bool is_lyra = (theme_ == MenuTheme::Lyra || theme_ == MenuTheme::LyraExt);
+  const bool is_lyra = is_lyra_family();
   const int hf_adv = header_font_.valid() ? header_font_.y_advance() : ui_font_.y_advance();
   const int list_top = is_lyra
       ? (10 + hf_adv + 8 + 1 + tab_bar_height_())
@@ -605,17 +609,20 @@ void SettingsScreen::apply_picker_(int sel) {
   if (!app_) return;
 
   if (picker_target_ == idx_theme_) {
-    static constexpr uint8_t kThemeOrder[] = {1, 0, 2, 3, 4, 5};
-    const uint8_t old_v = app_->menu_theme();
-    const uint8_t v = kThemeOrder[sel >= 0 && sel < 6 ? sel : 0];
+    // Picker order: Minimal(1), Chronicle(0), Stele(2), Codex(3), Lyra(4), LyraExt(5), BentoCover(6), BentoText(7)
+    static constexpr uint8_t kThemeOrder[] = {1, 0, 2, 3, 4, 5, 6, 7};
+    const uint8_t v = kThemeOrder[sel >= 0 && sel < 8 ? sel : 0];
     app_->set_menu_theme(v);
     set_item_label(idx_theme_, get_theme_label(v));
+    const bool old_was_lyra_family = ListMenuScreen::is_lyra_family();
     if (v == static_cast<uint8_t>(ListMenuScreen::MenuTheme::Lyra))
       app_->replace_screen(ScreenId::Lyra);
     else if (v == static_cast<uint8_t>(ListMenuScreen::MenuTheme::LyraExt))
       app_->replace_screen(ScreenId::LyraExt);
-    else if (old_v == static_cast<uint8_t>(ListMenuScreen::MenuTheme::Lyra) ||
-             old_v == static_cast<uint8_t>(ListMenuScreen::MenuTheme::LyraExt))
+    else if (v == static_cast<uint8_t>(ListMenuScreen::MenuTheme::BentoCover) ||
+             v == static_cast<uint8_t>(ListMenuScreen::MenuTheme::BentoText))
+      app_->replace_screen(ScreenId::Bento);
+    else if (old_was_lyra_family)
       app_->replace_screen(ScreenId::MainMenu);
     else
       app_->pop_screen();
@@ -707,17 +714,18 @@ void SettingsScreen::on_select(int index) {
     return;
   }
   if (index == idx_theme_) {
-    // Picker order: Minimal(1), Chronicle(0), Stele(2), Codex(3), Lyra(4), LyraExt(5)
-    static constexpr uint8_t kThemeOrder[] = {1, 0, 2, 3, 4, 5};
+    // Picker order: Minimal(1), Chronicle(0), Stele(2), Codex(3), Lyra(4), LyraExt(5), BentoCover(6), BentoText(7)
+    static constexpr uint8_t kThemeOrder[] = {1, 0, 2, 3, 4, 5, 6, 7};
     int cur_sel = 0;
     if (app_) {
       const uint8_t cur = app_->menu_theme();
-      for (int i = 0; i < 6; ++i)
+      for (int i = 0; i < 8; ++i)
         if (kThemeOrder[i] == cur) { cur_sel = i; break; }
     }
     open_picker_("Select Theme", idx_theme_,
       {"Minimal (deprecated)", "Chronicle (deprecated)", "Stele (deprecated)",
-       "Codex (deprecated)", "Lyra Like", "Lyra Extended Like"},
+       "Codex (deprecated)", "Lyra Like", "Lyra Extended Like",
+       "Bento Cover", "Bento Text"},
       cur_sel);
     return;
   }
@@ -1002,7 +1010,7 @@ void SettingsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_p
   static constexpr int kLM = 14;
   static constexpr int kRM = 14;
 
-  const bool is_lyra = (theme_ == MenuTheme::Lyra || theme_ == MenuTheme::LyraExt);
+  const bool is_lyra = is_lyra_family();
   const int hf_adv = header_font_.valid() ? header_font_.y_advance() : ui_font_.y_advance();
   int y;
 

@@ -133,7 +133,7 @@ int ListMenuScreen::nous_visible_from_(int scroll_off, int available_h) const {
 
 int ListMenuScreen::get_visible_count_(int H, int scroll_off) const {
   const int header_h = compute_header_h_();
-  if ((theme_ == MenuTheme::Lyra || theme_ == MenuTheme::LyraExt) && subtitle_font_.valid() && subtitle_.empty()) {
+  if (is_lyra_family() && subtitle_font_.valid() && subtitle_.empty()) {
     int bot_h = 0;
     if (section_font_.valid()) {
       static constexpr int kBotPad = 5, kBotMargin = 10;
@@ -215,7 +215,7 @@ int ListMenuScreen::compute_header_h_() const {
     }
     return h;
   }
-  if (theme_ == MenuTheme::Lyra || theme_ == MenuTheme::LyraExt) {
+  if (is_lyra_family()) {
     const int hf = header_font_.valid() ? header_font_.y_advance()
                                         : (ui_font_.valid() ? ui_font_.y_advance() : 0);
     return 10 + hf + 8 + 1;  // top pad + header row + gap + rule
@@ -304,7 +304,7 @@ int ListMenuScreen::draw_header_(DrawBuffer& buf, int W, int H, std::optional<ui
     }
     return y;
   }
-  if (theme_ == MenuTheme::Lyra || theme_ == MenuTheme::LyraExt) {
+  if (is_lyra_family()) {
     if (!ui_font_.valid()) return 0;
     const int hf_adv = header_font_.valid() ? header_font_.y_advance() : ui_font_.y_advance();
     static constexpr int kPad = 12;
@@ -508,7 +508,7 @@ void ListMenuScreen::draw_lyra_tooltip_bar(DrawBuffer& buf, const BitmapFont& sf
 //    Returns bottom_h = pixels reserved at the bottom (list must stay above).
 // ─────────────────────────────────────────────────────────────────────────────
 int ListMenuScreen::draw_bottom_(DrawBuffer& buf, int W, int H, std::optional<uint8_t> battery_pct) const {
-  if ((theme_ == MenuTheme::Lyra || theme_ == MenuTheme::LyraExt) && section_font_.valid()) {
+  if (is_lyra_family() && section_font_.valid()) {
     const BitmapFont& sf = section_font_;
 
     static constexpr int kBotPad    = 5;
@@ -609,8 +609,7 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
   if ((theme_ == MenuTheme::Chronicle || force_chronicle_list_) && subtitle_font_.valid() && subtitle_.empty()) {
     // Divider below header for non-Chronicle, non-Lyra sub-screens
     // (Lyra header already includes its own rule from draw_header_)
-    if (force_chronicle_list_ && theme_ != MenuTheme::Chronicle &&
-        theme_ != MenuTheme::Lyra && theme_ != MenuTheme::LyraExt)
+    if (force_chronicle_list_ && theme_ != MenuTheme::Chronicle && !is_lyra_family())
       buf.fill_rect(0, header_h, W, 1, false);
 
     static constexpr int kPadT = 5, kGap = 3, kPadB = 6;

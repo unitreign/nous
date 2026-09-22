@@ -21,6 +21,7 @@ set(lib_sources
     ${LIB}/screens/HiddenBooksMenu.cpp
     ${LIB}/screens/LyraScreen.cpp
     ${LIB}/screens/LyraExtScreen.cpp
+    ${LIB}/screens/BentoScreen.cpp
     ${LIB}/screens/RecentBooksScreen.cpp
     ${LIB}/screens/SeriesListScreen.cpp
     ${LIB}/screens/SeriesBookListScreen.cpp

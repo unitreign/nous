@@ -48,6 +48,7 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   if (reader_font_)
     reader_.set_fonts(reader_font_);
 
+  bento_.set_app(this);
   lyra_.set_app(this);
   lyra_ext_.set_app(this);
   recent_books_.set_app(this);
@@ -93,6 +94,9 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
     screen_mgr_.push(&lyra_, buf, runtime);
   else if (menu_theme_ == static_cast<uint8_t>(ListMenuScreen::MenuTheme::LyraExt))
     screen_mgr_.push(&lyra_ext_, buf, runtime);
+  else if (menu_theme_ == static_cast<uint8_t>(ListMenuScreen::MenuTheme::BentoCover) ||
+           menu_theme_ == static_cast<uint8_t>(ListMenuScreen::MenuTheme::BentoText))
+    screen_mgr_.push(&bento_, buf, runtime);
   else
     screen_mgr_.push(&menu_, buf, runtime);
 
@@ -504,6 +508,8 @@ IScreen* microreader::Application::screen_for_(ScreenId id) {
       return &lyra_;
     case ScreenId::LyraExt:
       return &lyra_ext_;
+    case ScreenId::Bento:
+      return &bento_;
     case ScreenId::RecentBooks:
       return &recent_books_;
     case ScreenId::WhatsNew:
@@ -621,7 +627,7 @@ void microreader::Application::save_settings_() {
 }
 
 void microreader::Application::set_menu_theme(uint8_t v) {
-  menu_theme_ = v % 6u;
+  menu_theme_ = v <= 7u ? v : 0u;
   ListMenuScreen::set_theme(static_cast<ListMenuScreen::MenuTheme>(menu_theme_));
   save_settings_();
 }
@@ -801,7 +807,7 @@ void microreader::Application::load_settings_() {
     else if (std::sscanf(line, "sleep_timeout_min=%u", &uval) == 1)
       sleep_timeout_min_ = static_cast<uint8_t>(uval <= 60 ? uval : 10);
     else if (std::sscanf(line, "menu_theme=%u", &uval) == 1)
-      menu_theme_ = static_cast<uint8_t>(uval <= 5 ? uval : 0);
+      menu_theme_ = static_cast<uint8_t>(uval <= 7 ? uval : 0);
     else if (std::sscanf(line, "sleep_text=%u", &uval) == 1)
       show_sleep_text_ = (uval != 0);
     else if (std::sscanf(line, "conv_log=%u", &uval) == 1)

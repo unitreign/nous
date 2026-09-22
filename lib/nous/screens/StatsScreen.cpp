@@ -482,7 +482,7 @@ void GlobalStatsScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> batter
   static constexpr int kRM = 16;
   const int inner_w = W - kLM - kRM;
 
-  const bool is_lyra = (theme_ == MenuTheme::Lyra || theme_ == MenuTheme::LyraExt);
+  const bool is_lyra = is_lyra_family();
   int y;
 
   if (is_lyra) {

@@ -14,6 +14,7 @@
 #include "screens/HiddenBooksMenu.h"
 #include "screens/IScreen.h"
 #include "screens/LinksScreen.h"
+#include "screens/BentoScreen.h"
 #include "screens/LyraExtScreen.h"
 #include "screens/LyraScreen.h"
 #include "screens/MainMenu.h"
@@ -53,6 +54,7 @@ enum class ScreenId : uint8_t {
   Alert,
   SeriesList,
   SeriesBookList,
+  Bento,
 };
 
 // Short-press power button action.
@@ -402,6 +404,7 @@ class Application {
   std::string last_seen_version_;
   bool show_whats_new_on_update_ = true;
 
+  BentoScreen bento_;
   LyraScreen lyra_;
   LyraExtScreen lyra_ext_;
   RecentBooksScreen recent_books_;

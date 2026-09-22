@@ -154,8 +154,7 @@ void MainMenu::stop() {
 }
 
 void MainMenu::on_back() {
-  const auto t = ListMenuScreen::theme();
-  if (t == ListMenuScreen::MenuTheme::Lyra || t == ListMenuScreen::MenuTheme::LyraExt)
+  if (ListMenuScreen::is_lyra_family())
     app_->pop_screen();
   else
     app_->push_screen(ScreenId::Settings);
@@ -304,12 +303,10 @@ void MainMenu::populate_list_() {
 
   const StringPool& bpool = BookIndex::instance().pool();
   const bool is_stele = (ListMenuScreen::theme() == ListMenuScreen::MenuTheme::Stele);
-  const bool is_lyra  = (ListMenuScreen::theme() == ListMenuScreen::MenuTheme::Lyra ||
-                          ListMenuScreen::theme() == ListMenuScreen::MenuTheme::LyraExt);
-  // Stats pinned item at index 0 for non-Lyra themes (Lyra has its own home screen entry).
-  stats_item_idx_ = is_lyra ? -1 : 0;
+  // Stats pinned item at index 0 for non-Lyra-family themes (Lyra/Bento have their own home screen entry).
+  stats_item_idx_ = ListMenuScreen::is_lyra_family() ? -1 : 0;
   const int sep_offset = (stats_item_idx_ >= 0) ? 1 : 0;
-  force_chronicle_list_ = is_lyra;
+  force_chronicle_list_ = ListMenuScreen::is_lyra_family();
   const bool check_mrb = app_ && app_->data_dir_ &&
       (app_->show_converted_indicator() || is_stele);
   for (const auto& idx : BookIndex::instance().entries()) {
@@ -333,7 +330,7 @@ void MainMenu::populate_list_() {
     entries_.push_back(std::move(e));
   }
 
-  if (sort_order_ == BookSortOrder::LastOpened && !is_lyra) {
+  if (sort_order_ == BookSortOrder::LastOpened && !ListMenuScreen::is_lyra_family()) {
     const auto fmt = list_format_;
     std::stable_sort(entries_.begin(), entries_.end(),
                      [&bpool, fmt](const BookEntry& a, const BookEntry& b) {
