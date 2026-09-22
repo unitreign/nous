@@ -45,6 +45,7 @@ static void blit_cover(DrawBuffer& buf, int dst_x, int dst_y,
 
 
 void LyraScreen::on_start() {
+  home_screen_selector_ = true;
   // Lyra is portrait-only; clamp landscape rotations to portrait and persist it.
   const Rotation rot = current_rotation_();
   if (rot == Rotation::Deg0 || rot == Rotation::Deg180) {
@@ -322,8 +323,8 @@ void LyraScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) 
         : text_h;
 
     const bool sel = (selected() == idx_recent_);
-    if (sel)
-      buf.fill_rect(0, y, W, card_h, false);
+    if (sel) draw_item_sel_(buf, 0, y, W, card_h);
+    const bool inv = sel && sel_fills_bg_();
 
     // Cover on the LEFT — scale high-res source down to thumbnail display size.
     if (cover_loaded_ && cover_w_ > 0 && cover_h_ > 0) {
@@ -339,14 +340,14 @@ void LyraScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) 
     for (int li = 0; li < n_title; ++li) {
       buf.draw_text_proportional(text_x, ty + ui_font_.baseline(),
                                  title_lines[li].c_str(), title_lines[li].size(),
-                                 ui_font_, sel, FontStyle::Bold);
+                                 ui_font_, inv, FontStyle::Bold);
       ty += ui_adv;
     }
     if (has_author) {
       ty += kSubGap;
       buf.draw_text_proportional(text_x, ty + section_font_.baseline(),
                                  recent_author_.c_str(), recent_author_.size(),
-                                 section_font_, sel);
+                                 section_font_, inv);
     }
 
     y += card_h + kCardNavGap;
@@ -363,14 +364,17 @@ void LyraScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) 
     if (idx_series_ >= 0) {
       const int half = W / 2;
       const bool sel_series = (selected() == idx_series_);
-      if (sel_all)    buf.fill_rect(0,    y, half, nav_row_h, false);
-      if (sel_series) buf.fill_rect(half, y, half, nav_row_h, false);
-      buf.draw_text_proportional(kPad, y + text_y_off, "All Books", ui_font_, sel_all);
-      buf.draw_text_proportional(half + kPad, y + text_y_off, "Series", ui_font_, sel_series);
+      if (sel_all)    draw_item_sel_(buf, 0,    y, half, nav_row_h);
+      if (sel_series) draw_item_sel_(buf, half, y, half, nav_row_h);
+      const bool inv_all    = sel_all    && sel_fills_bg_();
+      const bool inv_series = sel_series && sel_fills_bg_();
+      buf.draw_text_proportional(kPad, y + text_y_off, "All Books", ui_font_, inv_all);
+      buf.draw_text_proportional(half + kPad, y + text_y_off, "Series", ui_font_, inv_series);
       buf.fill_rect(half, y, 1, nav_row_h, false);
     } else {
-      if (sel_all) buf.fill_rect(0, y, W, nav_row_h, false);
-      buf.draw_text_proportional(kPad, y + text_y_off, "All Books", ui_font_, sel_all);
+      if (sel_all) draw_item_sel_(buf, 0, y, W, nav_row_h);
+      const bool inv_all = sel_all && sel_fills_bg_();
+      buf.draw_text_proportional(kPad, y + text_y_off, "All Books", ui_font_, inv_all);
     }
     y += nav_row_h;
   }
@@ -384,9 +388,9 @@ void LyraScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) 
   for (const auto& item : nav) {
     if (item.idx < 0) continue;
     const bool sel = (selected() == item.idx);
-    if (sel)
-      buf.fill_rect(0, y, W, nav_row_h, false);
-    buf.draw_text_proportional(kPad, y + text_y_off, item.label, ui_font_, sel);
+    if (sel) draw_item_sel_(buf, 0, y, W, nav_row_h);
+    const bool inv = sel && sel_fills_bg_();
+    buf.draw_text_proportional(kPad, y + text_y_off, item.label, ui_font_, inv);
     y += nav_row_h;
   }
 

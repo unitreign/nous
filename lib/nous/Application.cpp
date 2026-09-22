@@ -83,6 +83,7 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   ListMenuScreen::set_font_size(menu_font_size_);
   ListMenuScreen::set_font_face(ui_font_face_);
   ListMenuScreen::set_theme(static_cast<ListMenuScreen::MenuTheme>(menu_theme_));
+  ListMenuScreen::set_selector_style(static_cast<ListMenuScreen::SelectorStyle>(selector_style_));
 
   // Apply persisted display rotation.
   buf.set_rotation(rotation_from_setting(rotate_display_));
@@ -607,6 +608,7 @@ void microreader::Application::save_settings_() {
   std::fprintf(f, "battery_display=%u\n", static_cast<unsigned>(battery_display_));
   std::fprintf(f, "sleep_timeout_min=%u\n", static_cast<unsigned>(sleep_timeout_min_));
   std::fprintf(f, "menu_theme=%u\n", static_cast<unsigned>(menu_theme_));
+  std::fprintf(f, "selector_style=%u\n", static_cast<unsigned>(selector_style_));
   std::fprintf(f, "sleep_text=%u\n", show_sleep_text_ ? 1u : 0u);
   std::fprintf(f, "conv_log=%u\n", conv_log_enabled_ ? 1u : 0u);
   if (!last_seen_version_.empty())
@@ -629,6 +631,12 @@ void microreader::Application::save_settings_() {
 void microreader::Application::set_menu_theme(uint8_t v) {
   menu_theme_ = v <= 7u ? v : 0u;
   ListMenuScreen::set_theme(static_cast<ListMenuScreen::MenuTheme>(menu_theme_));
+  save_settings_();
+}
+
+void microreader::Application::set_selector_style(uint8_t v) {
+  selector_style_ = v <= 2u ? v : 0u;
+  ListMenuScreen::set_selector_style(static_cast<ListMenuScreen::SelectorStyle>(selector_style_));
   save_settings_();
 }
 
@@ -808,6 +816,8 @@ void microreader::Application::load_settings_() {
       sleep_timeout_min_ = static_cast<uint8_t>(uval <= 60 ? uval : 10);
     else if (std::sscanf(line, "menu_theme=%u", &uval) == 1)
       menu_theme_ = static_cast<uint8_t>(uval <= 7 ? uval : 0);
+    else if (std::sscanf(line, "selector_style=%u", &uval) == 1)
+      selector_style_ = static_cast<uint8_t>(uval <= 2 ? uval : 0);
     else if (std::sscanf(line, "sleep_text=%u", &uval) == 1)
       show_sleep_text_ = (uval != 0);
     else if (std::sscanf(line, "conv_log=%u", &uval) == 1)

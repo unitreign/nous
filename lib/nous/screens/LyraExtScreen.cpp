@@ -115,6 +115,7 @@ void LyraExtScreen::load_cover_(int i) {
 }
 
 void LyraExtScreen::on_start() {
+  home_screen_selector_ = true;
   // Lyra Ext is portrait-only; clamp landscape rotations to portrait and persist it.
   const Rotation rot = current_rotation_();
   if (rot == Rotation::Deg0 || rot == Rotation::Deg180) {
@@ -299,8 +300,8 @@ void LyraExtScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pc
     const int slot_x = kPad + i * (slot_w + kSlotGap);
     const bool sel = (idx_books_[i] >= 0 && selected() == idx_books_[i]);
 
-    if (sel)
-      buf.fill_rect(slot_x - 1, y - 1, slot_w + 2, slot_total_h + 2, false);
+    if (sel) draw_item_sel_(buf, slot_x - 1, y - 1, slot_w + 2, slot_total_h + 2);
+    const bool inv = sel && sel_fills_bg_();
 
     if (i < num_books_) {
       const auto& s = slots_[i];
@@ -320,7 +321,7 @@ void LyraExtScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pc
       const int max_tw = slot_w;
       int tw = ui_font_.word_width(title_sv.data(), title_sv.size(), FontStyle::Regular);
       if (tw <= max_tw) {
-        buf.draw_text_proportional(slot_x, title_y, title_sv.data(), title_sv.size(), ui_font_, sel);
+        buf.draw_text_proportional(slot_x, title_y, title_sv.data(), title_sv.size(), ui_font_, inv);
       } else {
         // Truncate with ellipsis
         const int ell_w = ui_font_.word_width(kEll, 3, FontStyle::Regular);
@@ -338,7 +339,7 @@ void LyraExtScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pc
         std::memcpy(trunc, title_sv.data(), cp);
         std::memcpy(trunc + cp, kEll, 3);
         trunc[cp + 3] = '\0';
-        buf.draw_text_proportional(slot_x, title_y, trunc, cp + 3, ui_font_, sel);
+        buf.draw_text_proportional(slot_x, title_y, trunc, cp + 3, ui_font_, inv);
       }
     } else {
       // Empty slot outline
@@ -358,14 +359,17 @@ void LyraExtScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pc
     if (idx_series_ >= 0) {
       const int half = W / 2;
       const bool sel_series = (selected() == idx_series_);
-      if (sel_all)    buf.fill_rect(0,    y, half, nav_row_h, false);
-      if (sel_series) buf.fill_rect(half, y, half, nav_row_h, false);
-      buf.draw_text_proportional(kPad, y + text_y_off, "All Books", ui_font_, sel_all);
-      buf.draw_text_proportional(half + kPad, y + text_y_off, "Series", ui_font_, sel_series);
+      if (sel_all)    draw_item_sel_(buf, 0,    y, half, nav_row_h);
+      if (sel_series) draw_item_sel_(buf, half, y, half, nav_row_h);
+      const bool inv_all    = sel_all    && sel_fills_bg_();
+      const bool inv_series = sel_series && sel_fills_bg_();
+      buf.draw_text_proportional(kPad, y + text_y_off, "All Books", ui_font_, inv_all);
+      buf.draw_text_proportional(half + kPad, y + text_y_off, "Series", ui_font_, inv_series);
       buf.fill_rect(half, y, 1, nav_row_h, false);
     } else {
-      if (sel_all) buf.fill_rect(0, y, W, nav_row_h, false);
-      buf.draw_text_proportional(kPad, y + text_y_off, "All Books", ui_font_, sel_all);
+      if (sel_all) draw_item_sel_(buf, 0, y, W, nav_row_h);
+      const bool inv_all = sel_all && sel_fills_bg_();
+      buf.draw_text_proportional(kPad, y + text_y_off, "All Books", ui_font_, inv_all);
     }
     y += nav_row_h;
   }
@@ -379,9 +383,9 @@ void LyraExtScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pc
   for (const auto& item : nav) {
     if (item.idx < 0) continue;
     const bool sel = (selected() == item.idx);
-    if (sel)
-      buf.fill_rect(0, y, W, nav_row_h, false);
-    buf.draw_text_proportional(kPad, y + text_y_off, item.label, ui_font_, sel);
+    if (sel) draw_item_sel_(buf, 0, y, W, nav_row_h);
+    const bool inv = sel && sel_fills_bg_();
+    buf.draw_text_proportional(kPad, y + text_y_off, item.label, ui_font_, inv);
     y += nav_row_h;
   }
 

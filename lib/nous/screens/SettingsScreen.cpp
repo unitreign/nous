@@ -125,6 +125,12 @@ static std::string get_theme_label(uint8_t theme) {
   return "Theme: Minimal (deprecated)";
 }
 
+static std::string get_selector_label(uint8_t style) {
+  if (style == 1) return "Selector: Dot";
+  if (style == 2) return "Selector: Corner";
+  return "Selector: Block";
+}
+
 static std::string get_sleep_timeout_label(uint8_t min) {
   if (min == 0) return "Auto Sleep: Off";
   char buf[32];
@@ -227,6 +233,7 @@ void SettingsScreen::on_start() {
   idx_series_view_ = idx_rotate_display_ = idx_reader_rotate_display_ = idx_menu_font_ = -1;
   idx_font_ = idx_sleep_image_ = idx_sleep_text_ = idx_reader_images_ = idx_sunlight_fading_ = -1;
   idx_battery_display_ = idx_sleep_timeout_ = idx_convert_all_ = idx_debug_log_ = idx_theme_ = -1;
+  idx_selector_style_ = -1;
   idx_ui_font_face_ = -1;
 #ifdef MICROREADER_ENABLE_DEMOS
   idx_bouncing_ball_ = idx_grayscale_demo_ = -1;
@@ -314,6 +321,9 @@ void SettingsScreen::on_start() {
 
   idx_theme_ = count();
   add_item(get_theme_label(app_ ? app_->menu_theme() : 0));
+
+  idx_selector_style_ = count();
+  add_item(get_selector_label(app_ ? app_->selector_style() : 0));
 
   const uint8_t cur_theme = app_ ? app_->menu_theme() : 0;
   const bool is_lyra_theme = (cur_theme == static_cast<uint8_t>(MenuTheme::Lyra) ||
@@ -612,9 +622,9 @@ void SettingsScreen::apply_picker_(int sel) {
     // Picker order: Minimal(1), Chronicle(0), Stele(2), Codex(3), Lyra(4), LyraExt(5), BentoCover(6), BentoText(7)
     static constexpr uint8_t kThemeOrder[] = {1, 0, 2, 3, 4, 5, 6, 7};
     const uint8_t v = kThemeOrder[sel >= 0 && sel < 8 ? sel : 0];
+    const bool old_was_lyra_family = ListMenuScreen::is_lyra_family();
     app_->set_menu_theme(v);
     set_item_label(idx_theme_, get_theme_label(v));
-    const bool old_was_lyra_family = ListMenuScreen::is_lyra_family();
     if (v == static_cast<uint8_t>(ListMenuScreen::MenuTheme::Lyra))
       app_->replace_screen(ScreenId::Lyra);
     else if (v == static_cast<uint8_t>(ListMenuScreen::MenuTheme::LyraExt))
@@ -626,6 +636,13 @@ void SettingsScreen::apply_picker_(int sel) {
       app_->replace_screen(ScreenId::MainMenu);
     else
       app_->pop_screen();
+    return;
+  }
+  if (picker_target_ == idx_selector_style_) {
+    const uint8_t v = (sel >= 0 && sel < 3) ? static_cast<uint8_t>(sel) : 0;
+    app_->set_selector_style(v);
+    set_item_label(idx_selector_style_, get_selector_label(v));
+    request_redraw();
     return;
   }
   if (picker_target_ == idx_menu_font_) {
@@ -726,6 +743,13 @@ void SettingsScreen::on_select(int index) {
       {"Minimal (deprecated)", "Chronicle (deprecated)", "Stele (deprecated)",
        "Codex (deprecated)", "Lyra Like", "Lyra Extended Like",
        "Bento Cover", "Bento Text"},
+      cur_sel);
+    return;
+  }
+  if (index == idx_selector_style_) {
+    const int cur_sel = app_ ? static_cast<int>(app_->selector_style()) : 0;
+    open_picker_("Select Selector", idx_selector_style_,
+      {"Block", "Dot", "Corner"},
       cur_sel);
     return;
   }

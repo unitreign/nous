@@ -67,6 +67,7 @@ static std::vector<std::string> wrap_text(const std::string& text, const BitmapF
 }
 
 void BentoScreen::on_start() {
+  home_screen_selector_ = true;
   const Rotation rot = current_rotation_();
   if (rot == Rotation::Deg0 || rot == Rotation::Deg180) {
     set_buf_rotation_(Rotation::Deg90);
@@ -307,21 +308,29 @@ void BentoScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct)
   // ── Left panel (recent book) ─────────────────────────────────────────────
   {
     const bool sel = (idx_recent_ >= 0 && selected() == idx_recent_);
+    const bool inv = sel && sel_fills_bg_();
 
     if (is_cover_mode && cover_loaded_ && cover_w_ > 0 && cover_h_ > 0) {
       blit_cover(buf, 0, main_y,
                  cover_data_.data(), cover_w_, cover_h_,
                  left_w, main_h);
       if (sel) {
-        // Invert-border selection indicator over the cover.
-        static constexpr int kBorderPx = 3;
-        buf.fill_rect(0,               main_y,               left_w,    kBorderPx, false);
-        buf.fill_rect(0,               main_y + main_h - kBorderPx, left_w, kBorderPx, false);
-        buf.fill_rect(0,               main_y,               kBorderPx, main_h,    false);
-        buf.fill_rect(left_w - kBorderPx, main_y,           kBorderPx, main_h,    false);
+        if (inv) {
+          // Block: invert-border indicator over the cover.
+          static constexpr int kBorderPx = 3;
+          buf.fill_rect(0,               main_y,               left_w,    kBorderPx, false);
+          buf.fill_rect(0,               main_y + main_h - kBorderPx, left_w, kBorderPx, false);
+          buf.fill_rect(0,               main_y,               kBorderPx, main_h,    false);
+          buf.fill_rect(left_w - kBorderPx, main_y,           kBorderPx, main_h,    false);
+        } else {
+          draw_item_sel_(buf, 0, main_y, left_w, main_h);
+        }
       }
     } else {
-      if (sel) buf.fill_rect(0, main_y, left_w, main_h, false);
+      if (sel) {
+        if (inv) buf.fill_rect(0, main_y, left_w, main_h, false);
+        else     draw_item_sel_(buf, 0, main_y, left_w, main_h);
+      }
 
       if (has_recent_) {
         const int inner_x = kPad;
@@ -343,7 +352,7 @@ void BentoScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct)
           const int tw = title_f.word_width(line.c_str(), line.size(), FontStyle::Regular);
           const int tx = inner_x + std::max(0, (inner_w - tw) / 2);
           buf.draw_text_proportional(tx, ty + title_f.baseline(), line.c_str(), line.size(),
-                                     title_f, sel);
+                                     title_f, inv);
           ty += title_adv;
         }
         if (has_author) {
@@ -351,19 +360,20 @@ void BentoScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct)
           const int aw = author_f.word_width(recent_author_.c_str(), recent_author_.size(), FontStyle::Regular);
           const int ax = inner_x + std::max(0, (inner_w - aw) / 2);
           buf.draw_text_proportional(ax, ty + author_f.baseline(), recent_author_.c_str(),
-                                     recent_author_.size(), author_f, sel);
+                                     recent_author_.size(), author_f, inv);
         }
       }
     }
   }
 
   // ── Cell helper ──────────────────────────────────────────────────────────
-  auto draw_cell = [&](int cx, int cy, int cw, int ch, const char* label, bool sel) {
-    if (sel) buf.fill_rect(cx, cy, cw, ch, false);
+  auto draw_cell = [&](int cx, int cy, int cw, int ch, const char* label, bool sel_c) {
+    if (sel_c) draw_item_sel_(buf, cx, cy, cw, ch);
+    const bool inv_c = sel_c && sel_fills_bg_();
     const int lw = ui_font_.word_width(label, std::strlen(label), FontStyle::Regular);
     const int lx = cx + std::max(0, (cw - lw) / 2);
     const int ly = cy + (ch - ui_adv) / 2 + ui_font_.baseline();
-    buf.draw_text_proportional(lx, ly, label, ui_font_, sel);
+    buf.draw_text_proportional(lx, ly, label, ui_font_, inv_c);
   };
 
   // ── Right panels ─────────────────────────────────────────────────────────

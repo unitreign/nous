@@ -216,6 +216,9 @@ class Application {
   uint8_t menu_theme() const { return menu_theme_; }
   void set_menu_theme(uint8_t v);
 
+  uint8_t selector_style() const { return selector_style_; }
+  void set_selector_style(uint8_t v);
+
   void update_book_read_time(const std::string& path, uint64_t ms,
                              uint32_t times_opened = 0, uint32_t page_turns = 0,
                              int progress_pct = 0, uint64_t time_left_ms = 0,
@@ -400,6 +403,7 @@ class Application {
   uint8_t list_align_ = 0;       // 0=center, 1=left, 2=right
   uint8_t sleep_timeout_min_ = 10;  // 0=off, else minutes until auto-sleep
   uint8_t menu_theme_ = 4;       // 4=Lyra default
+  uint8_t selector_style_ = 0;  // 0=Block, 1=Dot, 2=Corner
 
   std::string last_seen_version_;
   bool show_whats_new_on_update_ = true;

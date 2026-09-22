@@ -80,6 +80,7 @@ class SettingsScreen final : public ListMenuScreen {
   int idx_convert_all_ = -1;
   int idx_debug_log_ = -1;
   int idx_theme_ = -1;
+  int idx_selector_style_ = -1;
 
   DrawBuffer* buf_ = nullptr;
   mutable std::string subtitle_buf_;

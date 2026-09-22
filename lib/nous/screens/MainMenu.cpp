@@ -54,6 +54,7 @@ static bool natural_less(std::string_view a, std::string_view b) {
 }
 
 void MainMenu::on_start() {
+  home_screen_selector_ = true;
   title_ = "Nous";
 
   if (!app_->data_dir_) {
@@ -483,11 +484,11 @@ void MainMenu::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) co
     // Pinned Stats item — draw and advance before any book-entry logic.
     if (stats_item_idx_ >= 0 && vi == stats_item_idx_) {
       const bool sel = (vi == selected());
-      if (sel)
-        buf.fill_rect(0, item_y, W, slot_h - 1, false);
+      if (sel) draw_item_sel_(buf, 0, item_y, W, slot_h - 1);
+      const bool inv = sel && sel_fills_bg_();
       buf.draw_text_proportional(kLPad + kNumW + kNumGap,
                                  item_y + kItemPadT + ui_font_.baseline(),
-                                 "Stats", 5, ui_font_, sel);
+                                 "Stats", 5, ui_font_, inv);
       buf.fill_rect(0, item_y + slot_h - 1, W, 1, false);
       item_y += slot_h;
       continue;
@@ -529,8 +530,8 @@ void MainMenu::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) co
       sub += " \xc2\xb7 not converted";
 
     const bool sel = (vi == selected());
-    if (sel)
-      buf.fill_rect(0, item_y, W, slot_h - 1, false);
+    if (sel) draw_item_sel_(buf, 0, item_y, W, slot_h - 1);
+    const bool inv = sel && sel_fills_bg_();
 
     const int title_x = kLPad + kNumW + kNumGap;
     const int title_y = item_y + kItemPadT + ui_font_.baseline();
@@ -538,12 +539,12 @@ void MainMenu::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) co
 
     // Number right-aligned in column, using ui_font_ to match title size
     const int nw = ui_font_.word_width(num_s, std::strlen(num_s), FontStyle::Regular);
-    buf.draw_text_proportional(kLPad + kNumW - nw, title_y, num_s, ui_font_, sel);
+    buf.draw_text_proportional(kLPad + kNumW - nw, title_y, num_s, ui_font_, inv);
 
-    buf.draw_text_proportional(title_x, title_y, title_str.c_str(), title_str.size(), ui_font_, sel);
+    buf.draw_text_proportional(title_x, title_y, title_str.c_str(), title_str.size(), ui_font_, inv);
 
     if (!sub.empty())
-      buf.draw_text_proportional(title_x, sub_y, sub.c_str(), sub.size(), section_font_, sel);
+      buf.draw_text_proportional(title_x, sub_y, sub.c_str(), sub.size(), section_font_, inv);
 
     buf.fill_rect(0, item_y + slot_h - 1, W, 1, false);
     item_y += slot_h;

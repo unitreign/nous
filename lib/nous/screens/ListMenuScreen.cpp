@@ -22,6 +22,30 @@ namespace microreader {
 int ListMenuScreen::font_size_idx_ = 0;
 int ListMenuScreen::font_face_     = 0;
 ListMenuScreen::MenuTheme ListMenuScreen::theme_ = ListMenuScreen::MenuTheme::Chronicle;
+ListMenuScreen::SelectorStyle ListMenuScreen::selector_style_ = ListMenuScreen::SelectorStyle::Block;
+
+void ListMenuScreen::draw_item_sel_(DrawBuffer& buf, int x, int y, int w, int h) const {
+  if (!home_screen_selector_ || selector_style_ == SelectorStyle::Block) {
+    buf.fill_rect(x, y, w, h, false);
+    return;
+  }
+  if (selector_style_ == SelectorStyle::Dot) {
+    static constexpr int kDotSz = 5;
+    const int dx = x + w - kDotSz - 4;
+    const int dy = y + (h - kDotSz) / 2;
+    buf.fill_rect(dx, dy, kDotSz, kDotSz, false);
+  } else {
+    // Corner: 1px hollow rect inset 2px from item bounds
+    static constexpr int kIn = 2;
+    const int ix = x + kIn, iy = y + kIn;
+    const int iw = w - 2 * kIn, ih = h - 2 * kIn;
+    if (iw < 2 || ih < 2) return;
+    buf.fill_rect(ix,          iy,          iw, 1,  false);
+    buf.fill_rect(ix,          iy + ih - 1, iw, 1,  false);
+    buf.fill_rect(ix,          iy,          1,  ih, false);
+    buf.fill_rect(ix + iw - 1, iy,          1,  ih, false);
+  }
+}
 
 void ListMenuScreen::apply_ui_font(BitmapFont& out) {
   if (font_face_ == 1) {
@@ -642,8 +666,8 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
         continue;
       }
 
-      if (sel)
-        buf.fill_rect(0, y, W, slot_h - 1, false);
+      if (sel) draw_item_sel_(buf, 0, y, W, slot_h - 1);
+      const bool inv = sel && sel_fills_bg_();
 
       std::string_view label = get_item_label(i);
       const std::string_view sub = get_item_subtitle(i);
@@ -682,15 +706,15 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
         std::memcpy(trunc_buf, display_label.data(), cp);
         std::memcpy(trunc_buf + cp, kEll, 3);
         trunc_buf[cp + 3] = '\0';
-        buf.draw_text_proportional(kLM, title_y, trunc_buf, cp + 3, ui_font_, sel);
+        buf.draw_text_proportional(kLM, title_y, trunc_buf, cp + 3, ui_font_, inv);
       } else {
-        buf.draw_text_proportional(kLM, title_y, display_label.data(), display_label.size(), ui_font_, sel);
+        buf.draw_text_proportional(kLM, title_y, display_label.data(), display_label.size(), ui_font_, inv);
       }
 
       // Right-aligned read time (in subtitle_font_, same baseline as title)
       if (!right_txt.empty()) {
         const int right_x = W - kRM - sb_reserved - right_w_actual;
-        buf.draw_text_proportional(right_x, title_y, right_txt.data(), right_txt.size(), subtitle_font_, sel);
+        buf.draw_text_proportional(right_x, title_y, right_txt.data(), right_txt.size(), subtitle_font_, inv);
       }
 
       // Subtitle line (author, setting value)
@@ -713,9 +737,9 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
           std::memcpy(trunc_buf, sub.data(), cp);
           std::memcpy(trunc_buf + cp, kEll, 3);
           trunc_buf[cp + 3] = '\0';
-          buf.draw_text_proportional(kLM, sub_y, trunc_buf, cp + 3, sub_font, sel);
+          buf.draw_text_proportional(kLM, sub_y, trunc_buf, cp + 3, sub_font, inv);
         } else {
-          buf.draw_text_proportional(kLM, sub_y, sub.data(), sub.size(), sub_font, sel);
+          buf.draw_text_proportional(kLM, sub_y, sub.data(), sub.size(), sub_font, inv);
         }
       }
 
@@ -769,8 +793,8 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
         continue;
       }
 
-      if (sel)
-        buf.fill_rect(0, y, W, slot_h - 1, false);
+      if (sel) draw_item_sel_(buf, 0, y, W, slot_h - 1);
+      const bool inv = sel && sel_fills_bg_();
 
       std::string_view label = get_item_label(i);
       const std::string_view sub = get_item_subtitle(i);
@@ -804,9 +828,9 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
           std::memcpy(trunc_buf + cp, kEll, 3);
           trunc_buf[cp + 3] = '\0';
           const int tw = ui_font_.word_width(trunc_buf, cp + 3, FontStyle::Regular);
-          buf.draw_text_proportional((W - tw) / 2, title_y, trunc_buf, cp + 3, ui_font_, sel);
+          buf.draw_text_proportional((W - tw) / 2, title_y, trunc_buf, cp + 3, ui_font_, inv);
         } else {
-          buf.draw_text_proportional((W - lw) / 2, title_y, display_label.data(), display_label.size(), ui_font_, sel);
+          buf.draw_text_proportional((W - lw) / 2, title_y, display_label.data(), display_label.size(), ui_font_, inv);
         }
       }
 
@@ -831,9 +855,9 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
           std::memcpy(trunc_buf + cp, kEll, 3);
           trunc_buf[cp + 3] = '\0';
           const int tw = subtitle_font_.word_width(trunc_buf, cp + 3, FontStyle::Regular);
-          buf.draw_text_proportional((W - tw) / 2, sub_y, trunc_buf, cp + 3, subtitle_font_, sel);
+          buf.draw_text_proportional((W - tw) / 2, sub_y, trunc_buf, cp + 3, subtitle_font_, inv);
         } else {
-          buf.draw_text_proportional((W - sw) / 2, sub_y, sub.data(), sub.size(), subtitle_font_, sel);
+          buf.draw_text_proportional((W - sw) / 2, sub_y, sub.data(), sub.size(), subtitle_font_, inv);
         }
       }
 
@@ -960,19 +984,23 @@ void ListMenuScreen::draw_list_(DrawBuffer& buf, int W, int H, int header_h, int
       const int bar_w = 3;
       const int sel_top = (font_size_idx_ == 0) ? y - 1 : y;
       const int bar_h = ui_font_.y_advance() + (font_size_idx_ == 0 ? 1 : 0);
-      if (list_align_ == 1 || list_align_ == 2) {
-        const int bar_x = 16;
-        const int bar_width = W - 32 - landscape_pad;
-        buf.fill_rect(bar_x + 1, sel_top, bar_width - 2, bar_h, false);
-        buf.fill_rect(bar_x, sel_top + 1, 1, bar_h - 2, false);
-        buf.fill_rect(bar_x + bar_width - 1, sel_top + 1, 1, bar_h - 2, false);
-        buf.draw_text_proportional(ix, y + baseline, label, len, ui_font_, true);
+      const bool inv = sel_fills_bg_();
+      if (inv) {
+        if (list_align_ == 1 || list_align_ == 2) {
+          const int bar_x = 16;
+          const int bar_width = W - 32 - landscape_pad;
+          buf.fill_rect(bar_x + 1, sel_top, bar_width - 2, bar_h, false);
+          buf.fill_rect(bar_x, sel_top + 1, 1, bar_h - 2, false);
+          buf.fill_rect(bar_x + bar_width - 1, sel_top + 1, 1, bar_h - 2, false);
+        } else {
+          buf.fill_rect(ix - bar_w, sel_top, iw + bar_w * 2, bar_h, false);
+          buf.fill_rect(ix - bar_w - 1, sel_top + 1, 1, bar_h - 2, false);
+          buf.fill_rect(ix + iw + bar_w, sel_top + 1, 1, bar_h - 2, false);
+        }
       } else {
-        buf.fill_rect(ix - bar_w, sel_top, iw + bar_w * 2, bar_h, false);
-        buf.fill_rect(ix - bar_w - 1, sel_top + 1, 1, bar_h - 2, false);
-        buf.fill_rect(ix + iw + bar_w, sel_top + 1, 1, bar_h - 2, false);
-        buf.draw_text_proportional(ix, y + baseline, label, len, ui_font_, true);
+        draw_item_sel_(buf, 0, sel_top, W, bar_h);
       }
+      buf.draw_text_proportional(ix, y + baseline, label, len, ui_font_, inv);
     } else {
       buf.draw_text_proportional(ix, y + baseline, label, len, ui_font_, false);
     }

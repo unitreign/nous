@@ -64,6 +64,15 @@ class ListMenuScreen : public IScreen {
            theme_ == MenuTheme::BentoCover || theme_ == MenuTheme::BentoText;
   }
 
+  // Per-item selection indicator style — affects all home-screen instances.
+  enum class SelectorStyle : uint8_t {
+    Block  = 0,  // filled black rect (existing behaviour)
+    Dot    = 1,  // small dot on the right edge
+    Corner = 2,  // inset hollow frame
+  };
+  static void set_selector_style(SelectorStyle s) { selector_style_ = s; }
+  static SelectorStyle selector_style() { return selector_style_; }
+
  protected:
   const char* title_ = nullptr;
   const char* title2_ = nullptr;
@@ -72,7 +81,8 @@ class ListMenuScreen : public IScreen {
   std::string subtitle2_;
   std::string subtitle3_;
 
-  bool force_chronicle_list_ = false;  // use Chronicle-style rows regardless of global theme
+  bool force_chronicle_list_ = false;   // use Chronicle-style rows regardless of global theme
+  bool home_screen_selector_ = false;   // true on home screens — enables styled selector
 
   // When non-empty and theme is Lyra/LyraExt: used in place of "nous" in the header,
   // drawn with ui_font_ instead of brand_font_. Leave empty for the normal "nous" logo.
@@ -193,9 +203,10 @@ class ListMenuScreen : public IScreen {
   BitmapFont section_font_;    // one step below ui_font_; use for APPEARANCE/NAVIGATE etc.
   BitmapFont brand_font_;        // "nous" logotype, sized to match ui_font_
   BitmapFont brand_header_font_; // "nous" logotype, sized to match header_font_
-  static int font_size_idx_;  // 0=Normal, 1=Large, 2=XLarge
-  static int font_face_;      // 0=Inter, 1=Terminus
+  static int font_size_idx_;       // 0=Normal, 1=Large, 2=XLarge
+  static int font_face_;           // 0=Inter, 1=Terminus
   static MenuTheme theme_;
+  static SelectorStyle selector_style_;
 
   void request_redraw() {
     force_redraw_ = true;
@@ -226,6 +237,15 @@ class ListMenuScreen : public IScreen {
   // box_y: top of the box area. Geometry is computed dynamically from W.
   static void draw_lyra_tooltip_bar(DrawBuffer& buf, const BitmapFont& sf,
                                     int W, int box_y, const char* labels[4]);
+
+  // Draw the selection indicator at (x,y,w,h).
+  // On home screens (home_screen_selector_=true) uses the active SelectorStyle;
+  // on sub-screens always draws a filled Block.
+  void draw_item_sel_(DrawBuffer& buf, int x, int y, int w, int h) const;
+  // True when the active selector fills the item background (i.e. text should be inverted).
+  bool sel_fills_bg_() const {
+    return !home_screen_selector_ || selector_style_ == SelectorStyle::Block;
+  }
 
   virtual void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const;
   virtual void ensure_visible_();
