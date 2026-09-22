@@ -28,6 +28,7 @@ class SettingsScreen final : public ListMenuScreen {
   void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const override;
   bool is_item_focusable(int index) const override;
   int get_visible_count_(int H, int scroll_off) const override;
+  void get_button_labels(const char* out[4]) const override;
 
   static constexpr int kRowH = 42;
 

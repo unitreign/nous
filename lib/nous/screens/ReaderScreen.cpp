@@ -69,6 +69,9 @@ std::string ReaderScreen::book_stem_() const {
 
 bool ReaderScreen::decode_image_to_buffer_(uint16_t img_key, uint32_t offset, DrawBuffer& buf, int dest_x, int dest_y,
                                            uint16_t max_w, uint16_t max_h, uint16_t src_y, uint16_t clip_h) {
+  if (!images_enabled)
+    return false;
+
   char cache_path[256];
   snprintf(cache_path, sizeof(cache_path), "%s/img_%u_%ux%u.bin", book_cache_dir_.c_str(),
            static_cast<unsigned>(img_key), static_cast<unsigned>(max_w), static_cast<unsigned>(max_h));

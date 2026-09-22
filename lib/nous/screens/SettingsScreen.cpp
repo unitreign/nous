@@ -472,6 +472,20 @@ void SettingsScreen::on_start() {
 // Navigation
 // ---------------------------------------------------------------------------
 
+void SettingsScreen::get_button_labels(const char* out[4]) const {
+  const bool inv = app_ && app_->invert_menu_buttons();
+  out[0] = "Back";
+  if (focus_state_ == FocusState::TabBar) {
+    out[1] = "Next Tab";
+    out[2] = inv ? "\xe2\x80\x94" : "Enter";
+    out[3] = inv ? "Enter" : "\xe2\x80\x94";
+  } else {
+    out[1] = "Select";
+    out[2] = inv ? "Up" : "Down";
+    out[3] = inv ? "Down" : "Up";
+  }
+}
+
 void SettingsScreen::on_back() {
   if (focus_state_ == FocusState::List) {
     focus_state_ = FocusState::TabBar;
