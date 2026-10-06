@@ -127,6 +127,14 @@ CssRule CssRule::parse(const char* decl, size_t length, const CssConfig& config)
 
       std::string key = s.substr(key_start, key_end - key_start);
       std::string value = s.substr(val_start, val_end - val_start);
+      // Priority doesn't matter to us; strip it so "bold !important" still parses.
+      const size_t bang = value.find('!');
+      if (bang != std::string::npos) {
+        size_t end = bang;
+        while (end > 0 && std::isspace(static_cast<unsigned char>(value[end - 1])))
+          --end;
+        value.resize(end);
+      }
 
       if (key == "text-align") {
         if (value == "start" || value == "left")
@@ -143,10 +151,12 @@ CssRule CssRule::parse(const char* decl, size_t length, const CssConfig& config)
         else if (value == "italic")
           rule.set_italic(true);
       } else if (key == "font-weight") {
-        if (value == "normal")
+        if (value == "normal" || value == "lighter")
           rule.set_bold(false);
-        else if (value == "bold")
+        else if (value == "bold" || value == "bolder")
           rule.set_bold(true);
+        else if (!value.empty() && std::isdigit(static_cast<unsigned char>(value[0])))
+          rule.set_bold(std::atoi(value.c_str()) >= 600);
       } else if (key == "text-indent") {
         auto len = parse_css_length(value, config.glyph_width, config.content_width);
         if (len.has_value())

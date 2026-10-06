@@ -106,6 +106,9 @@ class SettingsScreen final : public ListMenuScreen {
   int tab_bar_height_() const;
   void draw_tab_bar_(DrawBuffer& buf, int y, int W) const;
 
+  bool confirmed_ = false;  // set while re-running on_select after a Confirm
+  bool is_destructive_(int index) const;
+
   void open_picker_(const char* title, int target_idx, std::vector<std::string> opts, int cur_sel);
   void apply_picker_(int sel);
   void draw_picker_(DrawBuffer& buf) const;

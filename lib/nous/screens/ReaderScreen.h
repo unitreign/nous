@@ -185,7 +185,7 @@ class ReaderScreen final : public IScreen {
   void render_text_(DrawBuffer& buf, const BitmapFontSet& fset, GrayPlane plane, bool white, int left_padding);
   bool next_page_();
   bool prev_page_();
-  void load_chapter_(size_t idx);
+  bool load_chapter_(size_t idx);
   void mark_book_finished_();
   void open_finished_picker_();
   void open_reopen_picker_();

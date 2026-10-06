@@ -10,6 +10,11 @@
 
 namespace microreader {
 
+// Left (recent book) panel width; shared by cover preload and draw.
+static int left_panel_w(int screen_w) {
+  return screen_w * 62 / 100;
+}
+
 // Scale src to fill dst_w x dst_h, centered, crop overflow.
 static void blit_cover(DrawBuffer& buf, int dst_x, int dst_y,
                        const uint8_t* data, int src_w, int src_h,
@@ -17,7 +22,7 @@ static void blit_cover(DrawBuffer& buf, int dst_x, int dst_y,
   if (dst_w <= 0 || dst_h <= 0 || src_w <= 0 || src_h <= 0) return;
   const int src_stride = (src_w + 7) / 8;
   const int dst_stride = (dst_w + 7) / 8;
-  uint8_t row_buf[64];
+  uint8_t row_buf[100];  // one full panel row on X4 (800 px) or X3 (792 px)
   if (dst_stride > (int)sizeof(row_buf)) return;
   const bool wd = (dst_w * src_h >= dst_h * src_w);
   const int crop_y = wd ? ((src_h * dst_w / src_w) - dst_h) / 2 : 0;
@@ -147,7 +152,7 @@ void BentoScreen::load_cover_data_() {
   const int src_w = hdr[0], src_h = hdr[1];
   if (src_w <= 0 || src_h <= 0) { std::fclose(f); return; }
 
-  const int dst_w = std::min(src_w, kCoverTargetW);
+  const int dst_w = std::min(src_w, left_panel_w(portrait_width_()));
   const int dst_h = dst_w * src_h / src_w;
   if (dst_w <= 0 || dst_h <= 0) { std::fclose(f); return; }
 
@@ -204,7 +209,7 @@ void BentoScreen::on_select(int index) {
 void BentoScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& runtime) {
   if (cover_needs_extract_) {
     cover_needs_extract_ = false;
-    if (app_) app_->ensure_cover_bin(recent_path_, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize, true);
+    if (app_) app_->ensure_cover_bin(recent_path_, buf, true);
     load_cover_data_();
     request_redraw();
     return;
@@ -283,7 +288,7 @@ void BentoScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct)
   const int main_h = bottom_row_y - main_y - 1;
 
   // Left panel | right panels
-  const int left_w   = W * 62 / 100;
+  const int left_w   = left_panel_w(W);
   const int right_x  = left_w + 1;
   const int right_w  = W - right_x;
 

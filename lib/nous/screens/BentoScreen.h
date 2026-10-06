@@ -45,15 +45,13 @@ class BentoScreen final : public ListMenuScreen {
   int back_hold_frames_ = 0;
   bool back_was_down_   = false;
 
-  // Cover image loaded at kCoverTargetW — large enough to fill the left panel.
+  // Cover image loaded at the left panel's width so it fills the panel on any screen.
   std::vector<uint8_t> cover_data_;
   uint16_t cover_w_ = 0;
   uint16_t cover_h_ = 0;
   bool cover_loaded_        = false;
   bool cover_needs_extract_ = false;
   std::string cover_bin_path_;
-
-  static constexpr int kCoverTargetW = 300;
 
   void load_cover_data_();
 };

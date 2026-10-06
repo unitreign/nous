@@ -15,6 +15,11 @@
 
 namespace microreader {
 
+// Book-stats cover thumbnail width: 1/6 of the panel (80 px on X4, 88 px on X3).
+static int stats_cover_w(int screen_w) {
+  return screen_w / 6;
+}
+
 // Scale src to fit dst_w × dst_h exactly (blit_cover already handles crop/scale).
 static void blit_cover(DrawBuffer& buf, int dst_x, int dst_y,
                        const uint8_t* data, int src_w, int src_h,
@@ -22,7 +27,7 @@ static void blit_cover(DrawBuffer& buf, int dst_x, int dst_y,
   if (dst_w <= 0 || dst_h <= 0 || src_w <= 0 || src_h <= 0) return;
   const int src_stride = (src_w + 7) / 8;
   const int dst_stride = (dst_w + 7) / 8;
-  uint8_t row_buf[80];
+  uint8_t row_buf[100];  // one full panel row on X4 (800 px) or X3 (792 px)
   if (dst_stride > static_cast<int>(sizeof(row_buf))) return;
   const bool wd = (dst_w * src_h >= dst_h * src_w);
   const int crop_y = wd ? ((src_h * dst_w / src_w) - dst_h) / 2 : 0;
@@ -87,8 +92,7 @@ void StatsScreen::load_cover_() {
   if (std::fread(hdr, 2, 2, f) == 2) {
     const int src_w = hdr[0], src_h = hdr[1];
     if (src_w > 0 && src_h > 0) {
-      static constexpr int kThumbW = 80;
-      const int dst_w = std::min(src_w, kThumbW);
+      const int dst_w = std::min(src_w, stats_cover_w(portrait_width_()));
       const int dst_h = dst_w * src_h / src_w;
       const int src_stride = (src_w + 7) / 8;
       const int dst_stride = (dst_w + 7) / 8;
@@ -165,13 +169,12 @@ void StatsScreen::draw_content_(DrawBuffer& buf) const {
   {
     static constexpr int kCardPad  = 10;
     static constexpr int kCoverGap = 12;
-    static constexpr int kMaxCoverW = 80;   // max rendered cover width
     static constexpr int kLineGap   = 6;
 
-    // ── Compute scaled cover size (preserve aspect ratio, max kMaxCoverW wide)
+    // ── Compute scaled cover size (preserve aspect ratio, max stats_cover_w wide)
     int scaled_cov_w = 0, scaled_cov_h = 0;
     if (cover_loaded_ && cover_w_ > 0 && cover_h_ > 0) {
-      scaled_cov_w = std::min(static_cast<int>(cover_w_), kMaxCoverW);
+      scaled_cov_w = std::min(static_cast<int>(cover_w_), stats_cover_w(W));
       scaled_cov_h = scaled_cov_w * static_cast<int>(cover_h_) / static_cast<int>(cover_w_);
     }
 

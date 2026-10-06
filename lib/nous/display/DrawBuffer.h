@@ -155,6 +155,17 @@ class DrawBuffer {
     return (rotation_ == Rotation::Deg0 || rotation_ == Rotation::Deg180) ? DisplayFrame::kPhysicalHeight : kHeight;
   }
 
+  // Portrait panel size regardless of the current rotation. UI code sizes
+  // rotation-independent assets (sleep covers, cover thumbnails) from these,
+  // never from kWidth/kHeight, so a different panel (X3: 528x790) only has to
+  // change what DrawBuffer reports.
+  int portrait_width() const {
+    return kWidth;
+  }
+  int portrait_height() const {
+    return kHeight;
+  }
+
   Rotation rotation() const {
     return rotation_;
   }
@@ -558,7 +569,7 @@ class DrawBuffer {
       return false;
     Mgr2Source_ src = Mgr2Source_::from_file(f);
     if (src.valid())
-      show_mgr2_sleep_(src, false, show_text);
+      show_mgr2_sleep_(src, true, show_text);
     std::fclose(f);
     return src.valid();
   }
@@ -935,12 +946,14 @@ class DrawBuffer {
   };
 
   void show_mgr2_sleep_(Mgr2Source_& src, bool deep_sleep_after, bool show_text = true) {
+    // Clip to the panel so an oversized or malformed header can't write past a row.
+    const int max_x = std::min<int>(src.w, DisplayFrame::kPhysicalWidth);
     auto decode_pass = [&](bool red_bit) {
       fill(false);
       for (uint16_t y = 0; y < src.h && y < DisplayFrame::kPhysicalHeight; ++y) {
         const uint8_t* src_row = src.get_row(y);
         uint8_t* dst = inactive_() + static_cast<size_t>(y) * DisplayFrame::kStride;
-        for (int x = 0; x < static_cast<int>(src.w); x++) {
+        for (int x = 0; x < max_x; x++) {
           int state = (src_row[x / 4] >> (6 - (x % 4) * 2)) & 0x3;
           if (red_bit ? (state >> 1) : (state & 1))
             dst[x / 8] |= static_cast<uint8_t>(0x80 >> (x % 8));
@@ -949,10 +962,10 @@ class DrawBuffer {
     };
 
     decode_pass(false);
-    if (show_text) draw_text_centered(kWidth / 2, kHeight - 24, "sleeping...", false, false);
+    if (show_text) draw_text_centered(portrait_width() / 2, portrait_height() - 24, "sleeping...", false, false);
     display_.write_ram_bw(inactive_());
     decode_pass(true);
-    if (show_text) draw_text_centered(kWidth / 2, kHeight - 24, "sleeping...", false, false);
+    if (show_text) draw_text_centered(portrait_width() / 2, portrait_height() - 24, "sleeping...", false, false);
     display_.write_ram_red(inactive_());
     display_.grayscale_refresh_1pass(/*turnOffScreen=*/true);
     if (deep_sleep_after)

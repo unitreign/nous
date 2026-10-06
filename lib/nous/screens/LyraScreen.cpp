@@ -10,7 +10,10 @@
 
 namespace microreader {
 
-static constexpr int kMaxCoverDisplayW = 100;  // thumbnail width for the recent-book card
+// Recent-book card thumbnail width: ~21% of the panel (100 px on X4, 110 px on X3).
+static int cover_display_w(int screen_w) {
+  return screen_w * 21 / 100;
+}
 
 // Cover mode blit: scale src to fill dst_w × dst_h, centered, crop overflow.
 static void blit_cover(DrawBuffer& buf, int dst_x, int dst_y,
@@ -19,7 +22,7 @@ static void blit_cover(DrawBuffer& buf, int dst_x, int dst_y,
   if (dst_w <= 0 || dst_h <= 0 || src_w <= 0 || src_h <= 0) return;
   const int src_stride = (src_w + 7) / 8;
   const int dst_stride = (dst_w + 7) / 8;
-  uint8_t row_buf[80];
+  uint8_t row_buf[100];  // one full panel row on X4 (800 px) or X3 (792 px)
   if (dst_stride > (int)sizeof(row_buf)) return;
   const bool wd = (dst_w * src_h >= dst_h * src_w);
   const int crop_y = wd ? ((src_h * dst_w / src_w) - dst_h) / 2 : 0;
@@ -133,7 +136,7 @@ void LyraScreen::load_cover_data_() {
 
   // Scale to thumbnail display size during load — avoid keeping the full
   // high-res bitmap (up to 47 KB) in RAM when only ~100 px are displayed.
-  const int dst_w = std::min(src_w, kMaxCoverDisplayW);
+  const int dst_w = std::min(src_w, cover_display_w(portrait_width_()));
   const int dst_h = dst_w * src_h / src_w;
   if (dst_w <= 0 || dst_h <= 0) { std::fclose(f); return; }
 
@@ -189,7 +192,7 @@ void LyraScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime& r
   // Lazy cover extraction: show loading bar, extract, then redraw.
   if (cover_needs_extract_) {
     cover_needs_extract_ = false;
-    if (app_) app_->ensure_cover_bin(recent_path_, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize, true);
+    if (app_) app_->ensure_cover_bin(recent_path_, buf, true);
     load_cover_data_();
     request_redraw();
     return;
@@ -295,9 +298,9 @@ void LyraScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct) 
 
   // ── Recent book card ─────────────────────────────────────────────────────
   if (has_recent_ && idx_recent_ >= 0) {
-    // Cover already loaded at kMaxCoverDisplayW; compute proportional display height.
+    // Cover already loaded at cover_display_w(); compute proportional display height.
     const int disp_cov_w = (cover_loaded_ && cover_w_ > 0)
-        ? std::min(static_cast<int>(cover_w_), kMaxCoverDisplayW) : 0;
+        ? std::min(static_cast<int>(cover_w_), cover_display_w(W)) : 0;
     const int disp_cov_h = (cover_loaded_ && cover_w_ > 0 && cover_h_ > 0)
         ? disp_cov_w * static_cast<int>(cover_h_) / static_cast<int>(cover_w_) : 0;
 

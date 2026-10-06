@@ -1,5 +1,6 @@
 #include "MrbConverter.h"
 
+#include <cstdio>
 #include <cstring>
 
 #include "../../ConvLog.h"
@@ -141,8 +142,20 @@ bool write_split_paragraph(MrbWriter& writer, Paragraph& para) {
 
 }  // namespace
 
+static bool convert_impl_(Book& book, const char* output_path, uint8_t* work_buf, uint8_t* xml_buf,
+                          std::function<void(int, int)>& progress_cb, CssCache* css_cache);
+
 bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t* work_buf, uint8_t* xml_buf,
                                    std::function<void(int, int)> progress_cb, CssCache* css_cache) {
+  const bool ok = convert_impl_(book, output_path, work_buf, xml_buf, progress_cb, css_cache);
+  // The writer is closed when convert_impl_ returns; never leave a partial book behind.
+  if (!ok)
+    std::remove(output_path);
+  return ok;
+}
+
+static bool convert_impl_(Book& book, const char* output_path, uint8_t* work_buf, uint8_t* xml_buf,
+                          std::function<void(int, int)>& progress_cb, CssCache* css_cache) {
   CLOG("[Conv] convert_epub_to_mrb_streaming START out=%s chapters=%u", output_path,
        (unsigned)book.chapter_count());
   CLOG_HEAP("Conv-pre-open");
@@ -323,14 +336,28 @@ bool convert_epub_to_mrb_streaming(Book& book, const char* output_path, uint8_t*
 
   // Remap TOC file_idx (zip entry index) → spine index so ReaderScreen::load_chapter_() works.
   // toc_work already has para_index values filled in from fragment anchor resolution.
+  // Entries pointing outside the spine are dropped; keeping the raw zip index would
+  // open the wrong chapter or none at all.
   const auto& spine = book.epub().spine();
-  for (auto& entry : toc_work.entries) {
-    for (size_t si = 0; si < spine.size(); ++si) {
-      if (spine[si].file_idx == entry.file_idx) {
-        entry.file_idx = static_cast<uint16_t>(si);
-        break;
+  {
+    size_t keep = 0;
+    for (size_t ei = 0; ei < toc_work.entries.size(); ++ei) {
+      auto entry = toc_work.entries[ei];
+      bool matched = false;
+      for (size_t si = 0; si < spine.size(); ++si) {
+        if (spine[si].file_idx == entry.file_idx) {
+          entry.file_idx = static_cast<uint16_t>(si);
+          matched = true;
+          break;
+        }
       }
+      if (!matched)
+        continue;
+      if (entry.para_index == 0xFFFF)  // fragment never resolved — open at chapter start
+        entry.para_index = 0;
+      toc_work.entries[keep++] = entry;
     }
+    toc_work.entries.resize(keep);
   }
 
   // Build spine filename table: base filename of each spine item for href resolution at runtime.

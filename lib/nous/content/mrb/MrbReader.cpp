@@ -20,14 +20,18 @@ bool MrbReader::open(const char* path) {
     return false;
   }
 
-  // Read chapter table (16 bytes per entry in v2)
-  if (header_.chapter_count > 2048 || header_.image_count > 4096) {
+  // A placeholder header from an interrupted conversion has zero counts/offsets.
+  if (header_.chapter_count == 0 || header_.chapter_count > 2048 || header_.image_count > 4096 ||
+      header_.chapter_offset == 0 || header_.meta_offset == 0) {
     close();
     return false;
   }
   chapters_.resize(header_.chapter_count);
-  if (header_.chapter_count > 0) {
-    fseek(f_, static_cast<long>(header_.chapter_offset), SEEK_SET);
+  {
+    if (fseek(f_, static_cast<long>(header_.chapter_offset), SEEK_SET) != 0) {
+      close();
+      return false;
+    }
     for (uint16_t i = 0; i < header_.chapter_count; ++i) {
       uint8_t buf[16];
       if (!read_bytes(buf, 16)) {
@@ -310,9 +314,12 @@ bool MrbReader::deserialize_text(const uint8_t* data, size_t size, Paragraph& ou
   uint16_t run_count = mrb_read_u16(data + pos);
   pos += 2;
 
+  // Each run needs at least 12 header bytes; cap before allocating.
+  if (run_count > (size - pos) / 12)
+    return false;
   out.text.runs.resize(run_count);
   for (uint16_t i = 0; i < run_count; ++i) {
-    if (pos + 12 > size)
+    if (size - pos < 12)
       return false;
 
     Run& run = out.text.runs[i];
@@ -330,18 +337,18 @@ bool MrbReader::deserialize_text(const uint8_t* data, size_t size, Paragraph& ou
     uint32_t text_len = mrb_read_u32(data + pos);
     pos += 4;
 
-    if (pos + text_len > size)
+    if (text_len > size - pos)
       return false;
     run.text.assign(reinterpret_cast<const char*>(data + pos), text_len);
     pos += text_len;
 
     // v9+: href string follows text bytes when flags bit 0x02 is set.
     if (flags & 0x02) {
-      if (pos + 2 > size)
+      if (size - pos < 2)
         return false;
       uint16_t href_len = mrb_read_u16(data + pos);
       pos += 2;
-      if (pos + href_len > size)
+      if (href_len > size - pos)
         return false;
       run.href.assign(reinterpret_cast<const char*>(data + pos), href_len);
       pos += href_len;

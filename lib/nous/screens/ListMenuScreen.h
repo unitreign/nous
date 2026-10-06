@@ -247,6 +247,11 @@ class ListMenuScreen : public IScreen {
     return !home_screen_selector_ || selector_style_ == SelectorStyle::Block;
   }
 
+  // Portrait panel width, for sizing assets loaded outside draw (buf_ is set in start()).
+  int portrait_width_() const {
+    return buf_ ? buf_->portrait_width() : DrawBuffer::kWidth;
+  }
+
   virtual void draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pct = std::nullopt) const;
   virtual void ensure_visible_();
   void set_scroll_offset_(int v) { scroll_offset_ = v; }

@@ -276,7 +276,8 @@ void ConvertAllScreen::do_convert_path_(const std::string& path, const std::stri
     CLOG("[CAS] book.open(sleep) result=%d", (int)err);
     CLOG_HEAP("CAS-pre-sleep");
     if (err == EpubError::Ok && book.chapter_count() > 0) {
-      bool slp_ok = book.write_cover_bin(sleep_path.c_str(), 480, 786, buf.scratch_buf1(), DrawBuffer::kBufSize);
+      bool slp_ok = book.write_cover_bin(sleep_path.c_str(), buf.portrait_width(), buf.portrait_height(),
+                                         buf.scratch_buf1(), DrawBuffer::kBufSize);
       CLOG("[CAS] write_cover_bin(480x786) %s", slp_ok ? "OK" : "FAIL");
       CLOG_HEAP("CAS-post-cover480");
     }

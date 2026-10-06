@@ -372,7 +372,8 @@ void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
       const std::string cpath = cover_bin_path(path_.c_str(), data_dir_.c_str());
       const std::string spath = cover_sleep_bin_path(path_.c_str(), data_dir_.c_str());
       book_.write_cover_bin(cpath.c_str(), 160, 240, buf.scratch_buf1(), DrawBuffer::kBufSize);
-      book_.write_cover_bin(spath.c_str(), 480, 786, buf.scratch_buf1(), DrawBuffer::kBufSize);
+      book_.write_cover_bin(spath.c_str(), buf.portrait_width(), buf.portrait_height(), buf.scratch_buf1(),
+                            DrawBuffer::kBufSize);
     }
 
 #ifdef ESP_PLATFORM
@@ -437,7 +438,7 @@ void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
   layout_engine_ = TextLayout{};
   layout_engine_.set_source(*chapter_src_);
   layout_engine_.set_image_size_fn(image_size_fn_);
-  layout_engine_.set_hyphenation_lang(detect_language(mrb_.metadata().language));
+  layout_engine_.set_hyphenation_lang(reader_settings_.hyphenation_enabled ? detect_language(mrb_.metadata().language) : HyphenationLang::None);
   render_page_(buf);
   if (saved_progress_pct_ >= 100) {
     open_reopen_picker_();
@@ -475,25 +476,31 @@ void ReaderScreen::resume(DrawBuffer& buf, IRuntime& runtime) {
 
   // Handle pending chapter jump (from ChapterSelectScreen).
   if (app_ && app_->chapter_select()->has_pending()) {
-    saved_chapter_idx_ = app_->chapter_select()->pending_chapter();
-    saved_page_pos_ = PagePosition{app_->chapter_select()->pending_para_index(), 0, 0};
+    const size_t ch = app_->chapter_select()->pending_chapter();
+    const uint16_t para = app_->chapter_select()->pending_para_index();
     app_->chapter_select()->clear_pending();
-    load_chapter_(saved_chapter_idx_);
-    page_pos_ = saved_page_pos_;
-    layout_engine_.set_source(*chapter_src_);
-    layout_engine_.set_image_size_fn(image_size_fn_);
-    layout_engine_.set_hyphenation_lang(reader_settings_.hyphenation_enabled ? detect_language(mrb_.metadata().language) : HyphenationLang::None);
+    if (load_chapter_(ch)) {
+      saved_chapter_idx_ = ch;
+      saved_page_pos_ = PagePosition{para == 0xFFFF ? uint16_t{0} : para, 0, 0};
+      page_pos_ = saved_page_pos_;
+      layout_engine_.set_image_size_fn(image_size_fn_);
+      layout_engine_.set_hyphenation_lang(reader_settings_.hyphenation_enabled ? detect_language(mrb_.metadata().language) : HyphenationLang::None);
+    }
   } else if (app_ && app_->links_screen()->has_pending()) {
-    if (nav_history_.size() < kMaxNavHistory)
-      nav_history_.push_back({saved_chapter_idx_, saved_page_pos_});
-    saved_chapter_idx_ = app_->links_screen()->pending_chapter();
-    saved_page_pos_ = PagePosition{app_->links_screen()->pending_para(), 0, 0};
+    const size_t ch = app_->links_screen()->pending_chapter();
+    const uint16_t para = app_->links_screen()->pending_para();
     app_->links_screen()->clear_pending();
-    load_chapter_(saved_chapter_idx_);
-    page_pos_ = saved_page_pos_;
-    layout_engine_.set_source(*chapter_src_);
-    layout_engine_.set_image_size_fn(image_size_fn_);
-    layout_engine_.set_hyphenation_lang(reader_settings_.hyphenation_enabled ? detect_language(mrb_.metadata().language) : HyphenationLang::None);
+    const size_t from_ch = saved_chapter_idx_;
+    const PagePosition from_pos = saved_page_pos_;
+    if (load_chapter_(ch)) {
+      if (nav_history_.size() < kMaxNavHistory)
+        nav_history_.push_back({from_ch, from_pos});
+      saved_chapter_idx_ = ch;
+      saved_page_pos_ = PagePosition{para == 0xFFFF ? uint16_t{0} : para, 0, 0};
+      page_pos_ = saved_page_pos_;
+      layout_engine_.set_image_size_fn(image_size_fn_);
+      layout_engine_.set_hyphenation_lang(reader_settings_.hyphenation_enabled ? detect_language(mrb_.metadata().language) : HyphenationLang::None);
+    }
   }
   // Check if font settings changed (font_size_idx may have been updated in options).
   if (const BitmapFontSet* fset = ext_font_set_ ? ext_font_set_ : (font_set_.valid() ? &font_set_ : nullptr)) {
@@ -697,13 +704,15 @@ void ReaderScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime&
   }
 }
 
-void ReaderScreen::load_chapter_(size_t idx) {
+bool ReaderScreen::load_chapter_(size_t idx) {
+  // Out-of-range jumps keep the current chapter loaded rather than leaving it null.
+  if (idx >= mrb_.chapter_count())
+    return false;
   chapter_src_.reset();
-  if (idx < mrb_.chapter_count()) {
-    chapter_src_ = std::make_unique<MrbChapterSource>(mrb_, static_cast<uint16_t>(idx));
-    chapter_idx_ = idx;
-    layout_engine_.set_source(*chapter_src_);
-  }
+  chapter_src_ = std::make_unique<MrbChapterSource>(mrb_, static_cast<uint16_t>(idx));
+  chapter_idx_ = idx;
+  layout_engine_.set_source(*chapter_src_);
+  return true;
 }
 
 void ReaderScreen::collect_page_links_() {
@@ -1159,10 +1168,13 @@ bool ReaderScreen::prev_page_() {
 void ReaderScreen::save_position_() {
   if (pos_path_.empty())
     return;
-  FILE* f = std::fopen(pos_path_.c_str(), "w");
+  // Write a temp file then swap it in, so a power loss mid-write can't leave an
+  // empty .pos. FAT rename won't overwrite, hence the remove first.
+  const std::string tmp_path = pos_path_ + ".tmp";
+  FILE* f = std::fopen(tmp_path.c_str(), "w");
   if (!f)
     return;
-  std::fprintf(f, "%u %u %u %u %u %llu %u %d %llu %u\n",
+  const int n = std::fprintf(f, "%u %u %u %u %u %llu %u %d %llu %u\n",
                static_cast<unsigned>(chapter_idx_), static_cast<unsigned>(page_pos_.paragraph),
                static_cast<unsigned>(page_pos_.offset), static_cast<unsigned>(page_pos_.text_offset),
                static_cast<unsigned>(times_opened_),
@@ -1171,7 +1183,12 @@ void ReaderScreen::save_position_() {
                progress_pct(),
                static_cast<unsigned long long>(estimated_time_left_ms()),
                static_cast<unsigned>(chapter_count()));
-  std::fclose(f);
+  if (std::fclose(f) != 0 || n <= 0) {
+    std::remove(tmp_path.c_str());
+    return;
+  }
+  std::remove(pos_path_.c_str());
+  std::rename(tmp_path.c_str(), pos_path_.c_str());
 }
 
 void ReaderScreen::load_position_() {
@@ -1180,6 +1197,8 @@ void ReaderScreen::load_position_() {
 
   // Try the current (hash-based) key first.
   FILE* f = std::fopen(pos_path_.c_str(), "r");
+  if (!f)  // power lost between save_position_'s remove and rename
+    f = std::fopen((pos_path_ + ".tmp").c_str(), "r");
   bool migrating = false;
 
   // If not found, try the legacy slug key so existing .pos files still load.

@@ -10,6 +10,14 @@
 
 namespace microreader {
 
+static constexpr int kPad     = 12;
+static constexpr int kSlotGap = 8;  // gap between the 3 cover slots
+
+// Shared by preload and draw so cached covers match the slot on any panel width.
+static int cover_slot_w(int screen_w) {
+  return (screen_w - 2 * kPad - 2 * kSlotGap) / 3;
+}
+
 // Cover mode: scale src so it fills dst_w × dst_h, centered, crop overflow.
 // Maintains aspect ratio — one dimension fills exactly, the other is cropped.
 // Example: src 300×400, dst 200×100 → scale by width (200/300), rendering
@@ -20,7 +28,7 @@ static void blit_cover(DrawBuffer& buf, int dst_x, int dst_y,
   if (dst_w <= 0 || dst_h <= 0 || src_w <= 0 || src_h <= 0) return;
   const int src_stride = (src_w + 7) / 8;
   const int dst_stride = (dst_w + 7) / 8;
-  uint8_t row_buf[80];  // supports up to 640px output columns
+  uint8_t row_buf[100];  // one full panel row on X4 (800 px) or X3 (792 px)
   if (dst_stride > (int)sizeof(row_buf)) return;
 
   // Determine dominant axis: if scaling by width already fills height → width-dominant.
@@ -80,7 +88,7 @@ void LyraExtScreen::load_cover_(int i) {
 
   // Scale to the display slot size during load — avoids holding the full
   // high-res bitmap (up to 47 KB) in RAM for each of the 3 slots.
-  const int slot_w = (480 - 2 * 12 - 2 * 8) / 3;  // kPortraitW=480, kPad=12, kSlotGap=8
+  const int slot_w = cover_slot_w(portrait_width_());
   const int slot_h = slot_w * 3 / 2;
   int dst_w = slot_w, dst_h = slot_w * src_h / src_w;
   if (dst_h > slot_h) { dst_h = slot_h; dst_w = slot_h * src_w / src_h; }
@@ -214,7 +222,7 @@ void LyraExtScreen::update(const ButtonState& buttons, DrawBuffer& buf, IRuntime
   for (int i = 0; i < num_books_; ++i) {
     if (slots_[i].cover_needs_extract) {
       slots_[i].cover_needs_extract = false;
-      if (app_) app_->ensure_cover_bin(slots_[i].path, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize, true);
+      if (app_) app_->ensure_cover_bin(slots_[i].path, buf, true);
       load_cover_(i);
       request_redraw();
       return;
@@ -250,9 +258,7 @@ void LyraExtScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pc
   buf.fill(true);
 
   // All spacing constants match LyraScreen exactly.
-  static constexpr int kPad         = 12;
   static constexpr int kTopGap      = 36;
-  static constexpr int kSlotGap     = 8;    // gap between the 3 cover slots
   static constexpr int kCoverTitleGap = 4;
   static constexpr int kCardNavGap  = 10;
   static constexpr int kNavPadV     = 32;
@@ -289,7 +295,7 @@ void LyraExtScreen::draw_all_(DrawBuffer& buf, std::optional<uint8_t> battery_pc
   const int bot_rule_y = H - bot_area_h;
 
   // ── 3 cover slots ────────────────────────────────────────────────────────
-  const int slot_w        = (W - 2 * kPad - 2 * kSlotGap) / 3;
+  const int slot_w        = cover_slot_w(W);
   const int cover_slot_h  = slot_w * 3 / 2;  // max slot height (3:2 portrait box)
   const int title_area_h  = ui_adv;
   const int slot_total_h  = cover_slot_h + kCoverTitleGap + title_area_h;

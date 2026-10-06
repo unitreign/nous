@@ -30,6 +30,8 @@ class FontManager {
       num = kMaxFontSizes;
 
     constexpr size_t kSizeTableOff = 8 + 32;
+    if (sz < kSizeTableOff + static_cast<size_t>(num) * 4)
+      return false;
     uint32_t sizes[kMaxFontSizes] = {};
     for (int i = 0; i < num; i++) {
       const uint8_t* p = d + kSizeTableOff + i * 4;
@@ -38,12 +40,12 @@ class FontManager {
 
     size_t off = kSizeTableOff + static_cast<size_t>(num) * 4;
     for (int i = 0; i < num; i++) {
-      if (off + sizes[i] > sz)
+      if (sizes[i] > sz - off)
         break;
       load_font(d + off, sizes[i]);
       off += sizes[i];
     }
-    return true;
+    return valid();
   }
 
   // Return the font set (use with app.set_reader_font()).

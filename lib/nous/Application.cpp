@@ -18,6 +18,7 @@
 #include <sys/stat.h>
 
 #include "esp_random.h"
+#include "esp_system.h"
 #else
 #include <filesystem>
 #endif
@@ -105,6 +106,19 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   if (!pending_book_path_.empty() && pending_book_path_.find("/.hidden/") != std::string::npos)
     pending_book_path_.clear();
 
+#ifdef ESP_PLATFORM
+  // If the last boot crashed, the open book may be the cause — start at the
+  // library instead of reopening it and crashing again.
+  {
+    const esp_reset_reason_t rr = esp_reset_reason();
+    if (!pending_book_path_.empty() &&
+        (rr == ESP_RST_PANIC || rr == ESP_RST_INT_WDT || rr == ESP_RST_TASK_WDT || rr == ESP_RST_WDT)) {
+      MR_LOGI("app", "skipping auto-open after crash reset (reason=%d)", (int)rr);
+      pending_book_path_.clear();
+    }
+  }
+#endif
+
   // Auto-open last book if one was active at shutdown — but only if the font
   // is valid. cache_only=true tells the reader not to convert if the MRB is
   // missing; it will pop back to the book list instead of blocking the UI.
@@ -139,7 +153,7 @@ void Application::auto_open_book(const char* epub_path, DrawBuffer& buf, IRuntim
   if (reader_font_)
     reader_.set_fonts(reader_font_);
 
-  ensure_cover_bin(epub_path, buf.scratch_buf1(), buf.scratch_buf2(), DrawBuffer::kBufSize, true);
+  ensure_cover_bin(epub_path, buf, true);
   screen_mgr_.push(&reader_, buf, runtime);
 }
 
@@ -196,19 +210,18 @@ static bool show_book_cover_sleep_(DrawBuffer& buf, const char* data_dir) {
   const int oy = (H - dst_h) / 2;
 
   // Nearest-neighbour blit row-by-row.
-  uint8_t row_buf[80];
-  if ((dst_w + 7) / 8 > static_cast<int>(sizeof(row_buf))) return false;
+  std::vector<uint8_t> row_buf((static_cast<size_t>(dst_w) + 7) / 8);
   for (int dy = 0; dy < dst_h; ++dy) {
     const int sy = dy * ch / dst_h;
     const uint8_t* src_row = data.data() + static_cast<size_t>(sy) * stride;
-    std::memset(row_buf, 0xFF, sizeof(row_buf));  // 1 = white
+    std::fill(row_buf.begin(), row_buf.end(), 0xFF);  // 1 = white
     for (int dx = 0; dx < dst_w; ++dx) {
       const int sx  = dx * cw / dst_w;
       const int bit = (src_row[sx >> 3] >> (7 - (sx & 7))) & 1;
       if (bit == 0)  // 0 = black pixel
         row_buf[dx >> 3] &= static_cast<uint8_t>(~(0x80u >> (dx & 7)));
     }
-    buf.blit_1bit_row(ox, oy + dy, row_buf, dst_w);
+    buf.blit_1bit_row(ox, oy + dy, row_buf.data(), dst_w);
   }
 
   buf.full_refresh(RefreshMode::Full, /*turnOffScreen=*/true);
@@ -672,10 +685,13 @@ void microreader::Application::record_book_opened(const std::string& path) {
   }
   save_settings_();
 }
-void Application::ensure_cover_bin(const std::string& epub_path,
-                                    uint8_t* scratch1, uint8_t* scratch2,
-                                    size_t scratch_size, bool generate_sleep) {
+void Application::ensure_cover_bin(const std::string& epub_path, DrawBuffer& buf, bool generate_sleep) {
   if (!data_dir_) return;
+  uint8_t* scratch1 = buf.scratch_buf1();
+  uint8_t* scratch2 = buf.scratch_buf2();
+  const size_t scratch_size = DrawBuffer::kBufSize;
+  const int sleep_w = buf.portrait_width();
+  const int sleep_h = buf.portrait_height();
   const std::string cpath  = cover_bin_path(epub_path.c_str(), data_dir_);
   const std::string spath  = cover_sleep_bin_path(epub_path.c_str(), data_dir_);
 
@@ -688,13 +704,14 @@ void Application::ensure_cover_bin(const std::string& epub_path,
     std::fclose(chk);
   }
 
-  // cover_sleep.bin: full-res (≤480×786). Only generated when requested.
+  // cover_sleep.bin: full-screen (≤ portrait panel size). Only generated when requested.
+  // Width below ~5/6 of the panel means an old small extract.
   bool need_sleep = false;
   if (generate_sleep) {
     FILE* schk = std::fopen(spath.c_str(), "rb");
     if (schk) {
       uint16_t hdr[2] = {};
-      need_sleep = (std::fread(hdr, 2, 2, schk) != 2 || hdr[0] < 400);
+      need_sleep = (std::fread(hdr, 2, 2, schk) != 2 || hdr[0] < sleep_w * 5 / 6);
       std::fclose(schk);
     } else {
       need_sleep = true;
@@ -717,13 +734,19 @@ void Application::ensure_cover_bin(const std::string& epub_path,
   Book book;
   if (book.open(epub_path.c_str(), scratch1, scratch2) != EpubError::Ok) return;
   if (need_thumb) book.write_cover_bin(cpath.c_str(),  160, 240, scratch1, scratch_size);
-  if (need_sleep) book.write_cover_bin(spath.c_str(),  480, 786, scratch1, scratch_size);
+  if (need_sleep) book.write_cover_bin(spath.c_str(), sleep_w, sleep_h, scratch1, scratch_size);
 }
 
 void microreader::Application::load_settings_() {
   if (settings_path_.empty())
     return;
+  // A power loss between save's two renames leaves no main file; the complete
+  // .tmp (newest) or .bak.1 is then the latest good copy.
   FILE* f = std::fopen(settings_path_.c_str(), "r");
+  if (!f)
+    f = std::fopen((settings_path_ + ".tmp").c_str(), "r");
+  if (!f)
+    f = std::fopen((settings_path_ + ".bak.1").c_str(), "r");
   if (!f)
     return;
 
@@ -733,10 +756,7 @@ void microreader::Application::load_settings_() {
   ReaderSettings& rs = reader_.reader_settings();
 
   while (std::fgets(line, sizeof(line), f)) {
-    // Strip trailing newline
-    char* nl = std::strchr(line, '\n');
-    if (nl)
-      *nl = 0;
+    line[std::strcspn(line, "\r\n")] = 0;
 
     char sval[512];
     unsigned uval = 0;

@@ -241,8 +241,34 @@ struct CssSheets {
 // Path resolution
 // ---------------------------------------------------------------------------
 
+// Decode %XX escapes in an href (zip entry names are stored unescaped).
+static std::string url_decode(const std::string& s) {
+  if (s.find('%') == std::string::npos)
+    return s;
+  auto hex = [](char c) -> int {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+  };
+  std::string out;
+  out.reserve(s.size());
+  for (size_t i = 0; i < s.size(); ++i) {
+    if (s[i] == '%' && i + 2 < s.size()) {
+      const int hi = hex(s[i + 1]), lo = hex(s[i + 2]);
+      if (hi >= 0 && lo >= 0) {
+        out += static_cast<char>((hi << 4) | lo);
+        i += 2;
+        continue;
+      }
+    }
+    out += s[i];
+  }
+  return out;
+}
+
 std::string Epub::resolve_path(const std::string& base_dir, const std::string& href) {
-  std::string path = href;
+  std::string path = url_decode(href);
 
   // Strip leading "./"
   while (path.size() >= 2 && path[0] == '.' && path[1] == '/') {
@@ -475,7 +501,7 @@ static EpubError parse_ncx(IZipFile& file, const ZipReader& zip, const ZipEntry&
             src = src.substr(0, hash);
           }
 
-          std::string full_path = normalize_path(root_dir + src);
+          std::string full_path = normalize_path(root_dir + url_decode(src));
           int idx = -1;
           for (size_t i = 0; i < zip.entry_count(); ++i) {
             if (zip.entry(i).name == full_path) {
@@ -559,21 +585,21 @@ EpubError Epub::parse_opf(IZipFile& file, const std::string& opf_path, uint8_t* 
           while (reader.next_event(text) == XmlError::Ok && text.type == XmlEventType::Text)
             accum += sv_to_string(text.content);
           if (metadata_.title.empty() && !accum.empty())
-            metadata_.title = normalize_whitespace(accum);
+            metadata_.title = normalize_whitespace(decode_entities(accum));
         } else if (sv_eq(ev.name, "dc:creator") || sv_eq(ev.name, "creator")) {
           std::string accum;
           XmlEvent text;
           while (reader.next_event(text) == XmlError::Ok && text.type == XmlEventType::Text)
             accum += sv_to_string(text.content);
           if (!metadata_.author.has_value() && !accum.empty())
-            metadata_.author = normalize_whitespace(accum);
+            metadata_.author = normalize_whitespace(decode_entities(accum));
         } else if (sv_eq(ev.name, "dc:language") || sv_eq(ev.name, "language")) {
           std::string accum;
           XmlEvent text;
           while (reader.next_event(text) == XmlError::Ok && text.type == XmlEventType::Text)
             accum += sv_to_string(text.content);
           if (!metadata_.language.has_value() && !accum.empty())
-            metadata_.language = normalize_whitespace(accum);
+            metadata_.language = normalize_whitespace(decode_entities(accum));
         } else if (sv_eq(ev.name, "meta")) {
           auto name = ev.attrs.get("name");
           auto content = ev.attrs.get("content");
@@ -583,7 +609,7 @@ EpubError Epub::parse_opf(IZipFile& file, const std::string& opf_path, uint8_t* 
               metadata_.cover_id = sv_to_string(content);
           } else if (sv_eq(name, "calibre:series")) {
             if (!content.empty() && !metadata_.series.has_value())
-              metadata_.series = sv_to_string(content);
+              metadata_.series = decode_entities(sv_to_string(content));
           } else if (sv_eq(name, "calibre:series_index")) {
             if (!content.empty() && !metadata_.series_index.has_value()) {
               const std::string s = sv_to_string(content);
@@ -600,7 +626,7 @@ EpubError Epub::parse_opf(IZipFile& file, const std::string& opf_path, uint8_t* 
               while (reader.next_event(text) == XmlError::Ok && text.type == XmlEventType::Text)
                 accum += sv_to_string(text.content);
               if (!accum.empty())
-                metadata_.series = normalize_whitespace(accum);
+                metadata_.series = normalize_whitespace(decode_entities(accum));
             }
           }
         }
@@ -611,7 +637,7 @@ EpubError Epub::parse_opf(IZipFile& file, const std::string& opf_path, uint8_t* 
           auto mt_sv = ev.attrs.get("media-type");
 
           if (!id.empty() && !href.empty()) {
-            std::string full_path = root_dir_ + std::string(href.data, href.length);
+            std::string full_path = normalize_path(root_dir_ + url_decode(std::string(href.data, href.length)));
             int idx = -1;
             for (size_t i = 0; i < zip_.entry_count(); ++i) {
               if (zip_.entry(i).name == full_path) {
@@ -870,7 +896,8 @@ class BodyParser {
     }
 
     // Check if this chunk ends with an incomplete UTF-8 lead byte.
-    if (tlen > 0) {
+    // When flushing held-back text at a boundary, emit it as-is instead.
+    if (tlen > 0 && !flushing_pending_) {
       size_t check = (tlen >= 4) ? tlen - 4 : 0;
       for (size_t j = tlen; j > check; --j) {
         unsigned char uc = static_cast<unsigned char>(t[j - 1]);
@@ -895,7 +922,7 @@ class BodyParser {
     // Check if this chunk ends with a partial entity (& followed by up to
     // 11 chars of entity name but no terminating ';').  Buffer it for the
     // next text event so the entity decoder sees the complete token.
-    if (tlen > 0) {
+    if (tlen > 0 && !flushing_pending_) {
       // Scan backwards for '&' within the last 12 bytes (max entity length)
       size_t scan_start = (tlen > 12) ? tlen - 12 : 0;
       for (size_t j = tlen; j > scan_start; --j) {
@@ -909,8 +936,8 @@ class BodyParser {
             }
           }
           if (!has_semi) {
-            // Partial entity — save from '&' onwards
-            pending_utf8_.assign(t + j - 1, tlen - (j - 1));
+            // Partial entity — save from '&' onwards, ahead of any partial UTF-8 already held.
+            pending_utf8_.insert(0, t + j - 1, tlen - (j - 1));
             tlen = j - 1;
           }
           break;
@@ -1070,8 +1097,11 @@ class BodyParser {
     // keeps the worst-case reallocation at ~6KB.  Splitting a run at a word
     // boundary (after a space) produces identical layout output regardless of
     // XML buffer size, because the layout engine splits words on whitespace.
-    if (current_run_.size() >= 2048 && !current_run_.empty() && current_run_.back() == ' ')
+    if (current_run_.size() >= 2048 && !current_run_.empty() && current_run_.back() == ' ') {
+      keep_pending_ = true;  // text held back from this chunk belongs to the next event
       flush_text(false);
+      keep_pending_ = false;
+    }
   }
 
   void set_bold(bool b) {
@@ -1345,6 +1375,14 @@ class BodyParser {
   }
 
   void flush_text(bool breaking) {
+    // A text node ended: any bytes held back waiting for the next chunk
+    // (e.g. a bare "&" in "AT&T") belong here, not in the next paragraph.
+    if (!pending_utf8_.empty() && !keep_pending_) {
+      flushing_pending_ = true;
+      push_text("", 0);
+      flushing_pending_ = false;
+      pending_utf8_.clear();  // preformatted path doesn't consume it
+    }
     if (!current_run_.empty()) {
       Run r{std::move(current_run_), style(), font_size_pct_, breaking};
       r.vertical_align = vertical_align_;
@@ -1439,6 +1477,8 @@ class BodyParser {
   std::string current_run_;
   // normalized_ removed — push_text() writes directly into current_run_
   std::string pending_utf8_;  // incomplete UTF-8 lead byte(s) from end of previous text event
+  bool keep_pending_ = false;
+  bool flushing_pending_ = false;
   bool bold_ = false;
   bool italic_ = false;
   uint8_t font_size_pct_ = 100;

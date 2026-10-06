@@ -632,6 +632,16 @@ void SettingsScreen::apply_picker_(int sel) {
   picker_open_ = false;
   if (!app_) return;
 
+  if (is_destructive_(picker_target_)) {
+    if (sel == 1) {
+      confirmed_ = true;
+      on_select(picker_target_);
+      confirmed_ = false;
+    }
+    request_redraw();
+    return;
+  }
+
   if (picker_target_ == idx_theme_) {
     // Picker order: Minimal(1), Chronicle(0), Stele(2), Codex(3), Lyra(4), LyraExt(5), BentoCover(6), BentoText(7)
     static constexpr uint8_t kThemeOrder[] = {1, 0, 2, 3, 4, 5, 6, 7};
@@ -735,7 +745,18 @@ void SettingsScreen::apply_picker_(int sel) {
 // on_select
 // ---------------------------------------------------------------------------
 
+bool SettingsScreen::is_destructive_(int index) const {
+  return index >= 0 && (index == idx_clear_cache_ || index == idx_rebuild_index_ ||
+                        index == idx_switch_ota_ || index == idx_spiffs_);
+}
+
 void SettingsScreen::on_select(int index) {
+  if (is_destructive_(index) && !confirmed_) {
+    std::string title(get_item_label(index));
+    title += "?";
+    open_picker_(title.c_str(), index, {"Cancel", "Confirm"}, 0);
+    return;
+  }
   if (index == idx_series_view_) {
     if (app_) {
       bool v = !app_->series_view_enabled();

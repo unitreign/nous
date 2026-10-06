@@ -70,7 +70,13 @@ bool BookIndex::add_entry(std::string_view path, std::string_view title, std::st
 }
 
 bool BookIndex::load(const std::string& index_file) {
+  // A power loss between save's two renames leaves no main file; the complete
+  // .tmp (newest) or .bak.1 is then the latest good copy.
   FILE* f = std::fopen(index_file.c_str(), "rb");
+  if (!f)
+    f = std::fopen((index_file + ".tmp").c_str(), "rb");
+  if (!f)
+    f = std::fopen((index_file + ".bak.1").c_str(), "rb");
   if (!f)
     return false;
 
@@ -197,11 +203,23 @@ bool BookIndex::save(const std::string& index_file) const {
   std::fprintf(f, "#microreader-index v%lu scanned=%lu\n",
                (unsigned long)INDEX_FORMAT_VERSION, (unsigned long)scanned_count_);
 
+  // '|' separates fields and '\n' records; neither may appear inside a field.
+  auto clean = [](std::string_view v, std::string& out) -> std::string_view {
+    if (v.find_first_of("|\r\n") == std::string_view::npos)
+      return v;
+    out.assign(v.data(), v.size());
+    for (auto& c : out)
+      if (c == '|') c = '/';
+      else if (c == '\r' || c == '\n') c = ' ';
+    return out;
+  };
+  std::string title_buf, author_buf, series_buf;
+
   for (const auto& entry : entries_) {
     auto path_v   = entry.path.view(pool_);
-    auto title_v  = entry.title.view(pool_);
-    auto author_v = entry.author.view(pool_);
-    auto series_v = entry.series.view(pool_);
+    auto title_v  = clean(entry.title.view(pool_), title_buf);
+    auto author_v = clean(entry.author.view(pool_), author_buf);
+    auto series_v = clean(entry.series.view(pool_), series_buf);
     std::fprintf(f, "%.*s|%.*s|%.*s|%u|%llu|%u|%u|%u|%u|%llu|%u|%.*s|%.6g\n",
                  static_cast<int>(path_v.size()), path_v.data(),
                  static_cast<int>(title_v.size()), title_v.data(),
