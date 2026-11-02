@@ -112,10 +112,6 @@ void scaled_size(uint16_t raw_w, uint16_t raw_h, uint16_t max_w, uint16_t max_h,
 // Uses ImageSizeStream internally. Returns true if successful.
 bool get_image_size(const uint8_t* data, size_t size, uint16_t& out_w, uint16_t& out_h);
 
-// Runtime toggle: when false, image dimension resolution and decoding are skipped.
-// Can be set from UI settings. Defaults to true.
-extern bool images_enabled;
-
 // Callback invoked for each dithered output row during streaming decode.
 // y: 0-based row index within the image.
 // data: packed 1-bit row, (width+7)/8 bytes, MSB=leftmost pixel.

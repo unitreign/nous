@@ -1,7 +1,15 @@
 #include "Book.h"
 
+#include <sys/stat.h>
+
 #include <cstdio>
 #include <cstring>
+
+#ifdef ESP_PLATFORM
+#include <dirent.h>
+#else
+#include <filesystem>
+#endif
 
 #include "../ConvLog.h"
 #include "../HeapLog.h"
@@ -64,8 +72,6 @@ EpubError Book::load_chapter_streaming(size_t index, ParagraphSink sink, void* s
 
 ImageError Book::decode_image(uint16_t entry_index, DecodedImage& out, uint16_t max_w, uint16_t max_h,
                               uint8_t* work_buf, size_t work_buf_size) {
-  if (!images_enabled)
-    return ImageError::UnsupportedFormat;
   if (entry_index >= epub_.zip().entry_count())
     return ImageError::UnsupportedFormat;
 
@@ -144,14 +150,11 @@ bool Book::write_cover_bin(const char* cover_path, int max_w, int max_h,
 
   auto& entry = epub_.zip().entry(static_cast<uint16_t>(idx));
   DecodedImage img;  // data stays empty; width/height filled by decoder
-  const bool was_enabled = images_enabled;
-  images_enabled = true;
   auto err = decode_image_from_entry(file_, entry,
                                      static_cast<uint16_t>(max_w),
                                      static_cast<uint16_t>(max_h),
                                      img, work_buf, work_buf_size,
                                      /*scale_to_fill=*/false, &sink);
-  images_enabled = was_enabled;
 
   if (err != ImageError::Ok || !ctx.ok || img.width == 0 || img.height == 0) {
     std::fclose(f); std::remove(cover_path);
@@ -184,12 +187,99 @@ static std::string epub_stem_(const char* epub_path) {
   return dot ? std::string(name, static_cast<size_t>(dot - name)) : std::string(name);
 }
 
+static uint32_t path_hash_(const char* s) {
+  uint32_t h = 2166136261u;  // FNV-1a
+  for (; *s; ++s)
+    h = (h ^ static_cast<uint8_t>(*s)) * 16777619u;
+  return h;
+}
+
+static bool dir_exists_(const std::string& p) {
+  struct stat st;
+  return stat(p.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+std::string book_cache_dir(const char* epub_path, const char* data_dir) {
+  const std::string stem = epub_stem_(epub_path);
+  char tag[12];
+  std::snprintf(tag, sizeof(tag), "_%08x", static_cast<unsigned>(path_hash_(epub_path)));
+  const std::string cache_root = std::string(data_dir) + "/cache/";
+  std::string dir = cache_root + stem + tag;
+  // Caches from before 2.6 were keyed by file name alone. Adopt one on first
+  // use so existing conversions survive; "sleep" is the BMP sleep-image cache.
+  if (stem != "sleep" && !dir_exists_(dir)) {
+    const std::string legacy = cache_root + stem;
+    if (dir_exists_(legacy))
+      std::rename(legacy.c_str(), dir.c_str());
+  }
+  return dir;
+}
+
 std::string cover_bin_path(const char* epub_path, const char* data_dir) {
-  return std::string(data_dir) + "/cache/" + epub_stem_(epub_path) + "/cover.bin";
+  return book_cache_dir(epub_path, data_dir) + "/cover.bin";
 }
 
 std::string cover_sleep_bin_path(const char* epub_path, const char* data_dir) {
-  return std::string(data_dir) + "/cache/" + epub_stem_(epub_path) + "/cover_sleep.bin";
+  return book_cache_dir(epub_path, data_dir) + "/cover_sleep.bin";
+}
+
+void clear_book_cache_dir(const std::string& cache_dir) {
+#ifdef ESP_PLATFORM
+  if (DIR* d = opendir(cache_dir.c_str())) {
+    while (struct dirent* ent = readdir(d)) {
+      if (ent->d_name[0] == '.')
+        continue;
+      const std::string p = cache_dir + "/" + ent->d_name;
+      std::remove(p.c_str());
+    }
+    closedir(d);
+  }
+#else
+  std::error_code ec;
+  for (const auto& e : std::filesystem::directory_iterator(cache_dir, ec))
+    std::filesystem::remove(e.path(), ec);
+#endif
+}
+
+// src.txt holds "<size> <mtime>" of the EPUB the cache was built from.
+static std::string source_stamp_(const char* epub_path) {
+  struct stat st;
+  if (stat(epub_path, &st) != 0)
+    return {};
+  char buf[48];
+  std::snprintf(buf, sizeof(buf), "%lld %lld", static_cast<long long>(st.st_size),
+                static_cast<long long>(st.st_mtime));
+  return buf;
+}
+
+void stamp_book_cache(const char* epub_path, const std::string& cache_dir) {
+  const std::string stamp = source_stamp_(epub_path);
+  if (stamp.empty())
+    return;
+  if (FILE* f = std::fopen((cache_dir + "/src.txt").c_str(), "w")) {
+    std::fputs(stamp.c_str(), f);
+    std::fclose(f);
+  }
+}
+
+bool validate_book_cache(const char* epub_path, const std::string& cache_dir) {
+  const std::string stamp = source_stamp_(epub_path);
+  if (stamp.empty())
+    return true;  // EPUB unreadable; let the caller report it
+  char stored[48] = {};
+  FILE* f = std::fopen((cache_dir + "/src.txt").c_str(), "r");
+  if (!f) {
+    // Built before stamps existed (or just created): adopt the current file.
+    stamp_book_cache(epub_path, cache_dir);
+    return true;
+  }
+  const bool read_ok = std::fgets(stored, sizeof(stored), f) != nullptr;
+  std::fclose(f);
+  if (read_ok && stamp == stored)
+    return true;
+  MR_LOGI("book", "EPUB changed since conversion, clearing cache: %s", cache_dir.c_str());
+  clear_book_cache_dir(cache_dir);
+  return false;
 }
 
 }  // namespace microreader

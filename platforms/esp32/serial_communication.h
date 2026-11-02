@@ -25,6 +25,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
+#include <atomic>
 #include <cerrno>
 #include <cstdint>
 #include <cstdio>
@@ -45,6 +46,7 @@
 #include "esp_rom_crc.h"
 #include "font_partition.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include "freertos/task.h"
 
 static constexpr const char* kLutRxTag = "lut_rx";
@@ -60,17 +62,21 @@ static constexpr uint32_t kLutSize = 112;
 static constexpr uint32_t kLutFrameSize = 113;  // 1 byte type + 112 bytes LUT
 static constexpr uint8_t kAck = 0x06;           // flow-control ACK between chunks
 
-// LUT state: shared between receiver task and main loop.
+// Everything below is shared between the serial receiver task (producer) and
+// the main loop (consumer). Flags are std::atomic with release/acquire so the
+// data written before a flag is visible to the side that sees the flag.
+
+// LUT state. The receiver only writes g_lut_buf while g_lut_pending is false.
 static uint8_t g_lut_buf[kLutSize];
 static uint8_t g_lut_type = 0;
-static volatile bool g_lut_pending = false;
+static std::atomic<bool> g_lut_pending{false};
 
 // Button injection: OR'd into next poll_buttons before clearing.
-volatile uint8_t g_serial_buttons = 0;
+std::atomic<uint8_t> g_serial_buttons{0};
 
-// Single-slot command queue: only one path command can be pending at a time.
-// The serial receiver task writes path then sets type as the commit signal.
-// The main loop reads type, dispatches, then clears to None.
+// Single-slot command queue for commands the main loop must run (open book,
+// benchmarks). g_cmd_path is scratch the receiver reuses for every command, so
+// a queued command keeps its own copy in g_queued_cmd_path.
 enum class SerialCmdType : uint8_t {
   None = 0,
   Open,
@@ -82,43 +88,50 @@ enum class SerialCmdType : uint8_t {
   RenderBench
 };
 static char g_cmd_path[256];
-static volatile SerialCmdType g_cmd_type = SerialCmdType::None;
+static char g_queued_cmd_path[256];
+static std::atomic<SerialCmdType> g_cmd_type{SerialCmdType::None};
 
 // Set when a font has been uploaded to the partition and needs re-mmap.
-static volatile bool g_font_uploaded = false;
+static std::atomic<bool> g_font_uploaded{false};
 
-// Single-slot SPSC queue for index mutations triggered by serial commands
-// (upload via 'W' magic-EPUB, delete via 'R', rename via 'N'). The receiver
-// task is the producer; the main loop is the consumer. Single slot is enough
-// because the host always waits for the "OK\n" response between operations,
-// and the main loop dequeues before processing (so the slot is free quickly).
-// If a second op arrives while the slot is still occupied, it is dropped with
-// a warning â€” the file on SD is unchanged, only the index entry is missed;
-// recoverable via "Rebuild Book Index" in Settings.
-//
-// Memory ordering: producer writes path_a/path_b THEN sets g_index_op (commit).
-// Consumer reads g_index_op, copies paths to locals, THEN clears g_index_op.
-// Volatile is sufficient on ESP32 (32-bit atomic reads/writes) and matches
-// the pattern already used by g_cmd_type/g_cmd_path above.
+// Queue of book-index mutations (upload, delete, rename) for the main loop,
+// which owns BookIndex. The main loop may defer an entry (e.g. while a book is
+// open), so the queue holds several; a full queue is reported to the host.
 enum class SerialIndexOp : uint8_t { None, Add, Remove, Rename };
-static volatile SerialIndexOp g_index_op = SerialIndexOp::None;
-static char g_index_path_a[256];  // Add/Remove: the path. Rename: src.
-static char g_index_path_b[256];  // Rename: dst.
+struct SerialIndexMsg {
+  SerialIndexOp op;
+  char a[256];  // Add/Remove: the path. Rename: src.
+  char b[256];  // Rename: dst.
+};
+static constexpr UBaseType_t kIndexQueueDepth = 8;
+static QueueHandle_t g_index_queue = nullptr;
 
-inline void request_index_op(SerialIndexOp op, const char* a, const char* b = nullptr) {
-  if (g_index_op != SerialIndexOp::None) {
-    ESP_LOGW(kCmdTag, "index op dropped (slot busy): op=%u path=%s", (unsigned)op, a ? a : "(null)");
-    return;  // drop
+inline bool request_index_op(SerialIndexOp op, const char* a, const char* b = nullptr) {
+  if (!g_index_queue)
+    return false;
+  SerialIndexMsg msg{};
+  msg.op = op;
+  if (a)
+    strncpy(msg.a, a, sizeof(msg.a) - 1);
+  if (b)
+    strncpy(msg.b, b, sizeof(msg.b) - 1);
+  if (xQueueSend(g_index_queue, &msg, pdMS_TO_TICKS(2000)) != pdTRUE) {
+    ESP_LOGW(kCmdTag, "index queue full: op=%u path=%s", (unsigned)op, a ? a : "(null)");
+    return false;
   }
-  if (a) {
-    strncpy(g_index_path_a, a, sizeof(g_index_path_a) - 1);
-    g_index_path_a[sizeof(g_index_path_a) - 1] = '\0';
-  }
-  if (b) {
-    strncpy(g_index_path_b, b, sizeof(g_index_path_b) - 1);
-    g_index_path_b[sizeof(g_index_path_b) - 1] = '\0';
-  }
-  g_index_op = op;  // commit
+  return true;
+}
+
+// Main loop: look at the oldest pending index op without removing it.
+inline bool serial_index_peek(SerialIndexMsg* out) {
+  return g_index_queue && xQueuePeek(g_index_queue, out, 0) == pdTRUE;
+}
+
+// Main loop: drop the op returned by the last successful serial_index_peek().
+inline void serial_index_pop() {
+  SerialIndexMsg discard;
+  if (g_index_queue)
+    xQueueReceive(g_index_queue, &discard, 0);
 }
 
 // Set while a chunked file upload (EPUB/SDFN/SIMG/FONT/CMND-W) is in
@@ -126,36 +139,52 @@ inline void request_index_op(SerialIndexOp op, const char* a, const char* b = nu
 // display SPI traffic (SPI2_HOST) from contending with SD-card fwrite()
 // (also SPI2_HOST). We also silence esp_log during this window so no log
 // line can interleave with 0x06 ACK bytes in the shared USB serial TX buffer.
-static volatile bool g_upload_in_progress = false;
+static std::atomic<bool> g_upload_in_progress{false};
 
 // Screen name of the top/active screen, updated once per main loop iteration.
 // Used by the serial 'Q' debug command.
 static char g_top_screen_name[32] = "unknown";
 
-// Call from the main loop. Returns true (and copies into `out`) when a fresh
-// LUT has been received since the last call.
-// Returns true and sets *type_out if a new LUT is available.
+// Call from the main loop. Returns true and copies the LUT (and its type) when
+// a fresh one has been received since the last call.
 inline bool serial_lut_take(uint8_t* out, uint8_t* type_out = nullptr) {
-  if (!g_lut_pending)
+  if (!g_lut_pending.load(std::memory_order_acquire))
     return false;
   memcpy(out, g_lut_buf, kLutSize);
   if (type_out)
     *type_out = g_lut_type;
-  g_lut_pending = false;
+  g_lut_pending.store(false, std::memory_order_release);
   return true;
 }
 
-// Call from the main loop. Returns the command type and sets *path_out to the
-// path string. Returns None (and leaves *path_out unchanged) if nothing pending.
-// Clears the pending state before returning.
-inline SerialCmdType serial_cmd_take(const char** path_out) {
-  SerialCmdType t = g_cmd_type;
+// Call from the main loop. Returns the pending command (None if nothing) and
+// copies its path into path_out.
+inline SerialCmdType serial_cmd_take(char* path_out, size_t path_out_size) {
+  const SerialCmdType t = g_cmd_type.load(std::memory_order_acquire);
   if (t == SerialCmdType::None)
     return SerialCmdType::None;
-  if (path_out)
-    *path_out = g_cmd_path;
-  g_cmd_type = SerialCmdType::None;
+  if (path_out && path_out_size > 0) {
+    strncpy(path_out, g_queued_cmd_path, path_out_size - 1);
+    path_out[path_out_size - 1] = '\0';
+  }
+  g_cmd_type.store(SerialCmdType::None, std::memory_order_release);
   return t;
+}
+
+// Receiver side: queue a main-loop command. Replies ERR:busy and returns false
+// if the previous command has not been taken yet.
+static void serial_write(const char* msg);
+static bool queue_cmd(SerialCmdType t, bool with_path) {
+  if (g_cmd_type.load(std::memory_order_acquire) != SerialCmdType::None) {
+    serial_write("ERR:busy\n");
+    return false;
+  }
+  if (with_path)
+    memcpy(g_queued_cmd_path, g_cmd_path, sizeof(g_queued_cmd_path));
+  else
+    g_queued_cmd_path[0] = '\0';
+  g_cmd_type.store(t, std::memory_order_release);
+  return true;
 }
 
 // Read exactly `n` bytes with a timeout. Returns true on success.
@@ -229,10 +258,100 @@ static void handle_lut_frame() {
     return;
   }
 
+  if (g_lut_pending.load(std::memory_order_acquire)) {
+    ESP_LOGW(kLutRxTag, "previous LUT not applied yet; dropping");
+    return;
+  }
   g_lut_type = payload[0];
   memcpy(g_lut_buf, payload + 1, kLutSize);
   ESP_LOGI(kLutRxTag, "OK: received LUT type %u (%lu bytes, CRC 0x%08lX)", g_lut_type, length, calc_crc);
-  g_lut_pending = true;
+  g_lut_pending.store(true, std::memory_order_release);
+}
+
+// ---------------------------------------------------------------------------
+// Receive `size` bytes (2 KB chunks, each ACKed with 0x06, then a CRC-32
+// trailer) into `<path>.part`, and swap it over `path` only once the CRC and
+// every SD write check out — a failed transfer never touches the existing file.
+// Sends READY first. On failure sends ERR:... and returns false; on success
+// returns true and leaves the final OK/ERR reply to the caller.
+// ---------------------------------------------------------------------------
+static bool receive_file_atomic(const char* path, uint32_t size) {
+  char part_path[262];
+  if (snprintf(part_path, sizeof(part_path), "%s.part", path) >= static_cast<int>(sizeof(part_path))) {
+    serial_write("ERR:path_too_long\n");
+    return false;
+  }
+  FILE* f = fopen(part_path, "wb");
+  if (!f) {
+    ESP_LOGE(kUpTag, "fopen failed: %s (errno=%d: %s)", part_path, errno, strerror(errno));
+    serial_write("ERR:fopen\n");
+    return false;
+  }
+
+  // Log before READY so the host's readline loop can skip it.
+  ESP_LOGI(kUpTag, "receiving '%s' (%lu bytes)", path, (unsigned long)size);
+  serial_write("READY\n");
+
+  // Silence logging and pause UI updates for the ACK-based transfer: a log byte
+  // in the USB TX stream would be read by the host as a bad ACK, and pausing
+  // the UI keeps display SPI traffic off the bus the SD card shares.
+  g_upload_in_progress.store(true);
+  esp_log_level_set("*", ESP_LOG_NONE);
+
+  auto fail = [&](const char* reply) {
+    g_upload_in_progress.store(false);
+    esp_log_level_set("*", ESP_LOG_INFO);
+    remove(part_path);
+    serial_write(reply);
+    return false;
+  };
+
+  uint32_t crc = 0;
+  uint32_t remaining = size;
+  bool write_ok = true;
+  static uint8_t chunk[2048];  // only the receiver task uploads; keeps it off the task stack
+  while (remaining > 0) {
+    const size_t want = remaining < sizeof(chunk) ? remaining : sizeof(chunk);
+    if (!serial_read_exact(chunk, want, 30000)) {
+      fclose(f);
+      ESP_LOGE(kUpTag, "timeout, %lu bytes remaining", (unsigned long)remaining);
+      return fail("ERR:timeout\n");
+    }
+    // Keep reading and ACKing after a write failure so the host stays in sync;
+    // the error is reported once the transfer ends.
+    if (write_ok && fwrite(chunk, 1, want, f) != want)
+      write_ok = false;
+    crc = esp_rom_crc32_le(crc, chunk, want);
+    remaining -= want;
+    serial_write_raw(&kAck, 1);
+  }
+  if (fclose(f) != 0)
+    write_ok = false;
+
+  uint8_t crc_buf[4];
+  if (!serial_read_exact(crc_buf, 4, 2000))
+    return fail("ERR:crc_missing\n");
+  const uint32_t expected = crc_buf[0] | (crc_buf[1] << 8) | (crc_buf[2] << 16) | (crc_buf[3] << 24);
+  if (crc != expected) {
+    ESP_LOGE(kUpTag, "CRC mismatch: got 0x%08lx, expected 0x%08lx", (unsigned long)crc, (unsigned long)expected);
+    return fail("ERR:crc\n");
+  }
+  if (!write_ok) {
+    ESP_LOGE(kUpTag, "SD write failed (card full?): %s", path);
+    return fail("ERR:write\n");
+  }
+
+  // FAT rename won't overwrite an existing file.
+  remove(path);
+  if (rename(part_path, path) != 0) {
+    ESP_LOGE(kUpTag, "rename failed: %s", path);
+    return fail("ERR:rename\n");
+  }
+
+  g_upload_in_progress.store(false);
+  esp_log_level_set("*", ESP_LOG_INFO);
+  ESP_LOGI(kUpTag, "saved %s (%lu bytes, CRC OK)", path, (unsigned long)size);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -267,79 +386,33 @@ static void handle_file_upload(const char* target_dir) {
   }
   uint32_t file_size = sz_buf[0] | (sz_buf[1] << 8) | (sz_buf[2] << 16) | (sz_buf[3] << 24);
 
-  // Build path
-  char path[256];
-  snprintf(path, sizeof(path), "%s/%s", target_dir, name);
-  mkdir(target_dir, 0775);
-
-  FILE* f = fopen(path, "wb");
-  if (!f) {
-    ESP_LOGE(kUpTag, "fopen failed: %s (errno=%d: %s)", path, errno, strerror(errno));
-    serial_write("ERR:fopen\n");
+  // The name must be a plain file name: no separators, not "." or "..", no control chars.
+  if (strchr(name, '/') || strchr(name, '\\') || strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
+    serial_write("ERR:name\n");
     return;
   }
-
-  // Log before READY so the host's readline loop can skip it.
-  ESP_LOGI(kUpTag, "receiving '%s' (%lu bytes)", name, (unsigned long)file_size);
-  serial_write("READY\n");
-
-  // Silence all ESP_LOG output and signal the main loop to pause UI updates
-  // for the duration of the ACK-based transfer. Any log bytes written to the
-  // shared USB serial TX buffer while the host expects a 0x06 ACK will be
-  // read as garbage (e.g. 'I' from ESP_LOGI) causing "Bad ACK" and abort.
-  // Pausing app.update() also prevents display SPI (SPI2_HOST) from
-  // contending with SD-card fwrite() (also SPI2_HOST).
-  g_upload_in_progress = true;
-  esp_log_level_set("*", ESP_LOG_NONE);
-
-  uint32_t crc = 0;
-  uint32_t remaining = file_size;
-  uint8_t chunk[2048];
-  while (remaining > 0) {
-    size_t want = remaining < sizeof(chunk) ? remaining : sizeof(chunk);
-    if (!serial_read_exact(chunk, want, 30000)) {
-      g_upload_in_progress = false;
-      esp_log_level_set("*", ESP_LOG_INFO);
-      ESP_LOGE(kUpTag, "timeout, %lu bytes remaining", (unsigned long)remaining);
-      fclose(f);
-      remove(path);
-      serial_write("ERR:timeout\n");
+  for (const char* p = name; *p; ++p) {
+    if (static_cast<unsigned char>(*p) < 0x20) {
+      serial_write("ERR:name\n");
       return;
     }
-    fwrite(chunk, 1, want, f);
-    crc = esp_rom_crc32_le(crc, chunk, want);
-    remaining -= want;
-    serial_write_raw(&kAck, 1);
-  }
-  fclose(f);
-
-  // Verify CRC.
-  uint8_t crc_buf[4];
-  if (!serial_read_exact(crc_buf, 4, 2000)) {
-    g_upload_in_progress = false;
-    esp_log_level_set("*", ESP_LOG_INFO);
-    remove(path);
-    serial_write("ERR:crc_missing\n");
-    return;
-  }
-  uint32_t expected = crc_buf[0] | (crc_buf[1] << 8) | (crc_buf[2] << 16) | (crc_buf[3] << 24);
-  if (crc != expected) {
-    g_upload_in_progress = false;
-    esp_log_level_set("*", ESP_LOG_INFO);
-    ESP_LOGE(kUpTag, "CRC mismatch: got 0x%08lx, expected 0x%08lx", (unsigned long)crc, (unsigned long)expected);
-    remove(path);
-    serial_write("ERR:crc\n");
-    return;
   }
 
-  g_upload_in_progress = false;
-  esp_log_level_set("*", ESP_LOG_INFO);
-  ESP_LOGI(kUpTag, "saved %s (%lu bytes, CRC OK)", path, (unsigned long)file_size);
+  char path[256];
+  if (snprintf(path, sizeof(path), "%s/%s", target_dir, name) >= static_cast<int>(sizeof(path))) {
+    serial_write("ERR:name\n");
+    return;
+  }
+  mkdir(target_dir, 0775);
+  if (!receive_file_atomic(path, file_size))
+    return;
+
   if (strcmp(target_dir, "/sdcard/books") == 0) {
-    // EPUB uploads go through request_index_op instead of touching BookIndex
-    // directly from this receiver task. The main loop will call index_file()
-    // which (via ensure_loaded_) merges with the existing on-disk index.
-    request_index_op(SerialIndexOp::Add, path);
+    // The main loop owns BookIndex; it calls index_file() for queued adds.
+    if (!request_index_op(SerialIndexOp::Add, path)) {
+      serial_write("ERR:index_queue_full\n");
+      return;
+    }
   }
   serial_write("OK\n");
 }
@@ -388,28 +461,33 @@ static void handle_font_upload() {
 
   ESP_LOGI(kUpTag, "receiving font (%lu bytes) â†’ spiffs partition", (unsigned long)file_size);
 
+  // Pause rendering before erasing: the current font is mapped from this partition.
+  g_upload_in_progress = true;
+
+  // Any failure after the erase leaves no usable font; flag it so the main loop
+  // re-checks the partition and drops the erased font instead of drawing from it.
+  auto fail = [](const char* msg) {
+    g_upload_in_progress = false;
+    esp_log_level_set("*", ESP_LOG_INFO);
+    g_font_uploaded = true;
+    serial_write(msg);
+  };
+
   // Erase needed sectors BEFORE signaling READY, so the host doesn't
   // start sending while we're busy erasing.
   size_t total = kFontPartHeaderSize + file_size;
   size_t erase_size = (total + 0xFFF) & ~0xFFF;
   if (esp_partition_erase_range(part, 0, erase_size) != ESP_OK) {
-    serial_write("ERR:erase\n");
+    fail("ERR:erase\n");
     return;
   }
 
-  // Write the header first (magic + size).
-  uint8_t header[kFontPartHeaderSize];
-  memcpy(header, kFontMagic, 4);
-  memcpy(header + 4, sz_buf, 4);
-  if (esp_partition_write(part, 0, header, sizeof(header)) != ESP_OK) {
-    serial_write("ERR:write_hdr\n");
-    return;
-  }
+  // The header is written last, after the CRC checks out, so an interrupted
+  // upload leaves an unrecognised partition rather than a "valid" corrupt font.
 
   // Now signal the host to start sending data.
   serial_write("READY\n");
 
-  g_upload_in_progress = true;
   esp_log_level_set("*", ESP_LOG_NONE);
 
   uint32_t crc = 0;
@@ -420,18 +498,14 @@ static void handle_font_upload() {
   while (remaining > 0) {
     size_t want = remaining < sizeof(chunk) ? remaining : sizeof(chunk);
     if (!serial_read_exact(chunk, want, 30000)) {
-      g_upload_in_progress = false;
-      esp_log_level_set("*", ESP_LOG_INFO);
+      fail("ERR:timeout\n");
       ESP_LOGE(kUpTag, "font upload timeout, %lu remaining", (unsigned long)remaining);
-      serial_write("ERR:timeout\n");
       return;
     }
     crc = esp_rom_crc32_le(crc, chunk, want);
 
     if (esp_partition_write(part, flash_offset, chunk, want) != ESP_OK) {
-      g_upload_in_progress = false;
-      esp_log_level_set("*", ESP_LOG_INFO);
-      serial_write("ERR:write\n");
+      fail("ERR:write\n");
       return;
     }
     flash_offset += want;
@@ -442,17 +516,25 @@ static void handle_font_upload() {
   // Verify CRC.
   uint8_t crc_buf[4];
   if (!serial_read_exact(crc_buf, 4, 2000)) {
-    g_upload_in_progress = false;
-    esp_log_level_set("*", ESP_LOG_INFO);
-    serial_write("ERR:crc_missing\n");
+    fail("ERR:crc_missing\n");
     return;
   }
   uint32_t expected = crc_buf[0] | (crc_buf[1] << 8) | (crc_buf[2] << 16) | (crc_buf[3] << 24);
   if (crc != expected) {
-    g_upload_in_progress = false;
-    esp_log_level_set("*", ESP_LOG_INFO);
+    fail("ERR:crc\n");
     ESP_LOGE(kUpTag, "font CRC mismatch: got 0x%08lx expected 0x%08lx", (unsigned long)crc, (unsigned long)expected);
-    serial_write("ERR:crc\n");
+    return;
+  }
+
+  // Data verified — now make the partition valid by writing the header.
+  // Static: 4 KB is too much for the 8 KB receiver-task stack.
+  static uint8_t header[kFontPartHeaderSize];
+  memset(header, 0xFF, sizeof(header));
+  memcpy(header, kFontMagic, 4);
+  memcpy(header + 4, sz_buf, 4);
+  memset(header + 8, 0, 4);  // CRC 0 marks a user-installed (non-embedded) font
+  if (esp_partition_write(part, 0, header, sizeof(header)) != ESP_OK) {
+    fail("ERR:write_hdr\n");
     return;
   }
 
@@ -527,7 +609,9 @@ static void remove_recursive(const char* path) {
   char child[300];
   while ((ent = readdir(d)) != nullptr) {
     if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) continue;
-    snprintf(child, sizeof(child), "%s/%s", path, ent->d_name);
+    // A truncated path would name a different file; skip rather than delete it.
+    if (snprintf(child, sizeof(child), "%s/%s", path, ent->d_name) >= static_cast<int>(sizeof(child)))
+      continue;
     if (ent->d_type == DT_DIR) {
       remove_recursive(child);
     } else {
@@ -552,7 +636,7 @@ static void handle_serial_cmd() {
         serial_write("ERR:btn_read\n");
         return;
       }
-      g_serial_buttons |= mask;
+      g_serial_buttons.fetch_or(mask);
       ESP_LOGI(kCmdTag, "button inject: 0x%02x", mask);
       serial_write("OK\n");
       break;
@@ -560,8 +644,8 @@ static void handle_serial_cmd() {
     case 'O': {
       if (!read_cmd_path("open"))
         return;
-      g_cmd_type = SerialCmdType::Open;
-      serial_write("OK\n");
+      if (queue_cmd(SerialCmdType::Open, true))
+        serial_write("OK\n");
       break;
     }
     case 'S': {
@@ -574,32 +658,13 @@ static void handle_serial_cmd() {
     case 'L': {
       // Response format: "path|title|author|size|mtime\n" per book.
       serial_write("BOOKS:\n");
-      const auto& bidx = microreader::BookIndex::instance();
-      const auto& entries = bidx.entries();
-      const auto& pool = bidx.pool();
-      if (!entries.empty()) {
-        char lbuf[800];
-        for (const auto& e : entries) {
-          auto pv = e.path.view(pool);
-          auto tv = e.title.view(pool);
-          auto av = e.author.view(pool);
-          // Get file size and modification time.
-          struct stat lst = {};
-          char path_c[256];
-          snprintf(path_c, sizeof(path_c), "%.*s", (int)pv.size(), pv.data());
-          stat(path_c, &lst);
-          snprintf(lbuf, sizeof(lbuf), "%.*s|%.*s|%.*s|%lu|%lu\n",
-                   (int)pv.size(), pv.data(),
-                   (int)tv.size(), tv.data(),
-                   (int)av.size(), av.data(),
-                   (unsigned long)lst.st_size,
-                   (unsigned long)lst.st_mtime);
-          serial_write(lbuf);
-        }
-      } else {
-        // Index not yet loaded â€” fall back to the on-disk file.
-        // File format: path|title|author|last_open_order; emit size/mtime from stat.
+      // Read the saved index file rather than the in-memory BookIndex, which
+      // the main loop may be mutating. Saves swap the file in with a rename, so
+      // fall back to the .tmp copy if the main file is momentarily absent.
+      {
         FILE* fidx = fopen("/sdcard/.microreader/book_index.dat", "r");
+        if (!fidx)
+          fidx = fopen("/sdcard/.microreader/book_index.dat.tmp", "r");
         if (fidx) {
           char line[1024];
           while (fgets(line, sizeof(line), fidx)) {
@@ -731,8 +796,10 @@ static void handle_serial_cmd() {
         // here. This avoids a data race with MainMenu::update() (which reads
         // entries_ from the main loop) and ensures ensure_loaded_() runs in
         // the right thread. Non-book paths (e.g. cache files) are ignored.
-        if (microreader::BookIndex::is_book_path(g_cmd_path)) {
-          request_index_op(SerialIndexOp::Remove, g_cmd_path);
+        if (microreader::BookIndex::is_book_path(g_cmd_path) &&
+            !request_index_op(SerialIndexOp::Remove, g_cmd_path)) {
+          serial_write("ERR:index_queue_full\n");
+          break;
         }
         serial_write("OK\n");
       } else {
@@ -744,39 +811,39 @@ static void handle_serial_cmd() {
     case 'X': {
       if (!read_cmd_path("bench"))
         return;
-      g_cmd_type = SerialCmdType::Bench;
-      serial_write("OK\n");
+      if (queue_cmd(SerialCmdType::Bench, true))
+        serial_write("OK\n");
       break;
     }
     case 'I': {
       if (!read_cmd_path("imgbench"))
         return;
-      g_cmd_type = SerialCmdType::ImgBench;
-      serial_write("OK\n");
+      if (queue_cmd(SerialCmdType::ImgBench, true))
+        serial_write("OK\n");
       break;
     }
     case 'D': {
       if (!read_cmd_path("imgdecode"))
         return;
-      g_cmd_type = SerialCmdType::ImgDecode;
-      serial_write("OK\n");
+      if (queue_cmd(SerialCmdType::ImgDecode, true))
+        serial_write("OK\n");
       break;
     }
     case 'G': {
-      // Flash erase+write benchmark â€” no path argument.
-      g_cmd_type = SerialCmdType::FlashBench;
-      serial_write("OK\n");
+      // Flash erase+write benchmark — no path argument.
+      if (queue_cmd(SerialCmdType::FlashBench, false))
+        serial_write("OK\n");
       break;
     }
     case 'F': {
-      g_cmd_type = SerialCmdType::InvalidateFont;
-      serial_write("FONT_INVALIDATED\n");
+      if (queue_cmd(SerialCmdType::InvalidateFont, false))
+        serial_write("FONT_INVALIDATED\n");
       break;
     }
     case 'P': {
       // Render benchmark on the currently open page (no path argument).
-      g_cmd_type = SerialCmdType::RenderBench;
-      serial_write("OK\n");
+      if (queue_cmd(SerialCmdType::RenderBench, false))
+        serial_write("OK\n");
       break;
     }
     case 'A': {
@@ -825,64 +892,25 @@ static void handle_serial_cmd() {
       // Format after 'W': 2-byte LE path_len + path + 4-byte LE size + [2KB chunks + 0x06 ACK] + 4-byte CRC32
       if (!read_cmd_path("write"))
         return;
-      if (strncmp(g_cmd_path, "/sdcard/", 8) != 0) {
+      // Must stay under /sdcard/ — no ".." path components.
+      if (strncmp(g_cmd_path, "/sdcard/", 8) != 0 || strstr(g_cmd_path, "/../") != nullptr ||
+          (strlen(g_cmd_path) >= 3 && strcmp(g_cmd_path + strlen(g_cmd_path) - 3, "/..") == 0)) {
         serial_write("ERR:invalid_path\n");
         return;
       }
       uint8_t wsz[4];
       if (!serial_read_exact(wsz, 4, 2000)) { serial_write("ERR:size\n"); return; }
       const uint32_t wfsize = wsz[0] | (wsz[1] << 8) | (wsz[2] << 16) | (wsz[3] << 24);
-      FILE* wf = fopen(g_cmd_path, "wb");
-      if (!wf) {
-        ESP_LOGE(kCmdTag, "write: fopen failed: %s (errno=%d)", g_cmd_path, errno);
-        serial_write("ERR:fopen\n");
+      if (!receive_file_atomic(g_cmd_path, wfsize))
         return;
+      // The Web Manager uploads EPUBs through 'W', so books are indexed here
+      // (by the main loop, which owns BookIndex) before replying.
+      if (microreader::BookIndex::is_book_path(g_cmd_path) &&
+          !request_index_op(SerialIndexOp::Add, g_cmd_path)) {
+        serial_write("ERR:index_queue_full\n");
+        break;
       }
-      ESP_LOGI(kCmdTag, "write: '%s' (%lu bytes)", g_cmd_path, (unsigned long)wfsize);
-      serial_write("READY\n");
-      g_upload_in_progress = true;
-      esp_log_level_set("*", ESP_LOG_NONE);
-      uint32_t wcrc = 0, wrem = wfsize;
-      uint8_t wchunk[2048];
-      while (wrem > 0) {
-        const size_t wwant = wrem < sizeof(wchunk) ? wrem : sizeof(wchunk);
-        if (!serial_read_exact(wchunk, wwant, 30000)) {
-          g_upload_in_progress = false;
-          esp_log_level_set("*", ESP_LOG_INFO);
-          ESP_LOGE(kCmdTag, "write: timeout, %lu remaining", (unsigned long)wrem);
-          fclose(wf); remove(g_cmd_path);
-          serial_write("ERR:timeout\n"); return;
-        }
-        fwrite(wchunk, 1, wwant, wf);
-        wcrc = esp_rom_crc32_le(wcrc, wchunk, wwant);
-        wrem -= wwant;
-        serial_write_raw(&kAck, 1);
-      }
-      fclose(wf);
-      uint8_t wcb[4];
-      if (!serial_read_exact(wcb, 4, 2000)) {
-        g_upload_in_progress = false;
-        esp_log_level_set("*", ESP_LOG_INFO);
-        remove(g_cmd_path); serial_write("ERR:crc_missing\n"); return;
-      }
-      const uint32_t wexp = wcb[0] | (wcb[1] << 8) | (wcb[2] << 16) | (wcb[3] << 24);
-      if (wcrc != wexp) {
-        g_upload_in_progress = false;
-        esp_log_level_set("*", ESP_LOG_INFO);
-        ESP_LOGE(kCmdTag, "write: CRC mismatch: got 0x%08lx expected 0x%08lx", (unsigned long)wcrc, (unsigned long)wexp);
-        remove(g_cmd_path); serial_write("ERR:crc\n"); return;
-      }
-      g_upload_in_progress = false;
-      esp_log_level_set("*", ESP_LOG_INFO);
-      ESP_LOGI(kCmdTag, "write: saved %s (%lu bytes, CRC OK)", g_cmd_path, (unsigned long)wfsize);
       serial_write("OK\n");
-      // If the file is a book under /sdcard/, schedule index update via the
-      // main loop. The Web Manager uploads EPUBs via this 'W' command rather
-      // than the EPUB magic, so without this hook newly uploaded books never
-      // appeared in the menu until a manual rebuild.
-      if (microreader::BookIndex::is_book_path(g_cmd_path)) {
-        request_index_op(SerialIndexOp::Add, g_cmd_path);
-      }
       break;
     }
     case 'K': {
@@ -915,14 +943,15 @@ static void handle_serial_cmd() {
         //   src non  + dst book  â†’ Add    (file became a book, e.g. .txt â†’ .epub)
         const bool src_is_book = microreader::BookIndex::is_book_path(nsrc);
         const bool dst_is_book = microreader::BookIndex::is_book_path(g_cmd_path);
+        bool queued = true;
         if (src_is_book && dst_is_book) {
-          request_index_op(SerialIndexOp::Rename, nsrc, g_cmd_path);
+          queued = request_index_op(SerialIndexOp::Rename, nsrc, g_cmd_path);
         } else if (src_is_book) {
-          request_index_op(SerialIndexOp::Remove, nsrc);
+          queued = request_index_op(SerialIndexOp::Remove, nsrc);
         } else if (dst_is_book) {
-          request_index_op(SerialIndexOp::Add, g_cmd_path);
+          queued = request_index_op(SerialIndexOp::Add, g_cmd_path);
         }
-        serial_write("OK\n");
+        serial_write(queued ? "OK\n" : "ERR:index_queue_full\n");
       } else {
         ESP_LOGE(kCmdTag, "rename failed: %s -> %s (errno=%d)", nsrc, g_cmd_path, errno);
         serial_write("ERR:rename_failed\n");
@@ -999,11 +1028,12 @@ static void handle_serial_cmd() {
     case 'Q': {
       // Debug: query active screen + index state.
       char buf[128];
+      // Debug only: the index counters are read racily from this task.
       snprintf(buf, sizeof(buf), "SCREEN:%s|ENTRIES:%zu|GEN:%llu|OP:%u\n",
                g_top_screen_name,
                microreader::BookIndex::instance().entries().size(),
                (unsigned long long)microreader::BookIndex::instance().generation(),
-               (unsigned)g_index_op);
+               g_index_queue ? (unsigned)uxQueueMessagesWaiting(g_index_queue) : 0u);
       serial_write(buf);
       break;
     }
@@ -1150,5 +1180,6 @@ inline void serial_start() {
   usb_serial_jtag_driver_install(&cfg);
   usb_serial_jtag_vfs_register();
 #endif
+  g_index_queue = xQueueCreate(kIndexQueueDepth, sizeof(SerialIndexMsg));
   xTaskCreate(serial_receiver_task, "serial_rx", 8192, nullptr, 3, nullptr);
 }

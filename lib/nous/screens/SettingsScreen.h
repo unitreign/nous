@@ -75,6 +75,7 @@ class SettingsScreen final : public ListMenuScreen {
   int idx_sleep_image_ = -1;
   int idx_sleep_text_ = -1;
   int idx_sunlight_fading_ = -1;
+  int idx_full_refresh_ = -1;
   int idx_reader_images_ = -1;
   int idx_battery_display_ = -1;
   int idx_sleep_timeout_ = -1;

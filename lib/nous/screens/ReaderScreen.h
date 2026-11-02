@@ -121,6 +121,7 @@ class ReaderScreen final : public IScreen {
   std::string book_cache_dir_;
   std::string mrb_path_;
   std::string pos_path_;       // path to .pos bookmark: <data_dir>/data/<book_key>.pos
+  uint32_t pos_seq_ = 0;       // sequence of the newest .pos slot; odd/even picks the slot to overwrite
   std::string book_key_;       // sanitized title (content-derived), drives .pos filename
   DrawBuffer* buf_ = nullptr;  // set in start(), cleared in stop()
   Book book_;
@@ -167,7 +168,6 @@ class ReaderScreen final : public IScreen {
   int saved_progress_pct_ = 0;
 
   // Returns the filename stem of path_ (no directory, no extension).
-  std::string book_stem_() const;
 
   bool decode_image_to_buffer_(uint16_t img_key, uint32_t offset, DrawBuffer& buf, int dest_x, int dest_y,
                                uint16_t max_w, uint16_t max_h, uint16_t src_y = 0, uint16_t clip_h = 0);

@@ -165,6 +165,7 @@ struct PageOptions {
   std::optional<Alignment> align_override;
   bool center_text = false;  // vertically center text content within the padded area
   bool override_publisher_fonts = false;
+  bool show_images = true;  // false: image paragraphs and inline images take no space
 
   PageOptions() = default;
   // Uniform padding constructor: sets all four sides to pad.
@@ -182,7 +183,8 @@ struct PageOptions {
     return width == o.width && height == o.height && padding_top == o.padding_top && padding_right == o.padding_right &&
            padding_bottom == o.padding_bottom && padding_left == o.padding_left && para_spacing == o.para_spacing &&
            line_height_multiplier_percent == o.line_height_multiplier_percent && align_override == o.align_override &&
-           center_text == o.center_text && override_publisher_fonts == o.override_publisher_fonts;
+           center_text == o.center_text && override_publisher_fonts == o.override_publisher_fonts &&
+           show_images == o.show_images;
   }
 };
 

@@ -82,9 +82,9 @@ void ConvertAllScreen::scan_entries_() {
     e.title = std::string(bk.title.view(pool));
     if (e.title.empty()) e.title = derive_stem_(e.path);
 
-    const std::string mrb_path   = std::string(app_->data_dir_) + "/cache/" +
-                                   derive_stem_(e.path) + "/book.mrb";
-    const std::string cover_path = cover_bin_path(e.path.c_str(), app_->data_dir_);
+    const std::string cache_dir  = book_cache_dir(e.path.c_str(), app_->data_dir_);
+    const std::string mrb_path   = cache_dir + "/book.mrb";
+    const std::string cover_path = cache_dir + "/cover.bin";
 
     FILE* mf = std::fopen(mrb_path.c_str(), "rb");
     if (mf) { std::fclose(mf); e.converted = true; }
@@ -229,11 +229,10 @@ void ConvertAllScreen::do_convert_path_(const std::string& path, const std::stri
                                          DrawBuffer& buf, IRuntime& runtime) {
   if (!app_) return;
 
-  const std::string stem       = derive_stem_(path);
-  const std::string cache_dir  = std::string(app_->data_dir_) + "/cache/" + stem;
+  const std::string cache_dir  = book_cache_dir(path.c_str(), app_->data_dir_);
   const std::string mrb_path   = cache_dir + "/book.mrb";
-  const std::string cover_path = cover_bin_path(path.c_str(), app_->data_dir_);
-  const std::string sleep_path = cover_sleep_bin_path(path.c_str(), app_->data_dir_);
+  const std::string cover_path = cache_dir + "/cover.bin";
+  const std::string sleep_path = cache_dir + "/cover_sleep.bin";
 
   CLOG("=== do_convert_path_ START: %s", path.c_str());
   CLOG_HEAP("CAS-start");
@@ -324,6 +323,8 @@ void ConvertAllScreen::do_convert_path_(const std::string& path, const std::stri
           &css_cache);
       CLOG("[CAS] convert returned %s", conv_ok ? "OK" : "FAIL");
       CLOG_HEAP("CAS-post-convert");
+      if (conv_ok)
+        stamp_book_cache(path.c_str(), cache_dir);
     }
     book.close();
   }
@@ -333,19 +334,14 @@ void ConvertAllScreen::do_convert_path_(const std::string& path, const std::stri
 
 void ConvertAllScreen::do_delete_(int idx, DrawBuffer& buf, IRuntime& runtime) {
   if (!app_) return;
-  const std::string path       = entries_[idx].path;
-  const std::string stem       = derive_stem_(path);
-  const std::string cache_dir  = std::string(app_->data_dir_) + "/cache/" + stem;
-  const std::string mrb_path   = cache_dir + "/book.mrb";
-  const std::string cover_path = cover_bin_path(path.c_str(), app_->data_dir_);
-  const std::string sleep_path = cover_sleep_bin_path(path.c_str(), app_->data_dir_);
+  const std::string path      = entries_[idx].path;
+  const std::string cache_dir = book_cache_dir(path.c_str(), app_->data_dir_);
 
   buf.sync_bw_ram();
   buf.show_loading("Deleting...", 0);
 
-  std::remove(mrb_path.c_str());
-  std::remove(cover_path.c_str());
-  std::remove(sleep_path.c_str());
+  // Clears image caches too, so the directory is empty and rmdir succeeds.
+  clear_book_cache_dir(cache_dir);
 #ifdef ESP_PLATFORM
   ::rmdir(cache_dir.c_str());
 #else

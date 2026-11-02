@@ -173,45 +173,31 @@ extern "C" void app_main(void) {
 #endif
 
     // Check if a new font was uploaded via serial.
-    if (g_font_uploaded) {
-      g_font_uploaded = false;
+    if (g_font_uploaded.exchange(false)) {
       font_mgr.on_serial_upload();
     }
 
-    // Process pending index mutation (upload via EPUB magic or 'W' command,
-    // delete via 'R', rename via 'N'). Single-slot SPSC queue: receiver task
-    // is the producer, this loop is the consumer.
+    // Process pending index mutations (uploads, 'R' deletes, 'N' renames)
+    // queued by the serial receiver task. This loop owns BookIndex.
     //
-    // Deferral rules:
-    //   (A) Add/Rename ops use scratch buffers (Book::open) â€” defer when
+    // Deferral rules (the op stays at the head of the queue and is retried):
+    //   (A) Add/Rename use scratch buffers (Book::open) — defer while the
     //       Reader is the top screen (it owns those buffers for rendering).
-    //   (C) ALL ops do SD card I/O (fopen/fprintf in save/load) which shares
-    //       SPI2_HOST with the display. Defer when the EPD hardware is
-    //       mid-refresh (DMA reading from framebuffer). This prevents SPI
-    //       contention that corrupts the display during SD card writes.
-    if (g_index_op != SerialIndexOp::None) {
-      const SerialIndexOp op = g_index_op;
+    //   (C) All ops do SD I/O on the bus the display shares — defer while the
+    //       EPD is mid-refresh.
+    static SerialIndexMsg index_msg;  // 513 bytes; static keeps it off the loop's stack frame
+    if (serial_index_peek(&index_msg)) {
+      const SerialIndexOp op = index_msg.op;
       const bool needs_scratch = (op == SerialIndexOp::Add || op == SerialIndexOp::Rename);
       const bool reader_active = app.is_reader_active();
       const bool epd_busy = epd.is_busy();
       const bool defer = (needs_scratch && reader_active) || epd_busy;
 
-      ESP_LOGI("main", "index_op: op=%u needs_scratch=%d reader_active=%d epd_busy=%d defer=%d",
-               (unsigned)op, (int)needs_scratch, (int)reader_active, (int)epd_busy, (int)defer);
-
-      if (defer) {
-        // Leave the slot occupied; retry next iteration. The main loop
-        // continues to run (UI updates, serial commands) between retries.
-      } else {
-        // Copy paths to locals BEFORE clearing the slot â€” minimizes the window
-        // in which a new op would be dropped.
-        char path_a[256];
-        char path_b[256];
-        strncpy(path_a, g_index_path_a, sizeof(path_a) - 1);
-        path_a[sizeof(path_a) - 1] = '\0';
-        strncpy(path_b, g_index_path_b, sizeof(path_b) - 1);
-        path_b[sizeof(path_b) - 1] = '\0';
-        g_index_op = SerialIndexOp::None;  // free slot before processing
+      if (!defer) {
+        serial_index_pop();
+        const char* path_a = index_msg.a;
+        const char* path_b = index_msg.b;
+        ESP_LOGI("main", "index_op: op=%u path=%s", (unsigned)op, path_a);
 
         constexpr const char* kDataDir = "/sdcard/.microreader";
         const std::string index_path = std::string(kDataDir) + "/book_index.dat";
@@ -260,9 +246,13 @@ extern "C" void app_main(void) {
 
     // Dispatch serial path commands (open book, benchmarks).
     {
-      const char* cmd_path = nullptr;
-      switch (serial_cmd_take(&cmd_path)) {
+      static char cmd_path[256];
+      switch (serial_cmd_take(cmd_path, sizeof(cmd_path))) {
         case SerialCmdType::Open:
+          if (app.is_reader_active()) {
+            ESP_LOGW("main", "serial open ignored: a book is already open");
+            break;
+          }
           app.auto_open_book(cmd_path, buf, runtime);
           // auto_open_book pushes the Reader and renders the page into the
           // inactive buffer, but does not commit it. We must refresh here to

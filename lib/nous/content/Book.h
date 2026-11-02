@@ -71,7 +71,6 @@ class Book {
   // work_buf: optional caller-provided scratch (>= ZipEntryInput::kMinWorkBufSize).
   //   On ESP32, pass queue.scratch_buf1() to avoid a 45 KB heap allocation.
   //   If nullptr (or too small), the buffer is heap-allocated internally.
-  // Returns UnsupportedFormat if images_enabled is false.
   ImageError decode_image(uint16_t entry_index, DecodedImage& out, uint16_t max_w = 0, uint16_t max_h = 0,
                           uint8_t* work_buf = nullptr, size_t work_buf_size = 0);
 
@@ -112,12 +111,25 @@ class Book {
   bool file_open_ = false;
 };
 
-// Derive the cover.bin path for an epub file (small display thumbnail).
-// Returns: {data_dir}/cache/{epub_stem}/cover.bin
+// Per-book cache directory: {data_dir}/cache/{epub_stem}_{hash of full path}.
+// Keyed by the full path so same-named books in different folders don't share
+// a cache. Renames a pre-2.6 {epub_stem} directory into place on first use.
+std::string book_cache_dir(const char* epub_path, const char* data_dir);
+
+// Small display thumbnail: {book_cache_dir}/cover.bin
 std::string cover_bin_path(const char* epub_path, const char* data_dir);
 
-// Derive the cover_sleep.bin path for an epub file (full-res sleep screen).
-// Returns: {data_dir}/cache/{epub_stem}/cover_sleep.bin
+// Full-res sleep-screen cover: {book_cache_dir}/cover_sleep.bin
 std::string cover_sleep_bin_path(const char* epub_path, const char* data_dir);
+
+// Remove every file in a book's cache directory (book.mrb, covers, image caches).
+void clear_book_cache_dir(const std::string& cache_dir);
+
+// Record the EPUB's size and modification time in the cache directory.
+void stamp_book_cache(const char* epub_path, const std::string& cache_dir);
+
+// False (after clearing the cache) if the EPUB changed since the cache was
+// stamped. A cache with no stamp is adopted and stamped.
+bool validate_book_cache(const char* epub_path, const std::string& cache_dir);
 
 }  // namespace microreader

@@ -100,6 +100,9 @@ class BookIndex {
   // Loads from index_path if entries_ is empty, preventing .dat truncation
   // when a mutation arrives after MainMenu::stop() cleared in-memory state.
   void ensure_loaded_(const std::string& index_path);
+
+  // Erase entries_[i], keeping scanned_count_ consistent.
+  void erase_at_(size_t i);
 };
 
 }  // namespace microreader

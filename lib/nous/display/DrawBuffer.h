@@ -99,6 +99,12 @@ class IDisplay {
     return false;
   }
 
+  // False when the panel can't run the reader's anti-aliasing grayscale pass;
+  // the reader then shows plain black-and-white text.
+  virtual bool supports_grayscale() const {
+    return true;
+  }
+
   // Returns true if the display hardware is currently busy refreshing.
   // Default: always ready. Platforms may override for non-blocking region updates.
   virtual bool is_busy() const {
@@ -520,8 +526,13 @@ class DrawBuffer {
   // -- Display operations
   // --------------------------------------------------
 
-  // Swap active<->inactive, then do a partial hardware refresh.
+  // Swap active<->inactive, then do a partial hardware refresh (or a full one
+  // if request_full_refresh() was called since the last full refresh).
   void refresh() {
+    if (full_refresh_requested_) {
+      full_refresh(RefreshMode::Full);
+      return;
+    }
     display_.partial_refresh(inactive_(), active_());
     active_idx_ = 1 - active_idx_;
     active_valid_ = true;
@@ -529,10 +540,16 @@ class DrawBuffer {
 
   // Call full hardware refresh using the current inactive buffer, then sync both.
   void full_refresh(RefreshMode mode = RefreshMode::Half, bool turnOffScreen = false) {
+    full_refresh_requested_ = false;
     display_.full_refresh(inactive_(), mode, turnOffScreen || sunlight_fading_fix_);
     memcpy(bufs_[active_idx_], bufs_[1 - active_idx_], kBufSize);
     active_idx_ = 1 - active_idx_;
     active_valid_ = true;
+  }
+
+  // Make the next refresh() a full refresh (clears accumulated ghosting).
+  void request_full_refresh() {
+    full_refresh_requested_ = true;
   }
 
   // Put the display into deep sleep (low-power mode). Call after a full refresh.
@@ -878,6 +895,7 @@ class DrawBuffer {
   bool active_valid_ = true;  // false after reset_after_scratch(); restored by refresh()/full_refresh()
   Rotation rotation_ = Rotation::Deg90;
   bool sunlight_fading_fix_ = false;
+  bool full_refresh_requested_ = false;
 
   uint8_t* inactive_() {
     return bufs_[1 - active_idx_];

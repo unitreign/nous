@@ -227,6 +227,14 @@ class Application {
   uint8_t sleep_timeout_min() const { return sleep_timeout_min_; }
   void set_sleep_timeout_min(uint8_t v) { sleep_timeout_min_ = v; save_settings_(); }
 
+  // Periodic full refresh to clear ghosting: 0 = never, else minutes of screen-on time.
+  uint8_t full_refresh_min() const { return full_refresh_min_; }
+  void set_full_refresh_min(uint8_t v) {
+    full_refresh_min_ = v;
+    full_refresh_elapsed_ms_ = 0;
+    save_settings_();
+  }
+
   PowerShortPress power_short_press() const { return power_short_press_; }
   void set_power_short_press(PowerShortPress v) { power_short_press_ = v; save_settings_(); }
 
@@ -400,6 +408,8 @@ class Application {
   uint8_t battery_display_ = 0;  // 0=icon, 1=number, 2=both
   uint8_t list_align_ = 0;       // 0=center, 1=left, 2=right
   uint8_t sleep_timeout_min_ = 10;  // 0=off, else minutes until auto-sleep
+  uint8_t full_refresh_min_ = 0;    // 0=never, else minutes of screen-on time between full refreshes
+  uint32_t full_refresh_elapsed_ms_ = 0;
   uint8_t menu_theme_ = 4;       // 4=Lyra default
   uint8_t selector_style_ = 0;  // 0=Block, 1=Dot, 2=Corner
 

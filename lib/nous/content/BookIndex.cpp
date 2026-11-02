@@ -189,9 +189,18 @@ bool BookIndex::load(const std::string& index_file) {
   }
 
   std::fclose(f);
+  if (scanned_count_ > entries_.size())
+    scanned_count_ = static_cast<uint32_t>(entries_.size());
   if (needs_rebuild)
     return false;
   return true;
+}
+
+void BookIndex::erase_at_(size_t i) {
+  // Entries [0, scanned_count_) have had their series read; keep that prefix exact.
+  if (i < scanned_count_)
+    --scanned_count_;
+  entries_.erase(entries_.begin() + static_cast<std::ptrdiff_t>(i));
 }
 
 bool BookIndex::save(const std::string& index_file) const {
@@ -277,8 +286,23 @@ bool BookIndex::index_file(const std::string& path, const std::string& index_pat
   auto meta = book.metadata();
   const std::string author = meta.author.value_or("");
   ensure_loaded_(index_path);
-  remove_entry(path);
-  add_entry(path, meta.title, author);
+  // A re-uploaded book keeps its reading stats and recency. It is re-appended
+  // (unscanned) so its series metadata is read again on the next scan.
+  BookIndexEntry old{};
+  bool had_old = false;
+  for (size_t i = 0; i < entries_.size(); ++i) {
+    if (entries_[i].path.view(pool_) == path) {
+      old = entries_[i];
+      had_old = true;
+      erase_at_(i);
+      break;
+    }
+  }
+  if (had_old)
+    add_entry(path, meta.title, author, old.last_open_order, old.read_time_ms, old.times_opened, old.page_turns,
+              old.progress_pct, old.chapter_count, old.time_left_ms, old.total_chars);
+  else
+    add_entry(path, meta.title, author);
   MR_LOGI("index", "index_file: added '%s' (entries=%zu)", path.c_str(), entries_.size());
   ++generation_;
   return save(index_path);
@@ -293,7 +317,7 @@ bool BookIndex::remove_path(const std::string& path, const std::string& index_pa
     return true;  // not indexed — nothing to do, no save needed
   }
   MR_LOGI("index", "remove_path: removing '%s'", path.c_str());
-  entries_.erase(it);
+  erase_at_(static_cast<size_t>(it - entries_.begin()));
   ++generation_;
   bool ok = save(index_path);
   if (!ok) MR_LOGE("index", "remove_path: save FAILED for '%s'", path.c_str());
@@ -315,7 +339,7 @@ void BookIndex::remove_entry(std::string_view path) {
   auto it = std::find_if(entries_.begin(), entries_.end(),
                          [&](const BookIndexEntry& e) { return e.path.view(pool_) == path; });
   if (it != entries_.end())
-    entries_.erase(it);
+    erase_at_(static_cast<size_t>(it - entries_.begin()));
 }
 
 void BookIndex::set_last_opened(std::string_view path, uint32_t order) {

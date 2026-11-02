@@ -49,6 +49,17 @@ static constexpr size_t kFontPartHeaderBytes = 12;   // bytes actually used in s
 struct FontPartition {
   const uint8_t* data = nullptr;  // mmapped pointer to FNTS bundle data
   size_t size = 0;                // FNTS bundle size in bytes
+  esp_partition_mmap_handle_t handle_ = 0;
+  bool mapped_ = false;
+
+  void unmap() {
+    if (mapped_) {
+      esp_partition_munmap(handle_);
+      mapped_ = false;
+    }
+    data = nullptr;
+    size = 0;
+  }
 
   // Find the spiffs partition.
   static const esp_partition_t* find() {
@@ -121,19 +132,9 @@ struct FontPartition {
       return false;
     }
 
-    uint8_t header[kFontPartHeaderSize];
-    memset(header, 0xFF, sizeof(header));
-    memcpy(header, kFontPartMagic, 4);
-    header[4] = file_size & 0xFF;
-    header[5] = (file_size >> 8) & 0xFF;
-    header[6] = (file_size >> 16) & 0xFF;
-    header[7] = (file_size >> 24) & 0xFF;
-    // CRC is 0 to distinguish it from the embedded built-in cache
-    if (esp_partition_write(part, 0, header, sizeof(header)) != ESP_OK) {
-      fclose(f);
-      return false;
-    }
-
+    // The header (with its magic) is written only after all data is in place, so
+    // an interrupted install leaves an erased, unrecognised partition rather
+    // than one that looks valid but holds garbage.
     size_t write_offset = kFontPartHeaderSize;
     long remaining = file_size;
 
@@ -170,7 +171,20 @@ struct FontPartition {
     if (own_write)
       free(write_buf_ext);
     fclose(f);
-    return success;
+    if (remaining > 0)  // short read from the SD card
+      success = false;
+    if (!success)
+      return false;
+
+    uint8_t header[kFontPartHeaderSize];
+    memset(header, 0xFF, sizeof(header));
+    memcpy(header, kFontPartMagic, 4);
+    header[4] = file_size & 0xFF;
+    header[5] = (file_size >> 8) & 0xFF;
+    header[6] = (file_size >> 16) & 0xFF;
+    header[7] = (file_size >> 24) & 0xFF;
+    // CRC is 0 to distinguish it from the embedded built-in cache
+    return esp_partition_write(part, 0, header, sizeof(header)) == ESP_OK;
   }
 
   // Stream-decompress zlib-compressed firmware font bytes and write them to
@@ -499,6 +513,10 @@ struct FontPartition {
       return false;
     }
 
+    // Release the previous mapping first; each map holds MMU pages from a small
+    // fixed pool. Callers reload their font set right after this returns.
+    unmap();
+
     // Memory-map the font data region.
     esp_partition_mmap_handle_t handle;
     const void* mapped = nullptr;
@@ -508,6 +526,8 @@ struct FontPartition {
       return false;
     }
 
+    handle_ = handle;
+    mapped_ = true;
     data = static_cast<const uint8_t*>(mapped);
     size = font_size;
     ESP_LOGI(kFontPartTag, "mmapped font: %lu bytes at %p", (unsigned long)font_size, mapped);

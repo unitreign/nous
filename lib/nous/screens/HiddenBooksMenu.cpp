@@ -6,6 +6,7 @@
 #include <string>
 
 #include "../Application.h"
+#include "../content/Book.h"
 
 #ifdef ESP_PLATFORM
 #include <dirent.h>
@@ -92,8 +93,7 @@ void HiddenBooksMenu::on_start() {
   for (const auto& p : paths_) {
     std::string label;
     if (check_mrb) {
-      std::string s = path_stem(p);
-      std::string mrb = std::string(app_->data_dir_) + "/cache/" + s + "/book.mrb";
+      const std::string mrb = book_cache_dir(p.c_str(), app_->data_dir_) + "/book.mrb";
       FILE* f = std::fopen(mrb.c_str(), "rb");
       if (f) { std::fclose(f); label = "* "; }
     }

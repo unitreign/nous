@@ -139,6 +139,13 @@ static std::string get_sleep_timeout_label(uint8_t min) {
 }
 
 
+static std::string get_full_refresh_label(uint8_t min) {
+  if (min == 0) return "Full Refresh: Never";
+  char buf[40];
+  std::snprintf(buf, sizeof(buf), "Full Refresh: Every %d min", static_cast<int>(min));
+  return buf;
+}
+
 static std::string get_font_label(const std::string& font_path) {
   std::string label = "Font: ";
   if (font_path == "Literata") {
@@ -232,6 +239,7 @@ void SettingsScreen::on_start() {
   idx_invert_side_ = idx_invert_side_reader_ = idx_power_short_ = -1;
   idx_series_view_ = idx_rotate_display_ = idx_reader_rotate_display_ = idx_menu_font_ = -1;
   idx_font_ = idx_sleep_image_ = idx_sleep_text_ = idx_reader_images_ = idx_sunlight_fading_ = -1;
+  idx_full_refresh_ = -1;
   idx_battery_display_ = idx_sleep_timeout_ = idx_convert_all_ = idx_debug_log_ = idx_theme_ = -1;
   idx_selector_style_ = -1;
   idx_ui_font_face_ = -1;
@@ -354,6 +362,9 @@ void SettingsScreen::on_start() {
   idx_sunlight_fading_ = count();
   add_item(std::string("Sunlight Fading Fix: ") + (app_ && app_->sunlight_fading_fix() ? "On" : "Off"));
 
+  idx_full_refresh_ = count();
+  add_item(get_full_refresh_label(app_ ? app_->full_refresh_min() : 0));
+
   if (!is_lyra_theme) {
     idx_battery_display_ = count();
     add_item(get_battery_display_label(app_ ? app_->battery_display() : 0));
@@ -440,8 +451,11 @@ void SettingsScreen::on_start() {
     if (next) {
       esp_ota_img_states_t state = ESP_OTA_IMG_UNDEFINED;
       esp_ota_get_state_partition(next, &state);
-      if (state == ESP_OTA_IMG_VALID || state == ESP_OTA_IMG_NEW || state == ESP_OTA_IMG_PENDING_VERIFY ||
-          state == ESP_OTA_IMG_UNDEFINED) {
+      // UNDEFINED also covers a never-flashed slot; only offer it when it holds an app image.
+      esp_app_desc_t desc{};
+      const bool has_app = esp_ota_get_partition_description(next, &desc) == ESP_OK;
+      if (has_app && (state == ESP_OTA_IMG_VALID || state == ESP_OTA_IMG_NEW ||
+                      state == ESP_OTA_IMG_PENDING_VERIFY || state == ESP_OTA_IMG_UNDEFINED)) {
         idx_switch_ota_ = count();
         char label[24];
         std::snprintf(label, sizeof(label), "Switch to %s", next->label);
@@ -695,6 +709,10 @@ void SettingsScreen::apply_picker_(int sel) {
     auto v = static_cast<uint8_t>(sel);
     app_->set_battery_display(v);
     set_item_label(idx_battery_display_, get_battery_display_label(v));
+  } else if (picker_target_ == idx_full_refresh_) {
+    const uint8_t v = (sel >= 0 && sel <= 6) ? static_cast<uint8_t>(sel * 5) : 0;  // Never, 5, 10, ... 30
+    app_->set_full_refresh_min(v);
+    set_item_label(idx_full_refresh_, get_full_refresh_label(v));
   } else if (picker_target_ == idx_sleep_timeout_) {
     static constexpr uint8_t kTimeouts[] = {0, 1, 3, 5, 10, 20, 30};
     uint8_t v = (sel >= 0 && sel < (int)sizeof(kTimeouts)) ? kTimeouts[sel] : 0;
@@ -810,6 +828,12 @@ void SettingsScreen::on_select(int index) {
       app_->set_sunlight_fading_fix(v);
       set_item_label(idx_sunlight_fading_, std::string("Sunlight Fading Fix: ") + (v ? "On" : "Off"));
     }
+    return;
+  }
+  if (index == idx_full_refresh_) {
+    open_picker_("Full Refresh", idx_full_refresh_,
+      {"Never", "Every 5 min", "Every 10 min", "Every 15 min", "Every 20 min", "Every 25 min", "Every 30 min"},
+      app_ ? app_->full_refresh_min() / 5 : 0);
     return;
   }
   if (index == idx_battery_display_) {
@@ -1000,8 +1024,12 @@ void SettingsScreen::on_select(int index) {
       static constexpr size_t kDecompSize = 11264;
       static constexpr size_t kWriteSize = 4096;
       uint8_t* work = static_cast<uint8_t*>(malloc(kDecompSize + kDictSize + kWriteSize));
-      if (work) {
-        esp_partition_erase_range(part, 0, part->size);
+      if (!work) {
+        buf_->show_loading("Not enough memory", 0);
+        return;
+      }
+      {
+        bool ok = esp_partition_erase_range(part, 0, part->size) == ESP_OK;
         if (buf_) buf_->show_loading("Writing...", 50);
 
         auto* decomp = reinterpret_cast<tinfl_decompressor*>(work);
@@ -1013,7 +1041,7 @@ void SettingsScreen::on_select(int index) {
         size_t flash_offset = 0;
         size_t dict_ofs = 0;
         tinfl_status status = TINFL_STATUS_HAS_MORE_OUTPUT;
-        while (status == TINFL_STATUS_HAS_MORE_OUTPUT || status == TINFL_STATUS_NEEDS_MORE_INPUT) {
+        while (ok && (status == TINFL_STATUS_HAS_MORE_OUTPUT || status == TINFL_STATUS_NEEDS_MORE_INPUT)) {
           size_t in_sz = in_left;
           size_t out_sz = kDictSize - dict_ofs;
           mz_uint32 flags = TINFL_FLAG_PARSE_ZLIB_HEADER;
@@ -1027,7 +1055,11 @@ void SettingsScreen::on_select(int index) {
             size_t chunk = produced - write_ofs;
             if (chunk > kWriteSize) chunk = kWriteSize;
             memcpy(wbuf, dict + dict_ofs + write_ofs, chunk);
-            esp_partition_write(part, flash_offset, wbuf, chunk);
+            if (flash_offset + chunk > part->size ||
+                esp_partition_write(part, flash_offset, wbuf, chunk) != ESP_OK) {
+              ok = false;
+              break;
+            }
             flash_offset += chunk;
             write_ofs += chunk;
           }
@@ -1035,7 +1067,16 @@ void SettingsScreen::on_select(int index) {
           if (status <= TINFL_STATUS_DONE) break;
         }
         free(work);
-        buf_->show_loading("Done!", 100);
+        if (ok && status == TINFL_STATUS_DONE) {
+          buf_->show_loading("Done!", 100);
+        } else {
+          // A half-written image could look like a valid font; erase the header
+          // sector so the boot path re-provisions the built-in font instead.
+          esp_partition_erase_range(part, 0, 4096);
+          ESP_LOGE("spiffs", "rebuild failed (ok=%d status=%d written=%u)", (int)ok, (int)status,
+                   (unsigned)flash_offset);
+          buf_->show_loading("Rebuild failed", 0);
+        }
         esp_restart();
       }
     }
@@ -1294,41 +1335,22 @@ void SettingsScreen::clear_cache_() {
 // ---------------------------------------------------------------------------
 
 #ifdef ESP_PLATFORM
-static esp_err_t force_switch_via_otadata_(const esp_partition_t* next) {
-  if (!next) return ESP_ERR_INVALID_ARG;
-  const esp_partition_t* otadata =
-      esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_OTA, nullptr);
-  if (!otadata) { ESP_LOGE("OTA", "otadata partition not found"); return ESP_ERR_NOT_FOUND; }
-
-  uint32_t seq = (next->subtype == ESP_PARTITION_SUBTYPE_APP_OTA_0) ? 1u : 2u;
-  uint8_t entry[32];
-  std::memset(entry, 0xFF, sizeof(entry));
-  std::memcpy(entry, &seq, 4);
-  uint32_t crc = esp_rom_crc32_le(UINT32_MAX, reinterpret_cast<const uint8_t*>(&seq), 4);
-  std::memcpy(entry + 28, &crc, 4);
-
-  esp_err_t err = esp_partition_erase_range(otadata, 0, otadata->size);
-  if (err != ESP_OK) { ESP_LOGE("OTA", "otadata erase failed: %s", esp_err_to_name(err)); return err; }
-  err = esp_partition_write(otadata, 0, entry, sizeof(entry));
-  if (err != ESP_OK) { ESP_LOGE("OTA", "otadata write failed: %s", esp_err_to_name(err)); return err; }
-  ESP_LOGW("OTA", "Forced boot slot via otadata write (seq=%u -> %s)", (unsigned)seq, next->label);
-  return ESP_OK;
-}
-
 void SettingsScreen::switch_ota_partition_() {
   auto running = esp_ota_get_running_partition();
   auto next = esp_ota_get_next_update_partition(running);
   if (!next) { ESP_LOGE("OTA", "No next OTA partition found, aborting"); return; }
 
+  // ESP-IDF validates the target image; if it refuses, booting it anyway could
+  // leave the device on a broken slot, so report and stay put.
   esp_err_t ret = esp_ota_set_boot_partition(next);
   if (ret == ESP_OK) { esp_restart(); return; }
 
-  ESP_LOGW("OTA", "esp_ota_set_boot_partition refused (%s); falling back to direct otadata write",
-           esp_err_to_name(ret));
-  if (force_switch_via_otadata_(next) == ESP_OK)
-    esp_restart();
-  else
-    ESP_LOGE("OTA", "Forced switch failed; staying on %s", running ? running->label : "running");
+  ESP_LOGE("OTA", "esp_ota_set_boot_partition refused (%s); staying on %s", esp_err_to_name(ret),
+           running ? running->label : "running");
+  toast_original_label_ = get_item_label(idx_switch_ota_);
+  toast_idx_ = idx_switch_ota_;
+  toast_frames_ = 25;
+  set_item_label(idx_switch_ota_, "Switch refused: invalid image");
 }
 #endif
 

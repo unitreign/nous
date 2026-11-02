@@ -569,7 +569,7 @@ const TextLayout::LaidOutParagraph& TextLayout::get_laid_out_(size_t pi) const {
         slot.block_height = font.y_advance();
         break;
       }
-      InlineImageInfo img = resolve_inline_image(para.text, cw, sp);
+      InlineImageInfo img = opts.show_images ? resolve_inline_image(para.text, cw, sp) : InlineImageInfo{};
       slot.inline_img = img;
       LayoutOptions lo;
       lo.width = cw;
@@ -627,10 +627,12 @@ const TextLayout::LaidOutParagraph& TextLayout::get_laid_out_(size_t pi) const {
       break;
     }
     case ParagraphType::Image: {
+      slot.img_key = para.image.key;
+      if (!opts.show_images)
+        break;  // laid out like an image of unknown size: no height, nothing drawn
       uint16_t w = para.image.attr_width, h = para.image.attr_height;
       if ((w == 0 || h == 0) && sp)
         sp(para.image.key, w, h);
-      slot.img_key = para.image.key;
       if (w > 0 && h > 0) {
         uint16_t x;
         scale_image(opts, cw, w, h, x);
@@ -1557,12 +1559,17 @@ PagePosition TextLayout::resolve_stable_position(PagePosition pos) const {
     return pos;
 
   const LaidOutParagraph& lp = get_laid_out_((size_t)pos.paragraph);
+  // A pixel offset into an image paragraph means nothing once images are hidden.
+  if (lp.type == ParagraphType::Image && lp.block_height == 0 && pos.offset > 0)
+    return {pos.paragraph, 0, 0};
   // Only adjust text paragraphs
   if (lp.type != ParagraphType::Text || lp.lines.empty())
     return pos;
 
-  // If we are mid-promoted-image, the pixel offset is stable enough.
-  if (lp.inline_img.promoted && lp.promoted_h > 0 && pos.offset < lp.promoted_h)
+  // If we are mid-promoted-image, the pixel offset is stable enough. A non-zero
+  // text_offset means the position is in the text after the image (e.g. it was
+  // saved with images hidden), so re-anchor by text below instead.
+  if (lp.inline_img.promoted && lp.promoted_h > 0 && pos.offset < lp.promoted_h && pos.text_offset == 0)
     return pos;
 
   // Find the last line that starts at or before the recorded offset.

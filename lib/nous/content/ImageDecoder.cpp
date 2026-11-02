@@ -19,8 +19,6 @@
 
 namespace microreader {
 
-bool images_enabled = true;
-
 // ---------------------------------------------------------------------------
 // Format detection
 // ---------------------------------------------------------------------------
@@ -450,9 +448,6 @@ ImageError decode_image(const uint8_t* /*data*/, size_t /*size*/, uint16_t /*max
 ImageError decode_image_from_entry(IZipFile& file, const ZipEntry& entry, uint16_t max_w, uint16_t max_h,
                                    DecodedImage& out, uint8_t* work_buf, size_t work_buf_size, bool scale_to_fill,
                                    ImageRowSink* sink, ImagePixelSink* pixel_sink) {
-  if (!images_enabled)
-    return ImageError::UnsupportedFormat;
-
   // Detect format from the entry filename extension (fast, no I/O).
   auto fmt = guess_format(std::string(entry.name).c_str());
   if (fmt == ImageFormat::Unknown) {

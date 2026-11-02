@@ -41,7 +41,7 @@ class FontManager : public microreader::FontManager {
   }
 
   void init() {
-    if (font_part_.mmap()) {
+    if (remap_()) {
       load_fonts_();
       if (font_set_.valid()) {
         for (int i = 0; i < microreader::kMaxFontSizes; i++) {
@@ -126,10 +126,12 @@ class FontManager : public microreader::FontManager {
       if (ok) {
         app_.set_installed_font_path(custom_font);
         buf.reset_after_scratch();
-        if (font_part_.mmap()) {
+        if (remap_()) {
           load_fonts_();
           app_.set_reader_font(font_set());
         }
+      } else {
+        drop_erased_font_();
       }
     } else {
       ESP_LOGI("font", "Provisioning font from SD card: %s", custom_font.c_str());
@@ -138,7 +140,7 @@ class FontManager : public microreader::FontManager {
           [&buf](int pct) { buf.show_loading("Installing fonts...", pct); });
       buf.reset_after_scratch();
       if (prov_ok) {
-        if (font_part_.mmap()) {
+        if (remap_()) {
           load_fonts_();
           if (font_set_.valid()) {
             app_.set_installed_font_path(custom_font);
@@ -152,24 +154,48 @@ class FontManager : public microreader::FontManager {
         ESP_LOGE("font", "SD card font provisioning failed: %s", custom_font.c_str());
         buf.show_loading("Font install failed!", 0);
         app_.set_custom_font_path(installed_font);
-        if (font_set_.valid())
-          app_.set_reader_font(font_set());
+        drop_erased_font_();
       }
     }
   }
 
   // Call in the main loop when g_font_uploaded is true (serial upload).
   void on_serial_upload() {
-    if (font_part_.mmap()) {
+    if (remap_()) {
       load_fonts_();
       if (font_set_.valid()) {
         ESP_LOGI("font", "re-loaded fonts after upload");
         app_.set_reader_font(font_set());
       }
+    } else {
+      ESP_LOGW("font", "font upload failed; partition erased, dropping current font");
+      drop_erased_font_();
     }
   }
 
  private:
+  // A failed install has already erased the partition the current font was
+  // mapped from. Drop it; the next ensure_ready() sees an invalid set and
+  // re-provisions the installed font.
+  void drop_erased_font_() {
+    font_part_.unmap();
+    load_fonts_();
+    app_.set_reader_font(nullptr);
+    app_.set_installed_font_path("");
+  }
+
+  // mmap() releases the previous mapping before remapping. If the new map then
+  // fails, drop the fonts that pointed into the old one rather than leave them dangling.
+  bool remap_() {
+    if (font_part_.mmap())
+      return true;
+    if (!font_part_.data) {
+      load_fonts_();
+      app_.set_reader_font(nullptr);
+    }
+    return false;
+  }
+
   void load_fonts_() {
     for (auto& f : prop_fonts_)
       f = microreader::BitmapFont();
@@ -179,7 +205,11 @@ class FontManager : public microreader::FontManager {
     const uint8_t* d = font_part_.data;
     size_t sz = font_part_.size;
 
-    if (sz < 40 || memcmp(d, "FNTS", 4) != 0 || d[5] != 2) {
+    if (!d || sz < 40) {
+      ESP_LOGE("font", "Invalid font partition (no data or too small: %u bytes)", (unsigned)sz);
+      return;
+    }
+    if (memcmp(d, "FNTS", 4) != 0 || d[5] != 2) {
       ESP_LOGE("font", "Invalid font partition (expected FNTS v2 bundle, got version %u)", d[5]);
       return;
     }
@@ -195,6 +225,10 @@ class FontManager : public microreader::FontManager {
     ESP_LOGI("font", "Bundle font: \"%s\" (v%u, %u sizes)", font_name, d[5], num);
 
     constexpr size_t kSizeTableOff = 8 + 32;
+    if (sz < kSizeTableOff + static_cast<size_t>(num) * 4) {
+      ESP_LOGE("font", "Font bundle truncated (size table past end)");
+      return;
+    }
     uint32_t sizes[microreader::kMaxFontSizes] = {};
     for (int i = 0; i < num; i++) {
       const uint8_t* p = d + kSizeTableOff + i * 4;
@@ -202,7 +236,7 @@ class FontManager : public microreader::FontManager {
     }
     size_t off = kSizeTableOff + static_cast<size_t>(num) * 4;
     for (int i = 0; i < num; i++) {
-      if (off + sizes[i] > sz)
+      if (sizes[i] > sz - off)
         break;
       load_font(d + off, sizes[i]);
       off += sizes[i];

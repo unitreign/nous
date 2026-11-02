@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "../Application.h"
+#include "../content/Book.h"
 #include "../content/BookIndex.h"
 
 #ifdef ESP_PLATFORM
@@ -319,12 +320,7 @@ void MainMenu::populate_list_() {
     e.read_time_ms = idx.read_time_ms;
     e.progress_pct = idx.progress_pct;
     if (check_mrb) {
-      const char* name = e.path.c_str();
-      const char* sep = std::strrchr(name, '/');
-      if (sep) name = sep + 1;
-      const char* dot = std::strrchr(name, '.');
-      std::string stem(name, dot ? static_cast<size_t>(dot - name) : std::strlen(name));
-      std::string mrb_path = std::string(app_->data_dir_) + "/cache/" + stem + "/book.mrb";
+      const std::string mrb_path = book_cache_dir(e.path.c_str(), app_->data_dir_) + "/book.mrb";
       FILE* mf = std::fopen(mrb_path.c_str(), "rb");
       if (mf) { std::fclose(mf); e.mrb_exists = true; }
     }

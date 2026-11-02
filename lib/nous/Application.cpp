@@ -89,9 +89,6 @@ void Application::start(DrawBuffer& buf, IRuntime& runtime) {
   // Apply persisted display rotation.
   buf.set_rotation(rotation_from_setting(rotate_display_));
 
-  // Apply persisted image toggle.
-  images_enabled = show_reader_images_;
-
   if (menu_theme_ == static_cast<uint8_t>(ListMenuScreen::MenuTheme::Lyra))
     screen_mgr_.push(&lyra_, buf, runtime);
   else if (menu_theme_ == static_cast<uint8_t>(ListMenuScreen::MenuTheme::LyraExt))
@@ -425,6 +422,16 @@ void Application::update(const ButtonState& buttons, uint32_t dt_ms, DrawBuffer&
   buttons_ = buttons;
   buf.set_sunlight_fading_fix(sunlight_fading_fix_);
 
+  // Periodic full refresh: once enough screen-on time has passed, the next
+  // screen update (page turn or menu move) is a full refresh that clears ghosting.
+  if (full_refresh_min_ > 0) {
+    full_refresh_elapsed_ms_ += dt_ms;
+    if (full_refresh_elapsed_ms_ >= static_cast<uint32_t>(full_refresh_min_) * 60u * 1000u) {
+      full_refresh_elapsed_ms_ = 0;
+      buf.request_full_refresh();
+    }
+  }
+
   // Inactivity / auto-sleep tracking
   if (buttons_.current != 0 || buttons_.pressed_latch != 0) {
     inactivity_ms_ = 0;
@@ -620,6 +627,7 @@ void microreader::Application::save_settings_() {
   std::fprintf(f, "show_reader_images=%u\n", show_reader_images_ ? 1u : 0u);
   std::fprintf(f, "battery_display=%u\n", static_cast<unsigned>(battery_display_));
   std::fprintf(f, "sleep_timeout_min=%u\n", static_cast<unsigned>(sleep_timeout_min_));
+  std::fprintf(f, "full_refresh_min=%u\n", static_cast<unsigned>(full_refresh_min_));
   std::fprintf(f, "menu_theme=%u\n", static_cast<unsigned>(menu_theme_));
   std::fprintf(f, "selector_style=%u\n", static_cast<unsigned>(selector_style_));
   std::fprintf(f, "sleep_text=%u\n", show_sleep_text_ ? 1u : 0u);
@@ -632,12 +640,21 @@ void microreader::Application::save_settings_() {
     return;
   }
 
+  // Rotate the .bak chain once per boot (keeping one known-good copy per
+  // session); later saves in the same session just swap the new file in.
+  // Load falls back to .tmp, then .bak.1, if a power cut lands between steps.
   static constexpr int kMaxBackups = 5;
-  std::remove((settings_path_ + ".bak." + std::to_string(kMaxBackups)).c_str());
-  for (int i = kMaxBackups - 1; i >= 1; --i)
-    std::rename((settings_path_ + ".bak." + std::to_string(i)).c_str(),
-                (settings_path_ + ".bak." + std::to_string(i + 1)).c_str());
-  std::rename(settings_path_.c_str(), (settings_path_ + ".bak.1").c_str());
+  static bool rotated_this_boot = false;
+  if (!rotated_this_boot) {
+    std::remove((settings_path_ + ".bak." + std::to_string(kMaxBackups)).c_str());
+    for (int i = kMaxBackups - 1; i >= 1; --i)
+      std::rename((settings_path_ + ".bak." + std::to_string(i)).c_str(),
+                  (settings_path_ + ".bak." + std::to_string(i + 1)).c_str());
+    std::rename(settings_path_.c_str(), (settings_path_ + ".bak.1").c_str());
+    rotated_this_boot = true;
+  } else {
+    std::remove(settings_path_.c_str());  // FAT rename won't overwrite
+  }
   std::rename(tmp_path.c_str(), settings_path_.c_str());
 }
 
@@ -655,7 +672,6 @@ void microreader::Application::set_selector_style(uint8_t v) {
 
 void microreader::Application::set_show_reader_images(bool v) {
   show_reader_images_ = v;
-  images_enabled = v;
   save_settings_();
 }
 
@@ -834,6 +850,8 @@ void microreader::Application::load_settings_() {
       battery_display_ = static_cast<uint8_t>(uval <= 2 ? uval : 0);
     else if (std::sscanf(line, "sleep_timeout_min=%u", &uval) == 1)
       sleep_timeout_min_ = static_cast<uint8_t>(uval <= 60 ? uval : 10);
+    else if (std::sscanf(line, "full_refresh_min=%u", &uval) == 1)
+      full_refresh_min_ = static_cast<uint8_t>(uval <= 30 && uval % 5 == 0 ? uval : 0);
     else if (std::sscanf(line, "menu_theme=%u", &uval) == 1)
       menu_theme_ = static_cast<uint8_t>(uval <= 7 ? uval : 0);
     else if (std::sscanf(line, "selector_style=%u", &uval) == 1)

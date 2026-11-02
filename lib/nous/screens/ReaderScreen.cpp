@@ -45,21 +45,6 @@ void ReaderScreen::tick_activity_() {
 // ReaderScreen — path helpers
 // ---------------------------------------------------------------------------
 
-std::string ReaderScreen::book_stem_() const {
-  const char* name = path_.c_str();
-  const char* sep = std::strrchr(name, '/');
-#ifdef _WIN32
-  const char* bsep = std::strrchr(name, '\\');
-  if (bsep && (!sep || bsep > sep))
-    sep = bsep;
-#endif
-  if (sep)
-    name = sep + 1;
-  const char* dot = std::strrchr(name, '.');
-  size_t len = dot ? static_cast<size_t>(dot - name) : std::strlen(name);
-  return std::string(name, len);
-}
-
 // ---------------------------------------------------------------------------
 // ReaderScreen — image size resolution
 // ---------------------------------------------------------------------------
@@ -69,9 +54,6 @@ std::string ReaderScreen::book_stem_() const {
 
 bool ReaderScreen::decode_image_to_buffer_(uint16_t img_key, uint32_t offset, DrawBuffer& buf, int dest_x, int dest_y,
                                            uint16_t max_w, uint16_t max_h, uint16_t src_y, uint16_t clip_h) {
-  if (!images_enabled)
-    return false;
-
   char cache_path[256];
   snprintf(cache_path, sizeof(cache_path), "%s/img_%u_%ux%u.bin", book_cache_dir_.c_str(),
            static_cast<unsigned>(img_key), static_cast<unsigned>(max_w), static_cast<unsigned>(max_h));
@@ -312,14 +294,15 @@ void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
     app_->font_manager()->ensure_ready(buf);
   MR_LOGI("reader", "font ready");
 
-  // Build cache path: <data_dir>/cache/<stem>/book.mrb
-  book_cache_dir_ = data_dir_ + "/cache/" + book_stem_();
+  book_cache_dir_ = book_cache_dir(path_.c_str(), data_dir_.c_str());
 #ifdef ESP_PLATFORM
   mkdir(book_cache_dir_.c_str(), 0775);
 #else
   std::filesystem::create_directories(book_cache_dir_);
 #endif
   mrb_path_ = book_cache_dir_ + "/book.mrb";
+  // A replaced EPUB (same path, different size/mtime) clears its stale cache here.
+  validate_book_cache(path_.c_str(), book_cache_dir_);
 
   MR_LOGI("reader", "mrb_path='%s'", mrb_path_.c_str());
   bool mrb_ok = mrb_.open(mrb_path_.c_str());
@@ -394,6 +377,7 @@ void ReaderScreen::start(DrawBuffer& buf, IRuntime& runtime) {
     ESP_LOGI("perf", "Conversion: %ldms  (open+convert=%ldms)", conv_ms, total_ms);
 #endif
     book_.close();
+    stamp_book_cache(path_.c_str(), book_cache_dir_);
 
     // Reset both display buffers to white after scratch use (conversion
     // corrupted them). render_page_ will fill the inactive buffer fresh.
@@ -819,6 +803,8 @@ void ReaderScreen::render_page_(DrawBuffer& buf) {
   opts.line_height_multiplier_percent = reader_settings_.line_height_multiplier_percent();
   opts.center_text = true;
   opts.override_publisher_fonts = reader_settings_.override_publisher_fonts;
+  // "Show Images" only controls display; decoding/caching never checks it.
+  opts.show_images = !app_ || app_->show_reader_images();
   layout_engine_.set_font(font);
   layout_engine_.set_options(opts);
   page_pos_ = layout_engine_.resolve_stable_position(page_pos_);
@@ -873,7 +859,7 @@ void ReaderScreen::render_page_(DrawBuffer& buf) {
   }
 
   // Track whether grayscale pass is needed (deferred to update()).
-  grayscale_pending_ = fset && fset->has_grayscale();
+  grayscale_pending_ = fset && fset->has_grayscale() && buf.display().supports_grayscale();
 
   // ── BW rendering
   // ────────────────────────────────────────────────────────
@@ -913,10 +899,9 @@ void ReaderScreen::render_page_(DrawBuffer& buf) {
   }
 
   for (const auto& itd : images) {
-    if (!decode_image_to_buffer_(itd.key, itd.offset, buf, itd.x, itd.y, static_cast<uint16_t>(itd.w),
-                                 static_cast<uint16_t>(itd.h), itd.src_y, itd.clip_h)) {
-      buf.fill_rect(itd.x, itd.y, itd.w, itd.h, false);
-    }
+    // A failed decode leaves the image box blank (white) rather than painting it black.
+    decode_image_to_buffer_(itd.key, itd.offset, buf, itd.x, itd.y, static_cast<uint16_t>(itd.w),
+                            static_cast<uint16_t>(itd.h), itd.src_y, itd.clip_h);
   }
 
   draw_bottom_(buf, landscape);
@@ -1165,41 +1150,156 @@ bool ReaderScreen::prev_page_() {
 // Bookmark persistence
 // ---------------------------------------------------------------------------
 
+// .pos layout: two fixed slots, one per 512-byte sector, written alternately in
+// place. A save only ever rewrites the older slot, so a power cut mid-write can
+// damage at most that sector; the other still holds the previous position.
+// No temp files or renames, so saving on every page turn stays cheap.
+namespace {
+constexpr uint32_t kPosMagic = 0x534F504Eu;  // "NPOS"
+constexpr long kPosSlotStride = 512;
+constexpr size_t kPosSlotBytes = 64;
+
+struct PosRecord {
+  uint32_t seq = 0;
+  uint32_t chapter = 0, paragraph = 0, offset = 0, text_offset = 0;
+  uint32_t times_opened = 0;
+  uint64_t reading_ms = 0;
+  uint32_t page_turns = 0;
+  int32_t progress_pct = 0;
+  uint64_t time_left_ms = 0;
+  uint32_t chapter_count = 0;
+};
+
+uint32_t pos_crc32(const uint8_t* d, size_t n) {
+  uint32_t c = 0xFFFFFFFFu;
+  for (size_t i = 0; i < n; ++i) {
+    c ^= d[i];
+    for (int k = 0; k < 8; ++k)
+      c = (c >> 1) ^ (0xEDB88320u & (0u - (c & 1u)));
+  }
+  return ~c;
+}
+
+template <typename T>
+void put_(uint8_t*& p, T v) {
+  std::memcpy(p, &v, sizeof(T));
+  p += sizeof(T);
+}
+template <typename T>
+T get_(const uint8_t*& p) {
+  T v;
+  std::memcpy(&v, p, sizeof(T));
+  p += sizeof(T);
+  return v;
+}
+
+void encode_pos(const PosRecord& r, uint8_t (&slot)[kPosSlotBytes]) {
+  std::memset(slot, 0, sizeof(slot));
+  uint8_t* p = slot;
+  put_(p, kPosMagic);
+  put_(p, r.seq);
+  put_(p, r.chapter);
+  put_(p, r.paragraph);
+  put_(p, r.offset);
+  put_(p, r.text_offset);
+  put_(p, r.times_opened);
+  put_(p, r.reading_ms);
+  put_(p, r.page_turns);
+  put_(p, r.progress_pct);
+  put_(p, r.time_left_ms);
+  put_(p, r.chapter_count);
+  const uint32_t crc = pos_crc32(slot, static_cast<size_t>(p - slot));
+  put_(p, crc);
+}
+
+bool decode_pos(const uint8_t (&slot)[kPosSlotBytes], PosRecord& r) {
+  const uint8_t* p = slot;
+  if (get_<uint32_t>(p) != kPosMagic)
+    return false;
+  r.seq = get_<uint32_t>(p);
+  r.chapter = get_<uint32_t>(p);
+  r.paragraph = get_<uint32_t>(p);
+  r.offset = get_<uint32_t>(p);
+  r.text_offset = get_<uint32_t>(p);
+  r.times_opened = get_<uint32_t>(p);
+  r.reading_ms = get_<uint64_t>(p);
+  r.page_turns = get_<uint32_t>(p);
+  r.progress_pct = get_<int32_t>(p);
+  r.time_left_ms = get_<uint64_t>(p);
+  r.chapter_count = get_<uint32_t>(p);
+  const size_t body = static_cast<size_t>(p - slot);
+  return get_<uint32_t>(p) == pos_crc32(slot, body);
+}
+}  // namespace
+
 void ReaderScreen::save_position_() {
   if (pos_path_.empty())
     return;
-  // Write a temp file then swap it in, so a power loss mid-write can't leave an
-  // empty .pos. FAT rename won't overwrite, hence the remove first.
-  const std::string tmp_path = pos_path_ + ".tmp";
-  FILE* f = std::fopen(tmp_path.c_str(), "w");
+  PosRecord r;
+  r.seq = ++pos_seq_;
+  r.chapter = static_cast<uint32_t>(chapter_idx_);
+  r.paragraph = page_pos_.paragraph;
+  r.offset = page_pos_.offset;
+  r.text_offset = page_pos_.text_offset;
+  r.times_opened = times_opened_;
+  r.reading_ms = reading_ms_total_;
+  r.page_turns = page_turn_count_;
+  r.progress_pct = progress_pct();
+  r.time_left_ms = estimated_time_left_ms();
+  r.chapter_count = static_cast<uint32_t>(chapter_count());
+  uint8_t slot[kPosSlotBytes];
+  encode_pos(r, slot);
+
+  FILE* f = std::fopen(pos_path_.c_str(), "r+b");
+  if (!f)
+    f = std::fopen(pos_path_.c_str(), "w+b");
   if (!f)
     return;
-  const int n = std::fprintf(f, "%u %u %u %u %u %llu %u %d %llu %u\n",
-               static_cast<unsigned>(chapter_idx_), static_cast<unsigned>(page_pos_.paragraph),
-               static_cast<unsigned>(page_pos_.offset), static_cast<unsigned>(page_pos_.text_offset),
-               static_cast<unsigned>(times_opened_),
-               static_cast<unsigned long long>(reading_ms_total_),
-               static_cast<unsigned>(page_turn_count_),
-               progress_pct(),
-               static_cast<unsigned long long>(estimated_time_left_ms()),
-               static_cast<unsigned>(chapter_count()));
-  if (std::fclose(f) != 0 || n <= 0) {
-    std::remove(tmp_path.c_str());
-    return;
-  }
-  std::remove(pos_path_.c_str());
-  std::rename(tmp_path.c_str(), pos_path_.c_str());
+  if (std::fseek(f, (r.seq & 1u) * kPosSlotStride, SEEK_SET) == 0)
+    std::fwrite(slot, 1, sizeof(slot), f);
+  std::fclose(f);
 }
 
 void ReaderScreen::load_position_() {
   if (pos_path_.empty())
     return;
+  pos_seq_ = 0;
 
-  // Try the current (hash-based) key first.
+  // Two-slot binary format: take the newest slot whose CRC checks out.
+  if (FILE* bf = std::fopen(pos_path_.c_str(), "rb")) {
+    PosRecord best;
+    bool found = false;
+    for (long s = 0; s < 2; ++s) {
+      uint8_t slot[kPosSlotBytes];
+      PosRecord r;
+      if (std::fseek(bf, s * kPosSlotStride, SEEK_SET) == 0 &&
+          std::fread(slot, 1, sizeof(slot), bf) == sizeof(slot) && decode_pos(slot, r) &&
+          (!found || r.seq > best.seq)) {
+        best = r;
+        found = true;
+      }
+    }
+    std::fclose(bf);
+    if (found) {
+      pos_seq_ = best.seq;
+      saved_chapter_idx_ = best.chapter;
+      saved_page_pos_ = PagePosition{static_cast<uint16_t>(best.paragraph), static_cast<uint16_t>(best.offset),
+                                     best.text_offset};
+      times_opened_ = best.times_opened;
+      reading_ms_total_ = best.reading_ms;
+      page_turn_count_ = best.page_turns;
+      saved_progress_pct_ = best.progress_pct;
+      MR_LOGI("reader", "Loaded pos ch=%u para=%u seq=%u", (unsigned)best.chapter, (unsigned)best.paragraph,
+              (unsigned)best.seq);
+      return;
+    }
+  }
+
+  // Older text format (2.5.0 and earlier). The next save rewrites it in the
+  // slot format; start() saves right after loading.
   FILE* f = std::fopen(pos_path_.c_str(), "r");
-  if (!f)  // power lost between save_position_'s remove and rename
+  if (!f)  // 2.5.0 wrote .pos.tmp then renamed; power could be lost in between
     f = std::fopen((pos_path_ + ".tmp").c_str(), "r");
-  bool migrating = false;
 
   // If not found, try the legacy slug key so existing .pos files still load.
   if (!f) {
@@ -1208,7 +1308,6 @@ void ReaderScreen::load_position_() {
     if (legacy_path != pos_path_) {
       f = std::fopen(legacy_path.c_str(), "r");
       if (f) {
-        migrating = true;
         MR_LOGI("reader", "Migrating legacy pos file: '%s' -> '%s'", legacy_path.c_str(), pos_path_.c_str());
 #ifdef ESP_PLATFORM
         unlink(legacy_path.c_str());
@@ -1238,16 +1337,11 @@ void ReaderScreen::load_position_() {
       page_turn_count_ = static_cast<uint32_t>(ptc);
     if (scanned >= 8)
       saved_progress_pct_ = pp;
-    MR_LOGI("reader", "Loaded pos ch=%u para=%u line=%u to=%u opens=%u rms=%llu ptc=%u (scanned=%d)",
+    MR_LOGI("reader", "Loaded legacy pos ch=%u para=%u line=%u to=%u opens=%u rms=%llu ptc=%u (scanned=%d)",
             ch, para, line, to, topen, rms, ptc, scanned);
-    if (migrating) {
-      FILE* fw = std::fopen(pos_path_.c_str(), "w");
-      if (fw) {
-        std::fprintf(fw, "%u %u %u %u %u %llu %u %d %llu %u\n", ch, para, line, to, topen, rms, ptc, pp, tl, cc);
-        std::fclose(fw);
-      }
-    }
   }
+  // A text .pos is overwritten in place by the slot format; drop any 2.5.0 temp copy.
+  std::remove((pos_path_ + ".tmp").c_str());
 }
 
 uint64_t ReaderScreen::estimated_time_left_ms() const {

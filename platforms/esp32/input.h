@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <cstdlib>
 
@@ -9,8 +10,8 @@
 #include "freertos/FreeRTOS.h"
 #include "nous/Input.h"
 
-// Defined in serial_communication.h â€” serial command button injection.
-extern volatile uint8_t g_serial_buttons;
+// Defined in serial_communication.h — serial command button injection.
+extern std::atomic<uint8_t> g_serial_buttons;
 
 // ---- Button hardware configuration ----
 //
@@ -78,7 +79,7 @@ class Esp32InputSource final : public microreader::IInputSource {
         result.press_history[result.press_history_count++] = btn_idx;
     }
     // Merge any button presses injected via serial commands.
-    uint8_t serial = g_serial_buttons;
+    const uint8_t serial = g_serial_buttons.exchange(0);
     if (serial) {
       for (uint8_t i = 0; i < kNumButtons; ++i) {
         if (serial & static_cast<uint8_t>(1u << i)) {
@@ -87,7 +88,6 @@ class Esp32InputSource final : public microreader::IInputSource {
             result.press_history[result.press_history_count++] = i;
         }
       }
-      g_serial_buttons = 0;
     }
     portEXIT_CRITICAL(&lock_);
     return result;
