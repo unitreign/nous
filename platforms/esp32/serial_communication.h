@@ -164,8 +164,7 @@ inline SerialCmdType serial_cmd_take(char* path_out, size_t path_out_size) {
   if (t == SerialCmdType::None)
     return SerialCmdType::None;
   if (path_out && path_out_size > 0) {
-    strncpy(path_out, g_queued_cmd_path, path_out_size - 1);
-    path_out[path_out_size - 1] = '\0';
+    snprintf(path_out, path_out_size, "%s", g_queued_cmd_path);
   }
   g_cmd_type.store(SerialCmdType::None, std::memory_order_release);
   return t;
