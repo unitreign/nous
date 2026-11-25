@@ -45,10 +45,21 @@ jobs:
           path: nous.bin
           if-no-files-found: error
 
-      # tag push (v*) -> GitHub release with nous.bin attached
-      - name: Release
+      # tag push (v*) -> draft release with nous.bin; notes come from the annotated tag message
+      - name: Release notes from tag
+        id: notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          git fetch --force --tags origin
+          git for-each-ref "refs/tags/${GITHUB_REF_NAME}" --format='%(contents)' > release-notes.md
+          test -s release-notes.md
+          echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Draft release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          draft: true
+          name: ${{ steps.notes.outputs.name }}
           files: nous.bin
-          generate_release_notes: true
+          body_path: release-notes.md
