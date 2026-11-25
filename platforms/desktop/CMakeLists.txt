@@ -13,22 +13,36 @@ project(microreader_desktop C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-# Auto-generate version.h
-execute_process(COMMAND python ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/generate_version.py)
+
+# lib/nous/version.h is checked in; tools/generate_version.py still targets the old lib/microreader path
 # ---------------------------------------------------------------------------
-# SDL2 – fetched at configure time; static build, no tests, no shared lib.
+# SDL2 - use a prebuilt SDL2 if SDL2_ROOT is given (folder with include/ and
+# lib/ or a DLL), otherwise fetch and build it statically.
 # ---------------------------------------------------------------------------
-include(FetchContent)
-FetchContent_Declare(
-    SDL2
-    GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-    GIT_TAG        release-2.32.10
-    GIT_SHALLOW    TRUE
-)
-set(SDL_SHARED OFF CACHE BOOL "" FORCE)
-set(SDL_STATIC ON  CACHE BOOL "" FORCE)
-set(SDL_TEST   OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(SDL2)
+set(SDL2_ROOT "" CACHE PATH "Prebuilt SDL2 folder (include/ + lib/)")
+if(SDL2_ROOT)
+  add_library(sdl2_prebuilt INTERFACE)
+  target_include_directories(sdl2_prebuilt INTERFACE ${SDL2_ROOT}/include ${SDL2_ROOT}/include/SDL2)
+  target_link_libraries(sdl2_prebuilt INTERFACE ${SDL2_ROOT}/lib/SDL2.dll)
+  set(SDL2_TARGET sdl2_prebuilt)
+else()
+  include(FetchContent)
+  FetchContent_Declare(
+      SDL2
+      GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+      GIT_TAG        release-2.32.10
+      GIT_SHALLOW    TRUE
+  )
+  set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+  set(SDL_STATIC ON  CACHE BOOL "" FORCE)
+  set(SDL_TEST   OFF CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(SDL2)
+  set(SDL2_TARGET SDL2::SDL2-static)
+endif()
+
+# Screen size override for testing other devices, e.g. -DNOUS_SCREEN_W=790 -DNOUS_SCREEN_H=528
+set(NOUS_SCREEN_W "" CACHE STRING "App-space width override (landscape)")
+set(NOUS_SCREEN_H "" CACHE STRING "App-space height override (landscape)")
 
 # miniz (vendored in third_party/miniz/ — all .c files compiled as separate TUs)
 set(MINIZ_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/miniz)
@@ -41,56 +55,22 @@ add_library(miniz STATIC
 target_include_directories(miniz PUBLIC ${MINIZ_DIR})
 
 # ---------------------------------------------------------------------------
-# Content library (EPUB, ZIP, XML, layout)
+# nous library (everything under lib/nous)
 # ---------------------------------------------------------------------------
-set(CONTENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/microreader/content)
-
-add_library(microreader_content STATIC
-    ${CONTENT_DIR}/HtmlEntities.cpp
-    ${CONTENT_DIR}/ZipReader.cpp
-    ${CONTENT_DIR}/XmlReader.cpp
-    ${CONTENT_DIR}/CssParser.cpp
-    ${CONTENT_DIR}/EpubParser.cpp
-    ${CONTENT_DIR}/ImageDecoder.cpp
-    ${CONTENT_DIR}/JpegDecoder.cpp
-    ${CONTENT_DIR}/PngDecoder.cpp
-    ${CONTENT_DIR}/BmpSleepConverter.cpp
-    ${CONTENT_DIR}/Book.cpp
-    ${CONTENT_DIR}/BookIndex.cpp
-    ${CONTENT_DIR}/TextLayout.cpp
-    ${CONTENT_DIR}/hyphenation/Hyphenation.cpp
-    ${CONTENT_DIR}/mrb/MrbWriter.cpp
-    ${CONTENT_DIR}/mrb/MrbReader.cpp
-    ${CONTENT_DIR}/mrb/MrbConverter.cpp
-)
-target_include_directories(microreader_content PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib
-)
-target_link_libraries(microreader_content PUBLIC miniz)
-
-# ---------------------------------------------------------------------------
-# Platform-agnostic core library
-# ---------------------------------------------------------------------------
-add_library(microreader_core STATIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/microreader/Application.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/microreader/Loop.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/microreader/screens/demo/BouncingBallDemo.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/microreader/screens/demo/GrayscaleDemo.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/microreader/screens/ListMenuScreen.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/microreader/screens/MainMenu.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/microreader/screens/ReaderScreen.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/microreader/screens/SettingsScreen.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/microreader/screens/ChapterSelectScreen.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/microreader/screens/LinksScreen.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/microreader/screens/ReaderOptionsScreen.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/microreader/screens/ConvertAllScreen.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/microreader/screens/StatsScreen.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/microreader/screens/HiddenBooksMenu.cpp
-)
-target_include_directories(microreader_core PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib
-)
-target_link_libraries(microreader_core PUBLIC microreader_content)
+# Same file list the firmware builds (platforms/esp32/CMakeLists.txt), so the
+# desktop build never drifts from it again.
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/../esp32/CMakeLists.txt _esp_lines REGEX "LIB}/.*cpp")
+set(NOUS_SOURCES "")
+foreach(_l ${_esp_lines})
+  string(REGEX REPLACE ".*LIB}/([^ )]+cpp).*" "\\1" _f "${_l}")
+  list(APPEND NOUS_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/nous/${_f})
+endforeach()
+add_library(microreader_core STATIC ${NOUS_SOURCES})
+target_include_directories(microreader_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../lib)
+target_link_libraries(microreader_core PUBLIC miniz)
+if(NOUS_SCREEN_W AND NOUS_SCREEN_H)
+  target_compile_definitions(microreader_core PUBLIC NOUS_SCREEN_W=${NOUS_SCREEN_W} NOUS_SCREEN_H=${NOUS_SCREEN_H})
+endif()
 
 # ---------------------------------------------------------------------------
 # Desktop executable
@@ -100,7 +80,7 @@ add_executable(microreader_desktop
 )
 target_link_libraries(microreader_desktop PRIVATE
     microreader_core
-    SDL2::SDL2-static
+    ${SDL2_TARGET}
 )
 # Statically link MinGW runtime so the exe runs without libstdc++/libgcc DLLs.
 if(MINGW)
@@ -111,7 +91,7 @@ endif()
 target_compile_definitions(microreader_desktop PRIVATE SDL_MAIN_HANDLED)
 # Generate a header with the repo-root sd/ path (avoids MSVC /D drive-letter colon issue).
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
-set(MICROREADER_SD_DIR "${REPO_ROOT}/sd")
+set(MICROREADER_SD_DIR "${REPO_ROOT}/sd" CACHE PATH "Folder used as the emulated SD card")
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/desktop_config.h.in
     ${CMAKE_CURRENT_BINARY_DIR}/desktop_config.h

@@ -26,10 +26,18 @@ enum class GrayPlane { BW, LSB, MSB };
 
 // Physical screen constants and bit-packed pixel helpers (used internally by DrawBuffer).
 struct DisplayFrame {
+#if defined(NOUS_SCREEN_W) && defined(NOUS_SCREEN_H)
+  // Desktop-only override to preview other screen sizes (e.g. X3: 790 x 528).
+  static constexpr int kPhysicalWidth = NOUS_SCREEN_W;
+  static constexpr int kPanelOffsetX = 0;
+  static constexpr int kPanelWidth = (NOUS_SCREEN_W + 7) / 8 * 8;
+  static constexpr int kPhysicalHeight = NOUS_SCREEN_H;
+#else
   static constexpr int kPhysicalWidth = 786;  // visible app-space width (panel has hidden area at the top and bottom)
   static constexpr int kPanelOffsetX = 10;    // hidden columns at the left edge of the 800px panel
   static constexpr int kPanelWidth = 800;
   static constexpr int kPhysicalHeight = 480;
+#endif
   static constexpr int kStride = kPanelWidth / 8;  // 100 bytes/row (800 divisible by 8)
   static constexpr std::size_t kPixelBytes = static_cast<std::size_t>(kStride) * kPhysicalHeight;  // 48000
 };
